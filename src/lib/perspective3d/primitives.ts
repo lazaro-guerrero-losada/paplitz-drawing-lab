@@ -1,6 +1,7 @@
 /**
  * Generador de Desafíos y Primitivas 3D para Lab 3D
- * Soporta SPHERE, RING, CUBE, CYLINDER, CONE, PYRAMID, CAPSULE y PRISM con perspectivas dinámicas no convencionales.
+ * Soporta SPHERE, RING, CUBE, CYLINDER, CONE, PYRAMID, CAPSULE y PRISM
+ * con habitación 3D de 6 paredes y perspectivas dinámicas perfectamente calibradas.
  */
 
 import {
@@ -26,7 +27,7 @@ import {
   multiplyMatrices,
   project3DTo2D,
   calculateVanishingPoints,
-  generatePerspectiveGrid,
+  generate6WallRoomGrid,
 } from './math3d';
 
 // Generador pseudo-aleatorio con semilla
@@ -40,24 +41,24 @@ function seededRng(seed: number): () => number {
 }
 
 /**
- * Genera una cámara 3D con un ángulo de visión inusual / dramático
+ * Genera una cámara 3D con un ángulo de visión inusual / dramático pero geométricamente limpio
  */
 export function generateDynamicCamera(
   rng: () => number,
   canvasWidth: number,
   canvasHeight: number
 ): Camera3D {
-  // Elevación: vista picada pronunciada (+35° a +55°) o contrapicado dramático (-25° a -45°)
-  const isWormEye = rng() > 0.5;
-  const elevationDeg = isWormEye ? -(25 + rng() * 25) : 30 + rng() * 25;
+  // Elevación: vista picada (+22° a +42°) o contrapicado (-18° a -32°)
+  const isWormEye = rng() > 0.65;
+  const elevationDeg = isWormEye ? -(18 + rng() * 16) : 22 + rng() * 20;
   const elevRad = (elevationDeg * Math.PI) / 180;
 
-  // Azimut: entre 25° y 65° o 115° y 155° para garantizar perspectiva a 3 puntos real
+  // Azimut: entre 30° y 60° o 120° y 150° para perspectiva clara a 3 puntos sin degeneración
   const quadrant = rng() > 0.5 ? 0 : Math.PI / 2;
-  const azimuthRad = quadrant + ((25 + rng() * 40) * Math.PI) / 180;
+  const azimuthRad = quadrant + ((30 + rng() * 30) * Math.PI) / 180;
 
-  // Distancia de la cámara al centro
-  const distance = 3.6 + rng() * 0.8;
+  // Distancia cómoda para enmarcar la habitación y el objeto en el lienzo
+  const distance = 4.8 + rng() * 0.5;
 
   const camX = distance * Math.cos(elevRad) * Math.sin(azimuthRad);
   const camY = distance * Math.sin(elevRad);
@@ -66,11 +67,10 @@ export function generateDynamicCamera(
   const eye = v3(camX, camY, camZ);
   const target = v3(0, 0, 0);
 
-  // Inclinación sutil de cámara (Dutch angle / roll de ±4° a ±10°) para romper la horizontalidad estándar
-  const rollDeg = (rng() - 0.5) * 16;
+  // Inclinación sutil de cámara (Dutch roll de ±4° a ±8°)
+  const rollDeg = (rng() - 0.5) * 12;
   const rollRad = (rollDeg * Math.PI) / 180;
 
-  // Vector Up con leve inclinación lateral
   const baseUp = v3(0, 1, 0);
   const forward = vNorm(vSub(target, eye));
   const right = vNorm(vCross(forward, baseUp));
@@ -80,9 +80,9 @@ export function generateDynamicCamera(
     eye,
     target,
     up,
-    fov: 60 + rng() * 10,
+    fov: 55 + rng() * 8,
     aspectRatio: canvasWidth / canvasHeight,
-    near: 0.1,
+    near: 0.15,
     far: 50.0,
   };
 }
@@ -141,11 +141,9 @@ export function createSpherePrimitive(
     equator3D.push(v3(R * Math.cos(th), 0, R * Math.sin(th)));
   }
 
-  // Separar ecuador en mitad frontal (sólida) y mitad trasera (tenue)
   const frontEquator3D: Vector3D[] = [];
   const backEquator3D: Vector3D[] = [];
   equator3D.forEach((p) => {
-    // Si el producto escalar con la dirección a la cámara es positivo, está al frente
     const dirToCam = vSub(camera.eye, p);
     const normal = vNorm(v3(p.x, 0, p.z));
     if (vDot(dirToCam, normal) >= 0) {
@@ -160,31 +158,29 @@ export function createSpherePrimitive(
     sample3DCurveTo2D(backEquator3D, viewProj, W, H, 'equator-back', 'Ecuador Posterior', true, 'faint'),
   ];
 
-  // 2. Meridiano 1 (Plano XY)
+  // 2. Meridianos verticales
   const meridianXY: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
     meridianXY.push(v3(R * Math.sin(th), R * Math.cos(th), 0));
   }
 
-  // 3. Meridiano 2 (Plano YZ)
   const meridianYZ: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
     meridianYZ.push(v3(0, R * Math.cos(th), R * Math.sin(th)));
   }
 
-  // 4. Silueta exterior de la esfera vista desde la cámara
+  // 3. Silueta exterior exacta en perspectiva de cono tangente
   const distCam = vLen(camera.eye);
-  const sinAlpha = R / distCam;
+  const sinAlpha = Math.min(0.999, R / distCam);
   const cosAlpha = Math.sqrt(Math.max(0, 1 - sinAlpha * sinAlpha));
-  const contactDist = R * sinAlpha; // Distancia del centro al plano de contacto
+  const contactDist = R * sinAlpha;
   const contactRadius = R * cosAlpha;
 
   const camDir = vNorm(camera.eye);
   const contactCenter = vScale(camDir, contactDist);
 
-  // Base ortonormal perpendicular a camDir
   let tempUp = camera.up;
   let uDir = vNorm(vCross(camDir, tempUp));
   if (vLen(uDir) < 0.001) uDir = v3(1, 0, 0);
@@ -203,7 +199,6 @@ export function createSpherePrimitive(
     sample3DCurveTo2D(meridianYZ, viewProj, W, H, 'meridian-2', 'Meridiano Vertical 2', false, 'solid'),
   ];
 
-  // Modelo 3D para el visor superior derecho
   const previewModel3D: WireframeModel3D = {
     vertices: [],
     edges: [],
@@ -223,11 +218,11 @@ export function createRingPrimitive(
   targetCurves: CurveSegment2D[];
   previewModel3D: WireframeModel3D;
 } {
-  const R = 1.05; // Radio mayor
-  const r = 0.28; // Radio menor del tubo
+  const R = 1.05;
+  const r = 0.28;
   const segments = 48;
 
-  // 1. Anillo central medio (Guía base dada)
+  // Anillo medio central (Guía base dada)
   const centerRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
@@ -238,7 +233,7 @@ export function createRingPrimitive(
     sample3DCurveTo2D(centerRing, viewProj, W, H, 'center-ring', 'Eje Central del Toroide', true, 'solid'),
   ];
 
-  // 2. Anillo exterior superior e inferior
+  // Anillos concéntricos interior y exterior
   const outerRingTop: Vector3D[] = [];
   const outerRingBottom: Vector3D[] = [];
   const innerRingTop: Vector3D[] = [];
@@ -254,7 +249,7 @@ export function createRingPrimitive(
     innerRingBottom.push(v3((R - r) * cosT, -r * 0.7, (R - r) * sinT));
   }
 
-  // 3. Secciones transversales circulares en 4 cuadrantes
+  // 4 secciones transversales circulares
   const crossSections: Vector3D[][] = [];
   const angles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
   angles.forEach((theta) => {
@@ -300,8 +295,7 @@ export function createCubePrimitive(
   targetCurves: CurveSegment2D[];
   previewModel3D: WireframeModel3D;
 } {
-  const s = 0.85; // Semilado
-  // 8 vértices
+  const s = 0.8;
   const v: Vector3D[] = [
     v3(-s, -s, -s), // 0: Izq-Abajo-Atrás
     v3(s, -s, -s),  // 1: Der-Abajo-Atrás
@@ -313,13 +307,12 @@ export function createCubePrimitive(
     v3(-s, s, s),   // 7: Izq-Arriba-Frente
   ];
 
-  // Base inferior dada como ancla (0-1-2-3-0)
+  // Base en el suelo dada
   const basePoints = [v[0], v[1], v[2], v[3], v[0]];
   const anchorCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(basePoints, viewProj, W, H, 'base-quad', 'Plano Base del Cubo', true, 'solid'),
   ];
 
-  // Las otras aristas como objetivo a completar
   const edgePairs: [number, number, string][] = [
     [0, 4, 'Pilar Izq-Atrás'],
     [1, 5, 'Pilar Der-Atrás'],
@@ -338,9 +331,9 @@ export function createCubePrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: v,
     edges: [
-      [0, 1], [1, 2], [2, 3], [3, 0], // Base
-      [4, 5], [5, 6], [6, 7], [7, 4], // Tapa
-      [0, 4], [1, 5], [2, 6], [3, 7], // Pilares
+      [0, 1], [1, 2], [2, 3], [3, 0],
+      [4, 5], [5, 6], [6, 7], [7, 4],
+      [0, 4], [1, 5], [2, 6], [3, 7],
     ],
   };
 
@@ -361,7 +354,7 @@ export function createCylinderPrimitive(
   const halfH = 0.95;
   const segments = 48;
 
-  // Base inferior (Dada)
+  // Base inferior en el suelo Y = -halfH
   const bottomRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
@@ -379,20 +372,22 @@ export function createCylinderPrimitive(
     topRing.push(v3(R * Math.cos(th), halfH, R * Math.sin(th)));
   }
 
-  // Generadores laterales verticales (siluetas tangentes)
-  // Perpendiculares a la línea visual en XZ
+  // Generatrices laterales tangentes exactas
+  const camHorizDist = Math.sqrt(camera.eye.x * camera.eye.x + camera.eye.z * camera.eye.z);
   const camAngle = Math.atan2(camera.eye.x, camera.eye.z);
-  const leftAngle = camAngle + Math.PI / 2;
-  const rightAngle = camAngle - Math.PI / 2;
+  const tangentOffset = Math.asin(Math.min(0.999, R / Math.max(R + 0.01, camHorizDist)));
+
+  const angleLeft = camAngle + Math.PI / 2 + tangentOffset;
+  const angleRight = camAngle - Math.PI / 2 - tangentOffset;
 
   const leftEdge = [
-    v3(R * Math.sin(leftAngle), -halfH, R * Math.cos(leftAngle)),
-    v3(R * Math.sin(leftAngle), halfH, R * Math.cos(leftAngle)),
+    v3(R * Math.sin(angleLeft), -halfH, R * Math.cos(angleLeft)),
+    v3(R * Math.sin(angleLeft), halfH, R * Math.cos(angleLeft)),
   ];
 
   const rightEdge = [
-    v3(R * Math.sin(rightAngle), -halfH, R * Math.cos(rightAngle)),
-    v3(R * Math.sin(rightAngle), halfH, R * Math.cos(rightAngle)),
+    v3(R * Math.sin(angleRight), -halfH, R * Math.cos(angleRight)),
+    v3(R * Math.sin(angleRight), halfH, R * Math.cos(angleRight)),
   ];
 
   const targetCurves: CurveSegment2D[] = [
@@ -424,7 +419,6 @@ export function createConePrimitive(
   const halfH = 0.95;
   const segments = 48;
 
-  // Base circular dada
   const baseRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
@@ -435,16 +429,17 @@ export function createConePrimitive(
     sample3DCurveTo2D(baseRing, viewProj, W, H, 'cone-base', 'Base Circular del Cono', true, 'solid'),
   ];
 
-  // Vértice superior (Ápice)
   const apex = v3(0, halfH + 0.1, 0);
 
-  // Generatrices laterales tangentes
+  const camHorizDist = Math.sqrt(camera.eye.x * camera.eye.x + camera.eye.z * camera.eye.z);
   const camAngle = Math.atan2(camera.eye.x, camera.eye.z);
-  const leftAngle = camAngle + Math.PI / 2;
-  const rightAngle = camAngle - Math.PI / 2;
+  const tangentOffset = Math.asin(Math.min(0.999, R / Math.max(R + 0.01, camHorizDist)));
 
-  const leftSlant = [v3(R * Math.sin(leftAngle), -halfH, R * Math.cos(leftAngle)), apex];
-  const rightSlant = [v3(R * Math.sin(rightAngle), -halfH, R * Math.cos(rightAngle)), apex];
+  const angleLeft = camAngle + Math.PI / 2 + tangentOffset;
+  const angleRight = camAngle - Math.PI / 2 - tangentOffset;
+
+  const leftSlant = [v3(R * Math.sin(angleLeft), -halfH, R * Math.cos(angleLeft)), apex];
+  const rightSlant = [v3(R * Math.sin(angleRight), -halfH, R * Math.cos(angleRight)), apex];
 
   const targetCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(leftSlant, viewProj, W, H, 'left-slant', 'Arista Tangente Izquierda', false, 'solid'),
@@ -516,14 +511,12 @@ export function createCapsulePrimitive(
   const cylH = 0.8;
   const segments = 48;
 
-  // Anillo divisor inferior
   const lowerRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
     lowerRing.push(v3(R * Math.cos(th), -cylH / 2, R * Math.sin(th)));
   }
 
-  // Cúpula inferior dada como ancla
   const lowerDomeArc: Vector3D[] = [];
   for (let i = 0; i <= 24; i++) {
     const th = Math.PI + (i / 24) * Math.PI;
@@ -535,21 +528,18 @@ export function createCapsulePrimitive(
     sample3DCurveTo2D(lowerDomeArc, viewProj, W, H, 'capsule-lower-dome', 'Cúpula Inferior', true, 'solid'),
   ];
 
-  // Anillo divisor superior
   const upperRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
     upperRing.push(v3(R * Math.cos(th), cylH / 2, R * Math.sin(th)));
   }
 
-  // Cúpula superior
   const upperDomeArc: Vector3D[] = [];
   for (let i = 0; i <= 24; i++) {
     const th = (i / 24) * Math.PI;
     upperDomeArc.push(v3(R * Math.cos(th), cylH / 2 + R * Math.sin(th), 0));
   }
 
-  // Lados cilíndricos
   const leftSide = [v3(-R, -cylH / 2, 0), v3(-R, cylH / 2, 0)];
   const rightSide = [v3(R, -cylH / 2, 0), v3(R, cylH / 2, 0)];
 
@@ -569,8 +559,13 @@ export function createCapsulePrimitive(
   return { anchorCurves, targetCurves, previewModel3D };
 }
 
+/**
+ * Prisma Triangular con orientación calibrada hacia la cámara:
+ * La cara triangular más cercana a la cámara es SIEMPRE la cara base dada en tinta negra,
+ * y las aristas longitudinales fugan de manera natural alejándose hacia el fondo.
+ */
 export function createPrismPrimitive(
-  _camera: Camera3D,
+  camera: Camera3D,
   viewProj: number[],
   W: number,
   H: number
@@ -579,39 +574,50 @@ export function createPrismPrimitive(
   targetCurves: CurveSegment2D[];
   previewModel3D: WireframeModel3D;
 } {
-  const w = 0.9;
-  const h = 1.0;
-  const depth = 1.1;
+  const w = 0.85;
+  const h = 0.95;
+  const depth = 1.2;
 
-  // Triángulo frontal (Dado)
-  const f0 = v3(-w, -h / 2, depth / 2);
-  const f1 = v3(w, -h / 2, depth / 2);
-  const f2 = v3(0, h / 2, depth / 2);
+  // Cara triangular A (Z = -depth / 2)
+  const a0 = v3(-w, -h / 2, -depth / 2);
+  const a1 = v3(w, -h / 2, -depth / 2);
+  const a2 = v3(0, h / 2, -depth / 2);
 
-  // Triángulo posterior (Objetivo)
-  const b0 = v3(-w, -h / 2, -depth / 2);
-  const b1 = v3(w, -h / 2, -depth / 2);
-  const b2 = v3(0, h / 2, -depth / 2);
+  // Cara triangular B (Z = +depth / 2)
+  const b0 = v3(-w, -h / 2, depth / 2);
+  const b1 = v3(w, -h / 2, depth / 2);
+  const b2 = v3(0, h / 2, depth / 2);
 
-  const frontTriangle = [f0, f1, f2, f0];
+  // Comparar distancias a la cámara para determinar la cara frontal
+  const distA = vLen(vSub(camera.eye, v3(0, 0, -depth / 2)));
+  const distB = vLen(vSub(camera.eye, v3(0, 0, depth / 2)));
+
+  const isACcloser = distA < distB;
+  const nearTriangle = isACcloser ? [a0, a1, a2, a0] : [b0, b1, b2, b0];
+  const farTriangle = isACcloser ? [b0, b1, b2, b0] : [a0, a1, a2, a0];
+
+  const nearPts = isACcloser ? [a0, a1, a2] : [b0, b1, b2];
+  const farPts = isACcloser ? [b0, b1, b2] : [a0, a1, a2];
+
+  // La cara frontal dada al usuario es SIEMPRE la cara más cercana a la cámara
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(frontTriangle, viewProj, W, H, 'prism-front', 'Cara Triangular Frontal', true, 'solid'),
+    sample3DCurveTo2D(nearTriangle, viewProj, W, H, 'prism-near', 'Cara Triangular Frontal', true, 'solid'),
   ];
 
-  const backTriangle = [b0, b1, b2, b0];
+  // El objetivo es la cara posterior (que disminuye en perspectiva hacia el fondo) y las 3 aristas que fugan
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(backTriangle, viewProj, W, H, 'prism-back', 'Cara Triangular Posterior', false, 'solid'),
-    sample3DCurveTo2D([f0, b0], viewProj, W, H, 'prism-edge-0', 'Arista Longitudinal Izquierda', false, 'solid'),
-    sample3DCurveTo2D([f1, b1], viewProj, W, H, 'prism-edge-1', 'Arista Longitudinal Derecha', false, 'solid'),
-    sample3DCurveTo2D([f2, b2], viewProj, W, H, 'prism-edge-2', 'Arista Longitudinal Superior', false, 'solid'),
+    sample3DCurveTo2D(farTriangle, viewProj, W, H, 'prism-far', 'Cara Triangular Posterior', false, 'solid'),
+    sample3DCurveTo2D([nearPts[0], farPts[0]], viewProj, W, H, 'prism-edge-0', 'Arista Longitudinal Izquierda', false, 'solid'),
+    sample3DCurveTo2D([nearPts[1], farPts[1]], viewProj, W, H, 'prism-edge-1', 'Arista Longitudinal Derecha', false, 'solid'),
+    sample3DCurveTo2D([nearPts[2], farPts[2]], viewProj, W, H, 'prism-edge-2', 'Arista Longitudinal Superior', false, 'solid'),
   ];
 
   const previewModel3D: WireframeModel3D = {
-    vertices: [f0, f1, f2, b0, b1, b2],
+    vertices: [a0, a1, a2, b0, b1, b2],
     edges: [
-      [0, 1], [1, 2], [2, 0], // Frente
-      [3, 4], [4, 5], [5, 3], // Atrás
-      [0, 3], [1, 4], [2, 5], // Longitudes
+      [0, 1], [1, 2], [2, 0], // Cara A
+      [3, 4], [4, 5], [5, 3], // Cara B
+      [0, 3], [1, 4], [2, 5], // Aristas longitudinales
     ],
   };
 
@@ -641,24 +647,19 @@ export function generate3DChallenge(
 ): Primitive3DChallenge {
   const rng = seededRng(seed);
 
-  // Elegir tipo de primitiva
   const type = forcedType || ALL_PRIMITIVES[Math.floor(rng() * ALL_PRIMITIVES.length)];
-
-  // Generar cámara con ángulo dinámico no convencional
   const camera = generateDynamicCamera(rng, canvasWidth, canvasHeight);
 
-  // Calcular matrices
   const viewMatrix = createLookAtMatrix(camera.eye, camera.target, camera.up);
   const projMatrix = createPerspectiveMatrix(camera.fov, camera.aspectRatio, camera.near, camera.far);
   const viewProjMatrix = multiplyMatrices(projMatrix, viewMatrix);
 
-  // Puntos de fuga calculados con precisión
+  // Puntos de fuga exactos
   const vanishingPoints = calculateVanishingPoints(camera, viewProjMatrix, canvasWidth, canvasHeight);
 
-  // Rejilla de perspectiva 3D
-  const gridLines = generatePerspectiveGrid(camera, viewProjMatrix, canvasWidth, canvasHeight);
+  // Habitación 3D de 6 Paredes completa
+  const gridLines = generate6WallRoomGrid(camera, viewMatrix, projMatrix, canvasWidth, canvasHeight);
 
-  // Construir primitiva seleccionada
   let primitiveData: {
     anchorCurves: CurveSegment2D[];
     targetCurves: CurveSegment2D[];
