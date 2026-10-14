@@ -83,22 +83,34 @@ Para evitar que un prisma o cilindro parezca extenderse en la dirección erróne
   - Checkboxes neobrutalistas para habilitar/deshabilitar cualquiera de las 8 formas (`CUBE`, `SPHERE`, `CYLINDER`, `CONE`, `PYRAMID`, `RING`, `CAPSULE`, `PRISM`).
   - Botón **Todas** para seleccionar el catálogo completo.
   - Botón **Solo Actual** para enfocar la sesión en una única figura.
-  - Botón **Reto** por cada figura para cargar inmediatamente un nuevo ángulo de esa geometría.
+  - Botón **🎲 Azar** para cargar de inmediato un reto aleatorio extraído del subconjunto activo.
+  - Botón **Reto** por cada figura para cargar inmediatamente una perspectiva de esa geometría específica.
   - Mecanismo de seguridad: impide deseleccionar todas las formas a la vez (siempre mantiene al menos una forma seleccionada).
   - Pestaña colapsable: se minimiza a un botón compacto `[ 📐 Formas (X/8) ]` para maximizar el área de dibujo en pantallas pequeñas o tablets.
 
-### 4.2 Botón de Ayudas Visuales de 3 Fases
-Ubicado en la barra central inferior flotante, cicla entre tres estados mediante un solo botón:
-1. **`Off` (Desactivado):** Lienzo despejado para práctica estricta a mano alzada.
-2. **`Línea` (`line`):** Traza una línea gris punteada (`strokeDasharray: [3, 5]`, tono neutral Slate) a lo largo de todas las aristas y curvas objetivo para ver la solución exacta en pantalla.
-3. **`Vértices` (`vertices`):** Muestra únicamente los vértices clave (marcadores azules con borde negro y centro blanco) y una línea fina direccional que parte de cada vértice apuntando en el vector exacto hacia su vértice conectado. El usuario puede ver el ángulo y dirección de fuga sin que se le revele el trazo completo.
+### 4.2 Barra de Herramientas Flotante Centrada Inferior
+Diseñada bajo el sistema neobrutalista `card-ink` con borde negro y sombra sólida `shadow-[4px_4px_0px_#000000]`, integra en un único bloque ergonómico:
+1. **Deshacer (`Undo2`) & Rehacer (`Redo2`)**: Control total del historial de trazos libres.
+2. **Borrar Todo (`Trash2`)**: Limpieza inmediata del lienzo.
+3. **Divisor rígido**: Separador de tinta vertical.
+4. **Botón de Ayudas Visuales de 3 Fases**:
+   - **`Off` (Desactivado):** Lienzo despejado para práctica estricta a mano alzada.
+   - **`Línea` (`line`):** Traza una línea gris punteada (`strokeDasharray: [3, 5]`, tono neutral Slate) a lo largo de todas las aristas y curvas objetivo para ver la solución exacta en pantalla.
+   - **`Vértices` (`vertices`):** Muestra únicamente los vértices clave (marcadores azules con borde negro y centro blanco) y una línea fina direccional que parte de cada vértice apuntando en el vector exacto hacia su vértice conectado. El usuario puede ver el ángulo y dirección de fuga sin que se le revele el trazo completo.
+5. **Rejilla 3D (`Grid`)**: Alterna la visualización de las 6 paredes cúbicas de referencia y puntos de fuga.
+6. **Nuevo Ángulo (`RotateCcw`)**: Genera una nueva perspectiva tridimensional del reto en curso sin tener que subir a la cabecera.
+7. **Comprobar / Siguiente (`Check` / `ChevronRight`)**: Disparador del evaluador analítico y avance de rondas.
 
 ### 4.3 Tarjeta Flotante 3D de Referencia (`src/components/Lab3D/Perspective3DPreviewCard.tsx`)
 - Muestra el modelo objetivo rotando en un canvas 3D independiente.
 - Soporta interactividad de ratón/stylus: permite hacer clic y arrastrar para inspeccionar la geometría en 360°.
 - Badge negro inferior neobrutalista con el nombre en mayúsculas de la primitiva.
 
-### 4.4 Calibración de Coordenadas del Lienzo sin Desplazamiento (Offset Fix)
+### 4.4 Lienzo Despejado y Cabecera Sobria
+- **Cabecera Minimalista**: Se eliminaron selectores redundantes y botones de cambio de modo superfluos, dejando una barra superior limpia con botón de regreso y contador de rondas.
+- **Lienzo Libre de Oclusiones**: Se retiraron las etiquetas técnicas duplicadas que antes quedaban ocultas o semi-tapadas debajo del menú flotante lateral.
+
+### 4.5 Calibración de Coordenadas del Lienzo sin Desplazamiento (Offset Fix)
 Para garantizar precisión 1:1 en pantallas de cualquier resolución o DPI:
 ```typescript
 const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>): Point2D => {

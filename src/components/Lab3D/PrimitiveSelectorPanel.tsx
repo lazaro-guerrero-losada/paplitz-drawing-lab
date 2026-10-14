@@ -7,6 +7,7 @@ interface PrimitiveSelectorPanelProps {
   selectedTypes: PrimitiveType[];
   onChangeSelectedTypes: (types: PrimitiveType[]) => void;
   onSelectImmediate?: (type: PrimitiveType) => void;
+  onSelectRandom?: () => void;
   currentType?: PrimitiveType;
 }
 
@@ -25,6 +26,7 @@ export const PrimitiveSelectorPanel: React.FC<PrimitiveSelectorPanelProps> = ({
   selectedTypes,
   onChangeSelectedTypes,
   onSelectImmediate,
+  onSelectRandom,
   currentType,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
@@ -91,10 +93,10 @@ export const PrimitiveSelectorPanel: React.FC<PrimitiveSelectorPanelProps> = ({
       </div>
 
       {/* Acciones Rápidas */}
-      <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold">
+      <div className="flex items-center gap-1 text-[10px] font-mono font-bold">
         <button
           onClick={handleSelectAll}
-          className="btn-ink-outline flex-1 py-0.5 px-1.5 text-center cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100"
+          className="btn-ink-outline flex-1 py-0.5 px-1 text-center cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100"
           title="Seleccionar todas las formas"
         >
           Todas
@@ -102,11 +104,20 @@ export const PrimitiveSelectorPanel: React.FC<PrimitiveSelectorPanelProps> = ({
         <button
           onClick={handleSelectOnlyCurrent}
           disabled={!currentType || (selectedTypes.length === 1 && selectedTypes.includes(currentType))}
-          className="btn-ink-outline flex-1 py-0.5 px-1.5 text-center cursor-pointer shadow-[1px_1px_0px_#000000] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100"
+          className="btn-ink-outline flex-1 py-0.5 px-1 text-center cursor-pointer shadow-[1px_1px_0px_#000000] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100"
           title="Solo la forma actual"
         >
           Solo Actual
         </button>
+        {onSelectRandom && (
+          <button
+            onClick={onSelectRandom}
+            className="btn-ink-outline flex-1 py-0.5 px-1 text-center cursor-pointer shadow-[1px_1px_0px_#000000] bg-neutral-100 hover:bg-neutral-200"
+            title="Cargar reto aleatorio de las formas seleccionadas"
+          >
+            🎲 Azar
+          </button>
+        )}
       </div>
 
       {/* Lista de Primitivas con Checkbox Neobrutalista */}

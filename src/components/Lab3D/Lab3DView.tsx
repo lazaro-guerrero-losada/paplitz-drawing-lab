@@ -23,7 +23,6 @@ import {
   ChevronRight,
   RotateCcw,
   Trophy,
-  Zap,
   Check,
 } from 'lucide-react';
 
@@ -44,9 +43,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   const [sessionScores, setSessionScores] = useState<number[]>([]);
   const [isSessionComplete, setIsSessionComplete] = useState<boolean>(false);
 
-  // Modo de práctica: 'rounds' (Desafío de 8 rondas) o 'free' (Práctica Libre Infinita)
-  const [practiceMode, setPracticeMode] = useState<'rounds' | 'free'>('rounds');
-  const [selectedPrimitiveType, setSelectedPrimitiveType] = useState<PrimitiveType | 'RANDOM'>('RANDOM');
+  // Formas seleccionadas para el entrenamiento
   const [enabledPrimitives, setEnabledPrimitives] = useState<PrimitiveType[]>([...ALL_PRIMITIVES]);
 
   // Reto actual
@@ -81,7 +78,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   const loadNewChallenge = useCallback(
     (roundNum: number, forcedType?: PrimitiveType, allowedOverride?: PrimitiveType[]) => {
       const allowed = allowedOverride || enabledPrimitives;
-      const type = forcedType || (selectedPrimitiveType === 'RANDOM' ? undefined : selectedPrimitiveType);
+      const type = forcedType;
       const newSeed = Math.floor(Math.random() * 1000000);
       const newCh = generate3DChallenge(
         newSeed,
@@ -97,7 +94,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       setEvaluation(null);
       setCurrentRound(roundNum);
     },
-    [canvasDimensions, selectedPrimitiveType, enabledPrimitives]
+    [canvasDimensions, enabledPrimitives]
   );
 
   // Ajustar dimensiones del canvas exactamente al contenedor del área de dibujo
@@ -523,14 +520,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       setSessionScores((prev) => [...prev, result.score]);
     } else {
       // 2. Pasar a la siguiente ronda
-      if (practiceMode === 'rounds') {
-        if (currentRound >= TOTAL_ROUNDS) {
-          setIsSessionComplete(true);
-        } else {
-          loadNewChallenge(currentRound + 1);
-        }
+      if (currentRound >= TOTAL_ROUNDS) {
+        setIsSessionComplete(true);
       } else {
-        // Práctica libre infinita
         loadNewChallenge(currentRound + 1);
       }
     }
@@ -567,49 +559,15 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             </button>
           )}
 
-          {/* Modo / Categoría Badge */}
-          <button
-            onClick={() => setPracticeMode((prev) => (prev === 'rounds' ? 'free' : 'rounds'))}
-            className="btn-ink px-3 py-1 text-xs font-mono font-bold tracking-wider uppercase shadow-[2px_2px_0px_#000000] cursor-pointer flex items-center gap-1.5"
-            title="Clic para cambiar entre Desafío (8 Rondas) y Práctica Libre"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-            <span>{practiceMode === 'rounds' ? 'FORMS - GUESS 3D' : 'PRÁCTICA LIBRE 3D'}</span>
-          </button>
-
           {/* Indicador de Ronda */}
           <div className="bg-neutral-100 border-2 border-black px-2.5 py-1 text-xs font-mono font-bold shadow-[2px_2px_0px_#000000]">
-            {practiceMode === 'rounds' ? `ROUND ${currentRound} / ${TOTAL_ROUNDS}` : `RETO #${currentRound}`}
+            ROUND {currentRound} / {TOTAL_ROUNDS}
           </div>
         </div>
 
-        {/* Selector rápido de Primitiva o Aleatorio */}
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedPrimitiveType}
-            onChange={(e) => {
-              const val = e.target.value as PrimitiveType | 'RANDOM';
-              setSelectedPrimitiveType(val);
-              loadNewChallenge(currentRound, val === 'RANDOM' ? undefined : val);
-            }}
-            className="hidden sm:inline-block border-2 border-black px-2.5 py-1 text-xs font-mono font-bold bg-white shadow-[2px_2px_0px_#000000] cursor-pointer"
-          >
-            <option value="RANDOM">🎲 Primitiva Aleatoria</option>
-            {ALL_PRIMITIVES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={() => loadNewChallenge(currentRound)}
-            className="btn-ink-outline px-2.5 py-1 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
-            title="Generar otro ángulo o perspectiva"
-          >
-            <RotateCcw className="w-3.5 h-3.5 stroke-[2.2]" />
-            <span className="hidden md:inline">Nuevo Ángulo</span>
-          </button>
+        {/* Lado derecho del header: Identificador sobrio */}
+        <div className="text-xs font-mono font-bold uppercase tracking-widest text-neutral-500 hidden sm:block">
+          LAB PERSPECTIVA 3D
         </div>
       </header>
 
@@ -625,6 +583,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           }}
           onSelectImmediate={(type) => {
             loadNewChallenge(currentRound, type);
+          }}
+          onSelectRandom={() => {
+            loadNewChallenge(currentRound);
           }}
           currentType={challenge.type}
         />
@@ -683,12 +644,6 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         ref={canvasContainerRef}
         className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center cursor-crosshair"
       >
-        {/* Etiqueta Técnica Superior Izquierda */}
-        <div className="absolute top-3 left-3 text-[10px] font-mono font-bold uppercase bg-white border-2 border-black px-2 py-0.5 pointer-events-none shadow-[2px_2px_0px_#000000] z-10 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 bg-black" />
-          <span>{challenge.name} · PERSPECTIVA 3D</span>
-        </div>
-
         {/* Indicador de 6 Paredes Inferior Izquierdo */}
         <div className="absolute bottom-3 left-3 text-[9px] font-mono font-bold uppercase bg-white border border-black px-1.5 py-0.5 pointer-events-none shadow-[1px_1px_0px_#000000] z-10 opacity-75 hidden sm:block">
           <span>6 PAREDES · VP X, Y, Z</span>
@@ -777,6 +732,18 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             title={showGrid ? 'Ocultar guías de perspectiva 3D' : 'Mostrar guías de perspectiva 3D'}
           >
             <Grid className="w-4 h-4 stroke-[2.2]" />
+          </button>
+
+          {/* Nuevo Ángulo */}
+          <button
+            onClick={() => loadNewChallenge(currentRound)}
+            className="btn-ink-outline p-2 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100"
+            title="Generar otro ángulo o perspectiva 3D"
+          >
+            <RotateCcw className="w-4 h-4 stroke-[2.2]" />
+            <span className="hidden md:inline uppercase text-[10px] tracking-wider font-mono">
+              Nuevo Ángulo
+            </span>
           </button>
 
           {/* Botón Principal: Submit (cuando se dibuja) o Next (tras evaluar) */}
