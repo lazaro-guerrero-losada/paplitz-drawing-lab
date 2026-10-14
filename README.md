@@ -250,6 +250,7 @@ For in-depth architectural specifications and formulas, refer to the [`docs/`](.
 * 📖 **[Central Documentation Index](./docs/README.md)**
 * 🏗️ **[Architecture & Component Tree](./docs/ARCHITECTURE.md)**
 * 📐 **[3D Geometry & Perspective Engine](./docs/GEOMETRY_AND_PERSPECTIVE.md)**
+* 📦 **[Lab 3D Dynamic Perspective Engine (Forms - Guess 3D)](./docs/LAB_3D_PERSPECTIVE_ENGINE.md)**
 * 🎯 **[Stroke Evaluation & Scoring Algorithms](./docs/STROKE_EVALUATION_AND_SCORING.md)**
 * 🧊 **[Sensei Cubito Avatar System](./docs/AVATAR_CUBITO.md)**
 * 🎮 **[Minigames & Progression Engine](./docs/MINIGAMES_AND_PROGRESSION.md)**

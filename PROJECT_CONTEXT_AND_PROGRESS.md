@@ -608,6 +608,20 @@ A continuación se resumen los avances implementados en la última fase de traba
       7. `E17.1`: Onda Inclinada en S `∿` (trazo vertical con deslizamiento lateral progresivo hacia la derecha de $+36$px, ángulo rector $\approx 74.5^\circ$, 15 trazos por bloque).
     - Misma disciplina rigurosa de 2 bloques discretos ($W = 128$px) delimitados por líneas sólidas de **INICIO** y **FIN**, zona central de pausa con etiqueta `(PAUSA)`, muestra permanente en la izquierda con flecha direccional y punto de inicio (●), y penalización estricta ($\le 30\%$) si se trazan líneas rectas sin curvatura o en sentido invertido.
     - Catálogo ampliado a **279 retos totales** (237 dinámicos + 42 páginas de cuaderno).
+16. **Laboratorio de Perspectiva 3D Dinámica (Lab 3D / Forms - Guess):**
+    - Creación e integración completa de la nueva pestaña **Lab 3D** (`src/components/Lab3D/` y `src/lib/perspective3d/`), inspirada en la sección de perspectiva extrema de Artly y adaptada rigurosamente al sistema Neobrutalista de Paplitz.
+    - **Motor Matemático 3D (`math3d.ts`):** Cámara con matriz LookAt, proyección cónica con recorte en near-plane, cálculo analítico en forma cerrada de puntos de fuga ($VP_X, VP_Y, VP_Z$) con indicadores en los bordes de la pantalla (`▲ VP Z`, `▼ VP Y`, `► VP X`) y generación de la habitación 3D cúbica completa con las 6 paredes (suelo, techo, izquierda, derecha, trasera y delantera) y 12 aristas estructurales.
+    - **8 Primitivas Tridimensionales Paramétricas (`primitives.ts`):** `SPHERE` (esfera con silueta cónica tangente y meridianos), `RING` (toroide con anillos concéntricos y cortes transversales), `CUBE` (cubo a 3 puntos de fuga), `CYLINDER` (cilindro en fuga vertical), `CONE` (cono con generatrices tangentes al ápice), `PYRAMID` (pirámide de 4 aguas), `CAPSULE` (cápsula cilíndrica con cúpulas semiesféricas) y `PRISM` (prisma recto triangular).
+    - **Corrección de Inversión Perceptiva:** Orientación dinámica de la cara ancla base comparando la distancia tridimensional euclídea entre ambos extremos de la figura y la posición de la cámara `camera.eye`, garantizando que la cara dada sea siempre la más próxima al espectador y la figura disminuya progresivamente hacia el fondo.
+    - **Panel Flotante Lateral de Formas (`PrimitiveSelectorPanel.tsx`):** Tarjeta flotante neobrutalista en el lateral izquierdo con checkboxes para seleccionar/deseleccionar individualmente cada forma, botones rápidos *Todas* y *Solo Actual*, botón *Reto* para carga instantánea y botón de colapso a pestaña compacta `[ 📐 Formas (X/8) ]`.
+    - **Botón de Ayudas Visuales de 3 Fases en la Barra Principal:**
+      1. `Off`: Práctica pura a mano alzada sin ayudas.
+      2. `Línea`: Línea gris de puntos (`strokeDasharray: [3, 5]`) que muestra el trazo completo para terminar la forma.
+      3. `Vértices`: Muestra únicamente los marcadores de vértices técnicos y una línea fina direccional que apunta en el vector exacto hacia el vértice conectado, permitiendo deducir la fuga sin desvelar la línea entera.
+    - **Tarjeta Flotante 3D de Referencia (`Perspective3DPreviewCard.tsx`):** Modelo 3D rotatorio interactivo con inspección 360° mediante arrastre de ratón/stylus y badge negro inferior con el nombre en mayúsculas de la forma.
+    - **Corrección de Offset del Cursor:** Calibración milimétrica 1:1 mediante `canvas.width / rect.width` y `canvas.height / rect.height`, `pointerCapture` y rechazo de palma para Stylus / Apple Pencil / S-Pen.
+    - **Evaluador Analítico y Diagnóstico en Color (`evaluator3d.ts`):** Cálculo de distancia geométrica, letras de calificación S, A, B, C, D con puntajes numéricos de 0 a 100 PTS y visualización diagnóstica simultánea (cyan: trazos del usuario, verde: aristas acertadas, rojo: aristas faltantes o desviadas).
+    - **Documentación Técnica Específica:** Guía matemática y arquitectónica completa en `docs/LAB_3D_PERSPECTIVE_ENGINE.md`.
 
 ---
 

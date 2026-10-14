@@ -19,6 +19,7 @@ This documentation provides complete architectural, mathematical, and algorithmi
 | **[AVATAR_CUBITO.md](./AVATAR_CUBITO.md)** | **Avatar / UX**: Sensei Cubito 3D procedural avatar, procedural animations, physics, and expressions. |
 | **[MINIGAMES_AND_PROGRESSION.md](./MINIGAMES_AND_PROGRESSION.md)** | **Gameplay**: Arcade modes (*Fever*, *Blitz*, *Survival*, *Sprint*), curriculum system, and XP progression. |
 | **[ANALOG_WORKSHEETS_AND_QR.md](./ANALOG_WORKSHEETS_AND_QR.md)** | **Paper Drawing**: Vector A4 PDF generation, QR grid indexing, and camera/scanner validation engine. |
+| **[LAB_3D_PERSPECTIVE_ENGINE.md](./LAB_3D_PERSPECTIVE_ENGINE.md)** | **Lab 3D**: Dynamic 3-point perspective engine, 6-wall room cube, 8 parametric primitives, visual aids, and brutalist UI. |
 | **[PORTING_GUIDE_ANDROID.md](./PORTING_GUIDE_ANDROID.md)** | **Android Guide**: Step-by-step setup with Capacitor, S-Pen low-latency stylus support, and camera permissions. |
 | **[PORTING_GUIDE_WINDOWS_EXE.md](./PORTING_GUIDE_WINDOWS_EXE.md)** | **Windows Guide**: Step-by-step packaging for standalone desktop executables (`.exe`) via Electron & Tauri. |
 
