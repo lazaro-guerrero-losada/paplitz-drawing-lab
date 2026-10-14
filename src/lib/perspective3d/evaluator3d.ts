@@ -51,7 +51,8 @@ export function evaluate3DSubmission(
     }
   });
 
-  const MATCH_THRESHOLD = 24.0; // Distancia máxima en px para considerar un punto coincidente
+  // Distancia máxima calibrada a 28px para acomodar la variabilidad natural del trazo libre a mano alzada / stylus
+  const MATCH_THRESHOLD = 28.0;
 
   const matchedSegments: { points: Point2D[]; accuracy: number }[] = [];
   const missingSegments: { points: Point2D[] }[] = [];
@@ -122,10 +123,10 @@ export function evaluate3DSubmission(
   const avgDistance = totalMatchedPoints > 0 ? totalDistanceErrors / totalMatchedPoints : MATCH_THRESHOLD;
   const precisionRatio = Math.max(0, 1 - avgDistance / MATCH_THRESHOLD);
 
-  // Penalización por trazos superfluos o descontrolados
+  // Penalización por trazos superfluos o descontrolados (generoso con bocetado y construcción)
   let totalUserPoints = 0;
   userStrokes.forEach((s) => (totalUserPoints += s.points.length));
-  const excessFactor = totalUserPoints > totalTargetSamplePoints * 3 ? 0.88 : 1.0;
+  const excessFactor = totalUserPoints > totalTargetSamplePoints * 3.5 ? 0.9 : 1.0;
 
   // Puntaje final (0.0 a 100.0)
   let rawScore = (coverageRatio * 75 + precisionRatio * 25) * excessFactor;

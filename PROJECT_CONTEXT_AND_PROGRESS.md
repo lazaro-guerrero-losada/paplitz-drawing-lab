@@ -627,9 +627,15 @@ A continuación se resumen los avances implementados en la última fase de traba
     - **Función REC (Modo Récord) Unificada (`sessionRecorder.ts` & `SessionRecordPanel.tsx`):**
       - Portado idéntico y sin alteración del repositorio oficial `Paplitz`, adaptado para soportar retos volumétricos de tipo `'3d'`.
       - Botón `REC` integrado en la barra inferior de Lab 3D, en la barra de navegación superior desktop y en el cajón de menú móvil, con indicador en pulso rojo y contador de ejercicios registrados `REC (N)`.
-      - Al calificar un ejercicio en Lab 3D con `isRecording` activo, el reto se almacena automáticamente en el historial de sesión en memoria React junto con su reporte diagnóstico y nota.
-      - Modal de sesión con métricas globales (nota media, ejercicios aprobados, ejercicios comentados), comentarios editables inline, visualización técnica expandible, y exportación consolidada en lote (Markdown consolidado o JSON completo).
-      - Sesión 100% volátil en memoria sin persistencia residual en almacenamiento local, garantizando limpieza automática al recargar.
+18. **Siluetas Tangenciales Dependientes del Punto de Vista y Calibración Justa del Evaluador 3D:**
+    - **Solución Geométrica para Superficies Curvas (`primitives.ts`):** En superficies regladas o curvas de revolución (cono, cilindro, esfera, cápsula y toroide), las aristas de contorno no son líneas rectas fijas en el espacio físico, sino generatrices de silueta que dependen estrictamente del punto de vista de la cámara $\vec{E} = (E_x, E_y, E_z)$:
+      - **Cono (`createConePrimitive`):** Derivación analítica exacta de la condición de tangencia $(\vec{E} - \vec{A}) \cdot \vec{N}(\theta) = 0$, resolviendo $\cos(\theta - \phi) = \frac{(y_{apex} - E_y) R}{H \cdot D_{xz}}$. Las generatrices de silueta conectan el ápice con los puntos de contacto tangencial $\vec{P}_1, \vec{P}_2$ de la base elíptica con rigurosa tangencia proyectiva 2D. Base circular dividida en arco frontal visible (tinta negra sólida) y arco posterior oculto (gris tenue).
+      - **Cilindro (`createCylinderPrimitive`):** Silueta lateral exacta con $\theta = \phi \pm \arccos(R / D_{xz})$, conectando tangencialmente la base inferior con la tapa superior y clasificando las generatrices como izquierda y derecha en pantalla.
+      - **Esfera (`createSpherePrimitive`):** Silueta exterior tangencial exacta mediante el cono de contacto de radio $r = R\sqrt{1 - R^2/D^2}$ a distancia focal $R^2/D$, más los meridianos ortogonales en los planos canónicos $XY$ ($Z=0$) y $YZ$ ($X=0$) con arcos frontales visibles hacia el usuario.
+      - **Cápsula (`createCapsulePrimitive`):** Laterales cilíndricos tangenciales a la cámara y cúpula semiesférica de silueta sobre el polo norte.
+      - **Toroide (`createRingPrimitive`):** Envolventes tangenciales superior e inferior calculadas analíticamente para cada sección transversal según el vector visual.
+    - **Muestreo Continuo y Denso (`sampleDenseSegment3D`):** Todas las aristas y generatrices rectas se muestrean con 24 a 32 puntos equidistantes en 3D, equilibrando la distribución de puntos objetivo entre aristas y curvas y permitiendo evaluar el trazo del usuario a lo largo de todo su recorrido.
+    - **Calibración del Evaluador (`evaluator3d.ts`):** Umbral de tolerancia de proximidad calibrado a $28.0$px para admitir la vibración natural de stylus/ratón a mano alzada sin castigar la precisión geométrica, y factor de tolerancia a trazos de construcción elevado a $3.5\times$ antes de penalización por exceso.
 
 ---
 
@@ -649,3 +655,4 @@ Si retomas el proyecto en otro ordenador o deseas continuar ampliándolo, aquí 
 ---
 
 *Documento redactado y preservado para el repositorio de Paplitz. Todo el código correspondiente se encuentra versionado y sincronizado en la rama `main` de GitHub.*
+

@@ -198,3 +198,46 @@ Portado de forma fiel y extendido para soportar ejercicios `'3d'`:
    - **Descargar JSON**: Exporta todos los datos crudos estructurados de la sesión en un archivo `.json`.
    - **100% Volátil en Memoria**: La sesión no persiste basura residual en almacenamiento local; se reinicia limpiamente al recargar la página.
 
+---
+
+## 9. Matemáticas de Siluetas Tangenciales Dependientes del Punto de Vista (`primitives.ts`)
+
+En dibujo analítico tridimensional, las superficies regladas o curvas de revolución no poseen aristas fijas en el espacio físico; sus líneas de contorno aparente (siluetas) son **estrictamente tangenciales al punto de vista de la cámara** $\vec{E} = (E_x, E_y, E_z)$:
+
+### 9.1 Cono en Perspectiva (`createConePrimitive`)
+Para un cono con ápice $\vec{A} = (0, y_{apex}, 0)$ y base circular en $y = y_{base}$ de radio $R$ (altura $H = y_{apex} - y_{base}$):
+- Normal exterior en la superficie a ángulo $\theta$: $\vec{N}(\theta) = (\cos\theta, \frac{R}{H}, \sin\theta)$.
+- Condición de tangencia de la visual desde la cámara $\vec{E}$:
+  $$(\vec{E} - \vec{A}) \cdot \vec{N}(\theta) = 0$$
+  $$E_x \cos\theta + E_z \sin\theta = (y_{apex} - E_y) \frac{R}{H}$$
+- Siendo $D_{xz} = \sqrt{E_x^2 + E_z^2}$ y $\phi = \text{atan2}(E_z, E_x)$:
+  $$\cos(\theta - \phi) = \frac{(y_{apex} - E_y) R}{H \cdot D_{xz}}$$
+- Los dos ángulos de contacto tangencial en la elipse base son:
+  $$\Delta\theta = \arccos\left(\text{clamp}\left(\frac{(y_{apex} - E_y) R}{H \cdot D_{xz}}, -1, 1\right)\right)$$
+  $$\theta_1 = \phi + \Delta\theta, \quad \theta_2 = \phi - \Delta\theta$$
+- Generatrices de silueta: van desde el ápice $\vec{A}$ a $\vec{P}_1 = (R\cos\theta_1, y_{base}, R\sin\theta_1)$ y $\vec{P}_2 = (R\cos\theta_2, y_{base}, R\sin\theta_2)$.
+- **Preservación Proyectiva:** Estas generatrices son rigurosamente tangenciales a la elipse proyectada de la base en el espacio de pantalla 2D.
+- Muestreo continuo con `sampleDenseSegment3D(apex, P, 32)` para evaluación suave en todo el recorrido.
+
+### 9.2 Cilindro en Perspectiva (`createCylinderPrimitive`)
+- Normal exterior: $\vec{N}(\theta) = (\cos\theta, 0, \sin\theta)$.
+- Condición de silueta: $(\vec{E} - \vec{P}) \cdot \vec{N}(\theta) = 0 \implies D_{xz} \cos(\theta - \phi) = R$.
+- Ángulos de tangencia: $\theta_{1,2} = \phi \pm \arccos(R / D_{xz})$.
+- Las aristas laterales conectan los puntos tangentes de la base inferior con los de la tapa superior y se ordenan en pantalla como Lateral Izquierdo y Derecho.
+
+### 9.3 Esfera en Perspectiva (`createSpherePrimitive`)
+- Cono tangente desde la cámara a la esfera: con radio $R$ y distancia $D = \|\vec{E}\|$:
+  $$\sin\alpha = \frac{R}{D}, \quad d_{contact} = \frac{R^2}{D}, \quad r_{contact} = R \sqrt{1 - \frac{R^2}{D^2}}$$
+- El círculo de contacto $3D$ se proyecta exactamente sobre la silueta aparente exterior de la esfera.
+- Líneas ortogonales canónicas: El ecuador horizontal ($XZ$, $Y=0$) dado como ancla, y los meridianos ortogonales en $XY$ ($Z=0$) y $YZ$ ($X=0$) cuyos arcos frontales visibles son objetivos a dibujar.
+
+### 9.4 Toroide / Anillo (`createRingPrimitive`)
+- Para cada sección transversal circular a ángulo $\theta$, el vector visual $\vec{V} = \vec{C}(\theta) - \vec{E}$ determina los puntos tangentes superior e inferior mediante el producto escalar con las direcciones radial y vertical:
+  $$(\vec{V} \cdot \vec{u}_r) \cos\alpha + (\vec{V} \cdot \vec{u}_y) \sin\alpha = 0$$
+- Esto traza la envolvente tangencial superior e inferior exacta del toroide en 3D.
+
+### 9.5 Muestreo Continuo y Evaluación Justa (`evaluator3d.ts`)
+- Todas las aristas rectas y curvas se muestrean con 24 a 48 puntos mediante `sampleDenseSegment3D`.
+- Umbral de tolerancia de stylus/mano alzada calibrado a $28.0\,\text{px}$, reconociendo trazos precisos sin penalizar la vibración natural del lápiz óptico o el ratón.
+
+

@@ -117,6 +117,24 @@ function sample3DCurveTo2D(
   };
 }
 
+/**
+ * Muestrea densamente un segmento 3D entre dos puntos pA y pB para evaluación continua de perspectiva
+ */
+export function sampleDenseSegment3D(pA: Vector3D, pB: Vector3D, count: number = 32): Vector3D[] {
+  const pts: Vector3D[] = [];
+  for (let i = 0; i <= count; i++) {
+    const t = i / count;
+    pts.push(
+      v3(
+        pA.x + t * (pB.x - pA.x),
+        pA.y + t * (pB.y - pA.y),
+        pA.z + t * (pB.z - pA.z)
+      )
+    );
+  }
+  return pts;
+}
+
 // ==========================================
 // Generadores de Primitivas Específicas
 // ==========================================
@@ -134,82 +152,100 @@ export function createSpherePrimitive(
   const R = 0.95;
   const segments = 48;
 
-  // 1. Ecuador (Plano XZ en Y = 0)
-  const equator3D: Vector3D[] = [];
+  // 1. Ecuador Horizontal (Plano XZ en Y = 0)
+  const fullEquator: Vector3D[] = [];
+  const frontEquator: Vector3D[] = [];
+  const backEquator: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    equator3D.push(v3(R * Math.cos(th), 0, R * Math.sin(th)));
-  }
+    const pt = v3(R * Math.cos(th), 0, R * Math.sin(th));
+    fullEquator.push(pt);
 
-  const frontEquator3D: Vector3D[] = [];
-  const backEquator3D: Vector3D[] = [];
-  equator3D.forEach((p) => {
-    const dirToCam = vSub(camera.eye, p);
-    const normal = vNorm(v3(p.x, 0, p.z));
+    // Vector normal en el punto hacia afuera
+    const normal = vNorm(v3(pt.x, 0, pt.z));
+    const dirToCam = vSub(camera.eye, pt);
     if (vDot(dirToCam, normal) >= 0) {
-      frontEquator3D.push(p);
+      frontEquator.push(pt);
     } else {
-      backEquator3D.push(p);
+      backEquator.push(pt);
     }
-  });
+  }
 
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(frontEquator3D, viewProj, W, H, 'equator-front', 'Ecuador Frontal', true, 'solid'),
-    sample3DCurveTo2D(backEquator3D, viewProj, W, H, 'equator-back', 'Ecuador Posterior', true, 'faint'),
+    sample3DCurveTo2D(frontEquator.length > 1 ? frontEquator : fullEquator, viewProj, W, H, 'equator-front', 'Ecuador Frontal', true, 'solid'),
+    sample3DCurveTo2D(backEquator, viewProj, W, H, 'equator-back', 'Ecuador Posterior', true, 'faint'),
   ];
 
-  // 2. Meridianos verticales
-  const meridianXY: Vector3D[] = [];
-  for (let i = 0; i <= segments; i++) {
-    const th = (i / segments) * Math.PI * 2;
-    meridianXY.push(v3(R * Math.sin(th), R * Math.cos(th), 0));
-  }
-
-  const meridianYZ: Vector3D[] = [];
-  for (let i = 0; i <= segments; i++) {
-    const th = (i / segments) * Math.PI * 2;
-    meridianYZ.push(v3(0, R * Math.cos(th), R * Math.sin(th)));
-  }
-
-  // 3. Silueta exterior exacta en perspectiva de cono tangente
+  // 2. Silueta exterior tangencial exacta (Cono tangente desde la cámara a la esfera)
   const distCam = vLen(camera.eye);
-  const sinAlpha = Math.min(0.999, R / distCam);
+  const sinAlpha = Math.min(0.9999, R / Math.max(R + 0.001, distCam));
   const cosAlpha = Math.sqrt(Math.max(0, 1 - sinAlpha * sinAlpha));
-  const contactDist = R * sinAlpha;
-  const contactRadius = R * cosAlpha;
+  const contactDist = R * sinAlpha;       // R^2 / distCam
+  const contactRadius = R * cosAlpha;     // R * sqrt(1 - R^2/distCam^2)
 
   const camDir = vNorm(camera.eye);
   const contactCenter = vScale(camDir, contactDist);
 
   let tempUp = camera.up;
   let uDir = vNorm(vCross(camDir, tempUp));
-  if (vLen(uDir) < 0.001) uDir = v3(1, 0, 0);
-  const vDir = vCross(camDir, uDir);
+  if (vLen(uDir) < 0.001) uDir = vNorm(vCross(camDir, v3(1, 0, 0)));
+  const vDir = vNorm(vCross(camDir, uDir));
 
   const silhouette3D: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    const offset = vAdd(vScale(uDir, contactRadius * Math.cos(th)), vScale(vDir, contactRadius * Math.sin(th)));
+    const offset = vAdd(
+      vScale(uDir, contactRadius * Math.cos(th)),
+      vScale(vDir, contactRadius * Math.sin(th))
+    );
     silhouette3D.push(vAdd(contactCenter, offset));
   }
 
+  // 3. Meridianos ortogonales en los planos canónicos XY (Z = 0) y YZ (X = 0)
+  // Muestreamos el arco frontal visible hacia la cámara
+  const fullMeridianXY: Vector3D[] = [];
+  const frontMeridianXY: Vector3D[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const th = (i / segments) * Math.PI * 2;
+    const pt = v3(R * Math.cos(th), R * Math.sin(th), 0);
+    fullMeridianXY.push(pt);
+    const normal = vNorm(pt);
+    const dirToCam = vSub(camera.eye, pt);
+    if (vDot(dirToCam, normal) >= 0) {
+      frontMeridianXY.push(pt);
+    }
+  }
+
+  const fullMeridianYZ: Vector3D[] = [];
+  const frontMeridianYZ: Vector3D[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const th = (i / segments) * Math.PI * 2;
+    const pt = v3(0, R * Math.sin(th), R * Math.cos(th));
+    fullMeridianYZ.push(pt);
+    const normal = vNorm(pt);
+    const dirToCam = vSub(camera.eye, pt);
+    if (vDot(dirToCam, normal) >= 0) {
+      frontMeridianYZ.push(pt);
+    }
+  }
+
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(silhouette3D, viewProj, W, H, 'silhouette', 'Silueta Exterior', false, 'solid'),
-    sample3DCurveTo2D(meridianXY, viewProj, W, H, 'meridian-1', 'Meridiano Vertical 1', false, 'solid'),
-    sample3DCurveTo2D(meridianYZ, viewProj, W, H, 'meridian-2', 'Meridiano Vertical 2', false, 'solid'),
+    sample3DCurveTo2D(silhouette3D, viewProj, W, H, 'silhouette', 'Silueta Exterior Tangencial', false, 'solid'),
+    sample3DCurveTo2D(frontMeridianXY.length > 1 ? frontMeridianXY : fullMeridianXY, viewProj, W, H, 'meridian-1', 'Meridiano Ortogonal XY', false, 'solid'),
+    sample3DCurveTo2D(frontMeridianYZ.length > 1 ? frontMeridianYZ : fullMeridianYZ, viewProj, W, H, 'meridian-2', 'Meridiano Ortogonal YZ', false, 'solid'),
   ];
 
   const previewModel3D: WireframeModel3D = {
     vertices: [],
     edges: [],
-    rings: [equator3D, meridianXY, meridianYZ, silhouette3D],
+    rings: [fullEquator, fullMeridianXY, fullMeridianYZ, silhouette3D],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
 }
 
 export function createRingPrimitive(
-  _camera: Camera3D,
+  camera: Camera3D,
   viewProj: number[],
   W: number,
   H: number
@@ -222,7 +258,7 @@ export function createRingPrimitive(
   const r = 0.28;
   const segments = 48;
 
-  // Anillo medio central (Guía base dada)
+  // Eje central del toroide en Y = 0 (ancla dada)
   const centerRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
@@ -233,20 +269,44 @@ export function createRingPrimitive(
     sample3DCurveTo2D(centerRing, viewProj, W, H, 'center-ring', 'Eje Central del Toroide', true, 'solid'),
   ];
 
-  // Anillos concéntricos interior y exterior
-  const outerRingTop: Vector3D[] = [];
-  const outerRingBottom: Vector3D[] = [];
-  const innerRingTop: Vector3D[] = [];
-  const innerRingBottom: Vector3D[] = [];
+  // Siluetas tangenciales superior e inferior del toroide desde el punto de vista de la cámara
+  const upperEnvelope3D: Vector3D[] = [];
+  const lowerEnvelope3D: Vector3D[] = [];
 
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    const cosT = Math.cos(th);
-    const sinT = Math.sin(th);
-    outerRingTop.push(v3((R + r) * cosT, r * 0.7, (R + r) * sinT));
-    outerRingBottom.push(v3((R + r) * cosT, -r * 0.7, (R + r) * sinT));
-    innerRingTop.push(v3((R - r) * cosT, r * 0.7, (R - r) * sinT));
-    innerRingBottom.push(v3((R - r) * cosT, -r * 0.7, (R - r) * sinT));
+    const cX = R * Math.cos(th);
+    const cZ = R * Math.sin(th);
+    const centerPt = v3(cX, 0, cZ);
+
+    const radDir = v3(Math.cos(th), 0, Math.sin(th));
+    const upDir = v3(0, 1, 0);
+
+    // Vector desde el centro del tubo hacia la cámara
+    const vToCam = vSub(camera.eye, centerPt);
+    const a = vDot(vToCam, radDir);
+    const b = vDot(vToCam, upDir);
+    const len = Math.hypot(a, b);
+
+    if (len > 0.001) {
+      // Normal tangencial a la visual
+      const cosA = -b / len;
+      const sinA = a / len;
+
+      const p1 = vAdd(centerPt, vAdd(vScale(radDir, r * cosA), vScale(upDir, r * sinA)));
+      const p2 = vAdd(centerPt, vAdd(vScale(radDir, -r * cosA), vScale(upDir, -r * sinA)));
+
+      if (p1.y >= p2.y) {
+        upperEnvelope3D.push(p1);
+        lowerEnvelope3D.push(p2);
+      } else {
+        upperEnvelope3D.push(p2);
+        lowerEnvelope3D.push(p1);
+      }
+    } else {
+      upperEnvelope3D.push(vAdd(centerPt, vScale(upDir, r)));
+      lowerEnvelope3D.push(vAdd(centerPt, vScale(upDir, -r)));
+    }
   }
 
   // 4 secciones transversales circulares
@@ -268,9 +328,8 @@ export function createRingPrimitive(
   });
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(outerRingTop, viewProj, W, H, 'outer-top', 'Borde Exterior Superior', false, 'solid'),
-    sample3DCurveTo2D(outerRingBottom, viewProj, W, H, 'outer-bottom', 'Borde Exterior Inferior', false, 'solid'),
-    sample3DCurveTo2D(innerRingTop, viewProj, W, H, 'inner-top', 'Borde Interior Superior', false, 'solid'),
+    sample3DCurveTo2D(upperEnvelope3D, viewProj, W, H, 'envelope-upper', 'Silueta Tangencial Superior', false, 'solid'),
+    sample3DCurveTo2D(lowerEnvelope3D, viewProj, W, H, 'envelope-lower', 'Silueta Tangencial Inferior', false, 'solid'),
     ...crossSections.map((cs, idx) =>
       sample3DCurveTo2D(cs, viewProj, W, H, `cross-${idx}`, `Sección Transversal ${idx + 1}`, false, 'solid')
     ),
@@ -279,7 +338,7 @@ export function createRingPrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [],
     edges: [],
-    rings: [centerRing, outerRingTop, outerRingBottom, innerRingTop, innerRingBottom, ...crossSections],
+    rings: [centerRing, upperEnvelope3D, lowerEnvelope3D, ...crossSections],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -325,7 +384,8 @@ export function createCubePrimitive(
   ];
 
   const targetCurves: CurveSegment2D[] = edgePairs.map(([startIdx, endIdx, name], idx) => {
-    return sample3DCurveTo2D([v[startIdx], v[endIdx]], viewProj, W, H, `edge-${idx}`, name, false, 'solid');
+    const densePts = sampleDenseSegment3D(v[startIdx], v[endIdx], 24);
+    return sample3DCurveTo2D(densePts, viewProj, W, H, `edge-${idx}`, name, false, 'solid');
   });
 
   const previewModel3D: WireframeModel3D = {
@@ -354,16 +414,50 @@ export function createCylinderPrimitive(
   const halfH = 0.95;
   const segments = 48;
 
-  // Base inferior en el suelo Y = -halfH
+  // Cámara en plano XZ
+  const Dxz = Math.hypot(camera.eye.x, camera.eye.z);
+  const phi = Math.atan2(camera.eye.z, camera.eye.x);
+
+  // Silueta cilíndrica exacta: cos(theta - phi) = R / Dxz
+  const deltaTheta = Math.acos(Math.max(-0.9999, Math.min(0.9999, R / Math.max(R + 0.001, Dxz))));
+  const angle1 = phi + deltaTheta;
+  const angle2 = phi - deltaTheta;
+
+  // Puntos de contacto en base inferior (Y = -halfH) y tapa superior (Y = +halfH)
+  const bContact1 = v3(R * Math.cos(angle1), -halfH, R * Math.sin(angle1));
+  const bContact2 = v3(R * Math.cos(angle2), -halfH, R * Math.sin(angle2));
+  const tContact1 = v3(R * Math.cos(angle1), halfH, R * Math.sin(angle1));
+  const tContact2 = v3(R * Math.cos(angle2), halfH, R * Math.sin(angle2));
+
+  // Ordenar izquierda y derecha en pantalla
+  const proj1 = project3DTo2D(bContact1, viewProj, W, H);
+  const proj2 = project3DTo2D(bContact2, viewProj, W, H);
+
+  const is1Left = proj1.point2D.x < proj2.point2D.x;
+  const bLeft = is1Left ? bContact1 : bContact2;
+  const bRight = is1Left ? bContact2 : bContact1;
+  const tLeft = is1Left ? tContact1 : tContact2;
+  const tRight = is1Left ? tContact2 : tContact1;
+
+  // Aristas laterales densamente muestreadas
+  const leftSide = sampleDenseSegment3D(bLeft, tLeft, 32);
+  const rightSide = sampleDenseSegment3D(bRight, tRight, 32);
+
+  // Base inferior (dada como guía ancla con arco frontal sólido y posterior tenue)
   const bottomRing: Vector3D[] = [];
+  const frontBottom: Vector3D[] = [];
+  const backBottom: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    bottomRing.push(v3(R * Math.cos(th), -halfH, R * Math.sin(th)));
+    const pt = v3(R * Math.cos(th), -halfH, R * Math.sin(th));
+    bottomRing.push(pt);
+    const dAng = Math.atan2(Math.sin(th - phi), Math.cos(th - phi));
+    if (Math.abs(dAng) <= deltaTheta) {
+      frontBottom.push(pt);
+    } else {
+      backBottom.push(pt);
+    }
   }
-
-  const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(bottomRing, viewProj, W, H, 'bottom-ellipse', 'Elipse Base Inferior', true, 'solid'),
-  ];
 
   // Tapa superior
   const topRing: Vector3D[] = [];
@@ -372,34 +466,21 @@ export function createCylinderPrimitive(
     topRing.push(v3(R * Math.cos(th), halfH, R * Math.sin(th)));
   }
 
-  // Generatrices laterales tangentes exactas
-  const camHorizDist = Math.sqrt(camera.eye.x * camera.eye.x + camera.eye.z * camera.eye.z);
-  const camAngle = Math.atan2(camera.eye.x, camera.eye.z);
-  const tangentOffset = Math.asin(Math.min(0.999, R / Math.max(R + 0.01, camHorizDist)));
-
-  const angleLeft = camAngle + Math.PI / 2 + tangentOffset;
-  const angleRight = camAngle - Math.PI / 2 - tangentOffset;
-
-  const leftEdge = [
-    v3(R * Math.sin(angleLeft), -halfH, R * Math.cos(angleLeft)),
-    v3(R * Math.sin(angleLeft), halfH, R * Math.cos(angleLeft)),
-  ];
-
-  const rightEdge = [
-    v3(R * Math.sin(angleRight), -halfH, R * Math.cos(angleRight)),
-    v3(R * Math.sin(angleRight), halfH, R * Math.cos(angleRight)),
+  const anchorCurves: CurveSegment2D[] = [
+    sample3DCurveTo2D(frontBottom.length > 1 ? frontBottom : bottomRing, viewProj, W, H, 'bottom-ellipse-front', 'Elipse Base Frontal', true, 'solid'),
+    sample3DCurveTo2D(backBottom, viewProj, W, H, 'bottom-ellipse-back', 'Elipse Base Posterior', true, 'faint'),
   ];
 
   const targetCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(topRing, viewProj, W, H, 'top-ellipse', 'Elipse Superior', false, 'solid'),
-    sample3DCurveTo2D(leftEdge, viewProj, W, H, 'left-side', 'Contorno Lateral Izquierdo', false, 'solid'),
-    sample3DCurveTo2D(rightEdge, viewProj, W, H, 'right-side', 'Contorno Lateral Derecho', false, 'solid'),
+    sample3DCurveTo2D(leftSide, viewProj, W, H, 'left-side', 'Contorno Lateral Izquierdo', false, 'solid'),
+    sample3DCurveTo2D(rightSide, viewProj, W, H, 'right-side', 'Contorno Lateral Derecho', false, 'solid'),
   ];
 
   const previewModel3D: WireframeModel3D = {
-    vertices: [],
+    vertices: [bLeft, bRight, tLeft, tRight],
     edges: [],
-    rings: [bottomRing, topRing, leftEdge, rightEdge],
+    rings: [bottomRing, topRing, leftSide, rightSide],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -417,39 +498,75 @@ export function createConePrimitive(
 } {
   const R = 0.95;
   const halfH = 0.95;
-  const segments = 48;
+  const apexY = halfH + 0.1; // 1.05
+  const baseY = -halfH;      // -0.95
+  const coneHeight = apexY - baseY; // 2.0
+  const apex = v3(0, apexY, 0);
 
-  const baseRing: Vector3D[] = [];
+  // Cámara en coordenadas cilíndricas relativas al eje vertical Y
+  const Dxz = Math.hypot(camera.eye.x, camera.eye.z);
+  const phi = Math.atan2(camera.eye.z, camera.eye.x);
+
+  // Derivación analítica de la silueta tangencial exacta del cono:
+  // Condición: (E - A) · N(theta) = 0 donde N(theta) = (cos theta, R / H, sin theta)
+  // E_x cos theta + E_z sin theta = (apexY - E_y) * (R / H)
+  // Dxz * cos(theta - phi) = (apexY - E_y) * (R / H)
+  // cos(theta - phi) = ((apexY - E_y) * R) / (coneHeight * Dxz)
+  const ratio = ((apexY - camera.eye.y) * R) / (coneHeight * Math.max(0.001, Dxz));
+  const clampedRatio = Math.max(-0.9999, Math.min(0.9999, ratio));
+  const deltaTheta = Math.acos(clampedRatio);
+
+  const angle1 = phi + deltaTheta;
+  const angle2 = phi - deltaTheta;
+
+  const pContact1 = v3(R * Math.cos(angle1), baseY, R * Math.sin(angle1));
+  const pContact2 = v3(R * Math.cos(angle2), baseY, R * Math.sin(angle2));
+
+  // Proyectar para clasificar izquierda vs derecha en la pantalla
+  const proj1 = project3DTo2D(pContact1, viewProj, W, H);
+  const proj2 = project3DTo2D(pContact2, viewProj, W, H);
+
+  const isP1Left = proj1.point2D.x < proj2.point2D.x;
+  const pLeft = isP1Left ? pContact1 : pContact2;
+  const pRight = isP1Left ? pContact2 : pContact1;
+
+  // Generatrices tangentes densamente muestreadas desde el ápice hasta la base
+  const leftSlant3D = sampleDenseSegment3D(apex, pLeft, 32);
+  const rightSlant3D = sampleDenseSegment3D(apex, pRight, 32);
+
+  // Base circular dividida en arco frontal y posterior
+  const segments = 48;
+  const frontBase3D: Vector3D[] = [];
+  const backBase3D: Vector3D[] = [];
+  const fullBase3D: Vector3D[] = [];
+
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    baseRing.push(v3(R * Math.cos(th), -halfH, R * Math.sin(th)));
+    const pt = v3(R * Math.cos(th), baseY, R * Math.sin(th));
+    fullBase3D.push(pt);
+
+    const dAng = Math.atan2(Math.sin(th - phi), Math.cos(th - phi));
+    if (Math.abs(dAng) <= deltaTheta) {
+      frontBase3D.push(pt);
+    } else {
+      backBase3D.push(pt);
+    }
   }
 
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(baseRing, viewProj, W, H, 'cone-base', 'Base Circular del Cono', true, 'solid'),
+    sample3DCurveTo2D(frontBase3D.length > 1 ? frontBase3D : fullBase3D, viewProj, W, H, 'cone-base-front', 'Base Circular Frontal', true, 'solid'),
+    sample3DCurveTo2D(backBase3D, viewProj, W, H, 'cone-base-back', 'Base Circular Posterior', true, 'faint'),
   ];
 
-  const apex = v3(0, halfH + 0.1, 0);
-
-  const camHorizDist = Math.sqrt(camera.eye.x * camera.eye.x + camera.eye.z * camera.eye.z);
-  const camAngle = Math.atan2(camera.eye.x, camera.eye.z);
-  const tangentOffset = Math.asin(Math.min(0.999, R / Math.max(R + 0.01, camHorizDist)));
-
-  const angleLeft = camAngle + Math.PI / 2 + tangentOffset;
-  const angleRight = camAngle - Math.PI / 2 - tangentOffset;
-
-  const leftSlant = [v3(R * Math.sin(angleLeft), -halfH, R * Math.cos(angleLeft)), apex];
-  const rightSlant = [v3(R * Math.sin(angleRight), -halfH, R * Math.cos(angleRight)), apex];
-
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(leftSlant, viewProj, W, H, 'left-slant', 'Arista Tangente Izquierda', false, 'solid'),
-    sample3DCurveTo2D(rightSlant, viewProj, W, H, 'right-slant', 'Arista Tangente Derecha', false, 'solid'),
+    sample3DCurveTo2D(leftSlant3D, viewProj, W, H, 'left-slant', 'Arista Tangente Izquierda', false, 'solid'),
+    sample3DCurveTo2D(rightSlant3D, viewProj, W, H, 'right-slant', 'Arista Tangente Derecha', false, 'solid'),
   ];
 
   const previewModel3D: WireframeModel3D = {
-    vertices: [apex],
+    vertices: [apex, pLeft, pRight],
     edges: [],
-    rings: [baseRing, leftSlant, rightSlant],
+    rings: [fullBase3D, leftSlant3D, rightSlant3D],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -480,10 +597,10 @@ export function createPyramidPrimitive(
   ];
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D([b0, apex], viewProj, W, H, 'slant-0', 'Arista a la Cúspide (Atrás-Izq)', false, 'solid'),
-    sample3DCurveTo2D([b1, apex], viewProj, W, H, 'slant-1', 'Arista a la Cúspide (Atrás-Der)', false, 'solid'),
-    sample3DCurveTo2D([b2, apex], viewProj, W, H, 'slant-2', 'Arista a la Cúspide (Frente-Der)', false, 'solid'),
-    sample3DCurveTo2D([b3, apex], viewProj, W, H, 'slant-3', 'Arista a la Cúspide (Frente-Izq)', false, 'solid'),
+    sample3DCurveTo2D(sampleDenseSegment3D(b0, apex, 24), viewProj, W, H, 'slant-0', 'Arista a la Cúspide (Atrás-Izq)', false, 'solid'),
+    sample3DCurveTo2D(sampleDenseSegment3D(b1, apex, 24), viewProj, W, H, 'slant-1', 'Arista a la Cúspide (Atrás-Der)', false, 'solid'),
+    sample3DCurveTo2D(sampleDenseSegment3D(b2, apex, 24), viewProj, W, H, 'slant-2', 'Arista a la Cúspide (Frente-Der)', false, 'solid'),
+    sample3DCurveTo2D(sampleDenseSegment3D(b3, apex, 24), viewProj, W, H, 'slant-3', 'Arista a la Cúspide (Frente-Izq)', false, 'solid'),
   ];
 
   const previewModel3D: WireframeModel3D = {
@@ -498,7 +615,7 @@ export function createPyramidPrimitive(
 }
 
 export function createCapsulePrimitive(
-  _camera: Camera3D,
+  camera: Camera3D,
   viewProj: number[],
   W: number,
   H: number
@@ -509,51 +626,74 @@ export function createCapsulePrimitive(
 } {
   const R = 0.75;
   const cylH = 0.8;
+  const halfCyl = cylH / 2;
   const segments = 48;
 
+  // Tangentes exactas del cilindro central según la posición de la cámara
+  const Dxz = Math.hypot(camera.eye.x, camera.eye.z);
+  const phi = Math.atan2(camera.eye.z, camera.eye.x);
+  const deltaTheta = Math.acos(Math.max(-0.9999, Math.min(0.9999, R / Math.max(R + 0.001, Dxz))));
+
+  const angle1 = phi + deltaTheta;
+  const angle2 = phi - deltaTheta;
+
+  const bContact1 = v3(R * Math.cos(angle1), -halfCyl, R * Math.sin(angle1));
+  const bContact2 = v3(R * Math.cos(angle2), -halfCyl, R * Math.sin(angle2));
+  const tContact1 = v3(R * Math.cos(angle1), halfCyl, R * Math.sin(angle1));
+  const tContact2 = v3(R * Math.cos(angle2), halfCyl, R * Math.sin(angle2));
+
+  // Ordenar izquierda y derecha en pantalla
+  const proj1 = project3DTo2D(bContact1, viewProj, W, H);
+  const proj2 = project3DTo2D(bContact2, viewProj, W, H);
+  const is1Left = proj1.point2D.x < proj2.point2D.x;
+
+  const bLeft = is1Left ? bContact1 : bContact2;
+  const bRight = is1Left ? bContact2 : bContact1;
+  const tLeft = is1Left ? tContact1 : tContact2;
+  const tRight = is1Left ? tContact2 : tContact1;
+
+  const leftSide = sampleDenseSegment3D(bLeft, tLeft, 28);
+  const rightSide = sampleDenseSegment3D(bRight, tRight, 28);
+
+  // Anillo divisor inferior en Y = -halfCyl (dado como ancla)
   const lowerRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    lowerRing.push(v3(R * Math.cos(th), -cylH / 2, R * Math.sin(th)));
+    lowerRing.push(v3(R * Math.cos(th), -halfCyl, R * Math.sin(th)));
   }
 
-  const lowerDomeArc: Vector3D[] = [];
-  for (let i = 0; i <= 24; i++) {
-    const th = Math.PI + (i / 24) * Math.PI;
-    lowerDomeArc.push(v3(R * Math.cos(th), -cylH / 2 + R * Math.sin(th), 0));
+  // Anillo divisor superior en Y = +halfCyl (objetivo)
+  const upperRing: Vector3D[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const th = (i / segments) * Math.PI * 2;
+    upperRing.push(v3(R * Math.cos(th), halfCyl, R * Math.sin(th)));
+  }
+
+  // Cúpula semiesférica superior: arco de silueta sobre el polo norte
+  const upperDomeArc: Vector3D[] = [];
+  const domeSegs = 24;
+  for (let i = 0; i <= domeSegs; i++) {
+    const t = i / domeSegs;
+    const arcX = tLeft.x * (1 - t) + tRight.x * t;
+    const arcZ = tLeft.z * (1 - t) + tRight.z * t;
+    upperDomeArc.push(v3(arcX, halfCyl + R * Math.sin(t * Math.PI), arcZ));
   }
 
   const anchorCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(lowerRing, viewProj, W, H, 'capsule-lower-ring', 'Anillo Inferior Cápsula', true, 'solid'),
-    sample3DCurveTo2D(lowerDomeArc, viewProj, W, H, 'capsule-lower-dome', 'Cúpula Inferior', true, 'solid'),
   ];
-
-  const upperRing: Vector3D[] = [];
-  for (let i = 0; i <= segments; i++) {
-    const th = (i / segments) * Math.PI * 2;
-    upperRing.push(v3(R * Math.cos(th), cylH / 2, R * Math.sin(th)));
-  }
-
-  const upperDomeArc: Vector3D[] = [];
-  for (let i = 0; i <= 24; i++) {
-    const th = (i / 24) * Math.PI;
-    upperDomeArc.push(v3(R * Math.cos(th), cylH / 2 + R * Math.sin(th), 0));
-  }
-
-  const leftSide = [v3(-R, -cylH / 2, 0), v3(-R, cylH / 2, 0)];
-  const rightSide = [v3(R, -cylH / 2, 0), v3(R, cylH / 2, 0)];
 
   const targetCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(upperRing, viewProj, W, H, 'capsule-upper-ring', 'Anillo Divisor Superior', false, 'solid'),
-    sample3DCurveTo2D(upperDomeArc, viewProj, W, H, 'capsule-upper-dome', 'Cúpula Esférica Superior', false, 'solid'),
-    sample3DCurveTo2D(leftSide, viewProj, W, H, 'capsule-left', 'Lateral Cilíndrico Izquierdo', false, 'solid'),
-    sample3DCurveTo2D(rightSide, viewProj, W, H, 'capsule-right', 'Lateral Cilíndrico Derecho', false, 'solid'),
+    sample3DCurveTo2D(upperDomeArc, viewProj, W, H, 'capsule-upper-dome', 'Cúpula Semiesférica Superior', false, 'solid'),
+    sample3DCurveTo2D(leftSide, viewProj, W, H, 'capsule-left', 'Lateral Tangente Izquierdo', false, 'solid'),
+    sample3DCurveTo2D(rightSide, viewProj, W, H, 'capsule-right', 'Lateral Tangente Derecho', false, 'solid'),
   ];
 
   const previewModel3D: WireframeModel3D = {
-    vertices: [],
+    vertices: [bLeft, bRight, tLeft, tRight],
     edges: [],
-    rings: [lowerRing, upperRing, lowerDomeArc, upperDomeArc, leftSide, rightSide],
+    rings: [lowerRing, upperRing, upperDomeArc, leftSide, rightSide],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -594,8 +734,6 @@ export function createPrismPrimitive(
 
   const isACcloser = distA < distB;
   const nearTriangle = isACcloser ? [a0, a1, a2, a0] : [b0, b1, b2, b0];
-  const farTriangle = isACcloser ? [b0, b1, b2, b0] : [a0, a1, a2, a0];
-
   const nearPts = isACcloser ? [a0, a1, a2] : [b0, b1, b2];
   const farPts = isACcloser ? [b0, b1, b2] : [a0, a1, a2];
 
@@ -604,12 +742,17 @@ export function createPrismPrimitive(
     sample3DCurveTo2D(nearTriangle, viewProj, W, H, 'prism-near', 'Cara Triangular Frontal', true, 'solid'),
   ];
 
-  // El objetivo es la cara posterior (que disminuye en perspectiva hacia el fondo) y las 3 aristas que fugan
+  // Cara posterior y aristas longitudinales que fugan hacia el fondo
+  const farEdge0 = sampleDenseSegment3D(farPts[0], farPts[1], 24);
+  const farEdge1 = sampleDenseSegment3D(farPts[1], farPts[2], 24);
+  const farEdge2 = sampleDenseSegment3D(farPts[2], farPts[0], 24);
+  const farTriangleDense = [...farEdge0, ...farEdge1, ...farEdge2];
+
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(farTriangle, viewProj, W, H, 'prism-far', 'Cara Triangular Posterior', false, 'solid'),
-    sample3DCurveTo2D([nearPts[0], farPts[0]], viewProj, W, H, 'prism-edge-0', 'Arista Longitudinal Izquierda', false, 'solid'),
-    sample3DCurveTo2D([nearPts[1], farPts[1]], viewProj, W, H, 'prism-edge-1', 'Arista Longitudinal Derecha', false, 'solid'),
-    sample3DCurveTo2D([nearPts[2], farPts[2]], viewProj, W, H, 'prism-edge-2', 'Arista Longitudinal Superior', false, 'solid'),
+    sample3DCurveTo2D(farTriangleDense, viewProj, W, H, 'prism-far', 'Cara Triangular Posterior', false, 'solid'),
+    sample3DCurveTo2D(sampleDenseSegment3D(nearPts[0], farPts[0], 24), viewProj, W, H, 'prism-edge-0', 'Arista Longitudinal Izquierda', false, 'solid'),
+    sample3DCurveTo2D(sampleDenseSegment3D(nearPts[1], farPts[1], 24), viewProj, W, H, 'prism-edge-1', 'Arista Longitudinal Derecha', false, 'solid'),
+    sample3DCurveTo2D(sampleDenseSegment3D(nearPts[2], farPts[2], 24), viewProj, W, H, 'prism-edge-2', 'Arista Longitudinal Superior', false, 'solid'),
   ];
 
   const previewModel3D: WireframeModel3D = {
