@@ -152,28 +152,15 @@ export function createSpherePrimitive(
   const R = 0.95;
   const segments = 48;
 
-  // 1. Ecuador Horizontal (Plano XZ en Y = 0)
+  // 1. Ecuador Horizontal Completo (Plano XZ en Y = 0) dado como ancla guía
   const fullEquator: Vector3D[] = [];
-  const frontEquator: Vector3D[] = [];
-  const backEquator: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    const pt = v3(R * Math.cos(th), 0, R * Math.sin(th));
-    fullEquator.push(pt);
-
-    // Vector normal en el punto hacia afuera
-    const normal = vNorm(v3(pt.x, 0, pt.z));
-    const dirToCam = vSub(camera.eye, pt);
-    if (vDot(dirToCam, normal) >= 0) {
-      frontEquator.push(pt);
-    } else {
-      backEquator.push(pt);
-    }
+    fullEquator.push(v3(R * Math.cos(th), 0, R * Math.sin(th)));
   }
 
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(frontEquator.length > 1 ? frontEquator : fullEquator, viewProj, W, H, 'equator-front', 'Ecuador Frontal', true, 'solid'),
-    sample3DCurveTo2D(backEquator, viewProj, W, H, 'equator-back', 'Ecuador Posterior', true, 'faint'),
+    sample3DCurveTo2D(fullEquator, viewProj, W, H, 'equator', 'Ecuador de la Esfera', true, 'solid'),
   ];
 
   // 2. Silueta exterior tangencial exacta (Cono tangente desde la cámara a la esfera)
@@ -443,21 +430,16 @@ export function createCylinderPrimitive(
   const leftSide = sampleDenseSegment3D(bLeft, tLeft, 32);
   const rightSide = sampleDenseSegment3D(bRight, tRight, 32);
 
-  // Base inferior (dada como guía ancla con arco frontal sólido y posterior tenue)
+  // 1. Base inferior completa dada como guía ancla sólida en tinta negra
   const bottomRing: Vector3D[] = [];
-  const frontBottom: Vector3D[] = [];
-  const backBottom: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    const pt = v3(R * Math.cos(th), -halfH, R * Math.sin(th));
-    bottomRing.push(pt);
-    const dAng = Math.atan2(Math.sin(th - phi), Math.cos(th - phi));
-    if (Math.abs(dAng) <= deltaTheta) {
-      frontBottom.push(pt);
-    } else {
-      backBottom.push(pt);
-    }
+    bottomRing.push(v3(R * Math.cos(th), -halfH, R * Math.sin(th)));
   }
+
+  // 2. Línea vertical finita desde el centro de la base que determina la altura exacta del cilindro
+  const heightAxis = sampleDenseSegment3D(v3(0, -halfH, 0), v3(0, halfH, 0), 20);
+  const topAxisTick = [v3(-0.08, halfH, 0), v3(0.08, halfH, 0)];
 
   // Tapa superior
   const topRing: Vector3D[] = [];
@@ -467,8 +449,9 @@ export function createCylinderPrimitive(
   }
 
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(frontBottom.length > 1 ? frontBottom : bottomRing, viewProj, W, H, 'bottom-ellipse-front', 'Elipse Base Frontal', true, 'solid'),
-    sample3DCurveTo2D(backBottom, viewProj, W, H, 'bottom-ellipse-back', 'Elipse Base Posterior', true, 'faint'),
+    sample3DCurveTo2D(bottomRing, viewProj, W, H, 'bottom-ellipse', 'Elipse Base Inferior', true, 'solid'),
+    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint'),
+    sample3DCurveTo2D(topAxisTick, viewProj, W, H, 'height-tick', 'Límite Superior de Altura', true, 'faint'),
   ];
 
   const targetCurves: CurveSegment2D[] = [
@@ -480,7 +463,7 @@ export function createCylinderPrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [bLeft, bRight, tLeft, tRight],
     edges: [],
-    rings: [bottomRing, topRing, leftSide, rightSide],
+    rings: [bottomRing, topRing, leftSide, rightSide, heightAxis],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -534,28 +517,22 @@ export function createConePrimitive(
   const leftSlant3D = sampleDenseSegment3D(apex, pLeft, 32);
   const rightSlant3D = sampleDenseSegment3D(apex, pRight, 32);
 
-  // Base circular dividida en arco frontal y posterior
+  // 1. Base circular completa dada como guía ancla sólida en tinta negra
   const segments = 48;
-  const frontBase3D: Vector3D[] = [];
-  const backBase3D: Vector3D[] = [];
-  const fullBase3D: Vector3D[] = [];
-
+  const baseRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
-    const pt = v3(R * Math.cos(th), baseY, R * Math.sin(th));
-    fullBase3D.push(pt);
-
-    const dAng = Math.atan2(Math.sin(th - phi), Math.cos(th - phi));
-    if (Math.abs(dAng) <= deltaTheta) {
-      frontBase3D.push(pt);
-    } else {
-      backBase3D.push(pt);
-    }
+    baseRing.push(v3(R * Math.cos(th), baseY, R * Math.sin(th)));
   }
 
+  // 2. Línea vertical finita desde el centro de la base hasta el ápice que determina la altura exacta
+  const heightAxis = sampleDenseSegment3D(v3(0, baseY, 0), apex, 20);
+  const apexTick = [v3(-0.06, apexY, 0), v3(0.06, apexY, 0)];
+
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(frontBase3D.length > 1 ? frontBase3D : fullBase3D, viewProj, W, H, 'cone-base-front', 'Base Circular Frontal', true, 'solid'),
-    sample3DCurveTo2D(backBase3D, viewProj, W, H, 'cone-base-back', 'Base Circular Posterior', true, 'faint'),
+    sample3DCurveTo2D(baseRing, viewProj, W, H, 'cone-base', 'Base Circular del Cono', true, 'solid'),
+    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint'),
+    sample3DCurveTo2D(apexTick, viewProj, W, H, 'apex-tick', 'Ápice del Cono', true, 'faint'),
   ];
 
   const targetCurves: CurveSegment2D[] = [
@@ -566,7 +543,7 @@ export function createConePrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [apex, pLeft, pRight],
     edges: [],
-    rings: [fullBase3D, leftSlant3D, rightSlant3D],
+    rings: [baseRing, leftSlant3D, rightSlant3D, heightAxis],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -591,9 +568,17 @@ export function createPyramidPrimitive(
   const b3 = v3(-s, -halfH, s);
   const apex = v3(0, halfH + 0.1, 0);
 
+  // 1. Base cuadrada completa dada como guía ancla sólida en tinta negra
   const baseQuad = [b0, b1, b2, b3, b0];
+
+  // 2. Línea vertical finita desde el centro de la base hasta la cúspide que determina la altura
+  const heightAxis = sampleDenseSegment3D(v3(0, -halfH, 0), apex, 20);
+  const apexTick = [v3(-0.06, halfH + 0.1, 0), v3(0.06, halfH + 0.1, 0)];
+
   const anchorCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(baseQuad, viewProj, W, H, 'pyramid-base', 'Base Cuadrada en Perspectiva', true, 'solid'),
+    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint'),
+    sample3DCurveTo2D(apexTick, viewProj, W, H, 'apex-tick', 'Cúspide de la Pirámide', true, 'faint'),
   ];
 
   const targetCurves: CurveSegment2D[] = [
@@ -609,6 +594,7 @@ export function createPyramidPrimitive(
       [0, 1], [1, 2], [2, 3], [3, 0],
       [0, 4], [1, 4], [2, 4], [3, 4],
     ],
+    rings: [heightAxis],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -655,12 +641,16 @@ export function createCapsulePrimitive(
   const leftSide = sampleDenseSegment3D(bLeft, tLeft, 28);
   const rightSide = sampleDenseSegment3D(bRight, tRight, 28);
 
-  // Anillo divisor inferior en Y = -halfCyl (dado como ancla)
+  // 1. Anillo divisor inferior completo en sólido
   const lowerRing: Vector3D[] = [];
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
     lowerRing.push(v3(R * Math.cos(th), -halfCyl, R * Math.sin(th)));
   }
+
+  // 2. Línea vertical finita de altura central
+  const heightAxis = sampleDenseSegment3D(v3(0, -halfCyl, 0), v3(0, halfCyl, 0), 20);
+  const topAxisTick = [v3(-0.08, halfCyl, 0), v3(0.08, halfCyl, 0)];
 
   // Anillo divisor superior en Y = +halfCyl (objetivo)
   const upperRing: Vector3D[] = [];
@@ -681,6 +671,8 @@ export function createCapsulePrimitive(
 
   const anchorCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(lowerRing, viewProj, W, H, 'capsule-lower-ring', 'Anillo Inferior Cápsula', true, 'solid'),
+    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint'),
+    sample3DCurveTo2D(topAxisTick, viewProj, W, H, 'height-tick', 'Límite Superior Cilíndrico', true, 'faint'),
   ];
 
   const targetCurves: CurveSegment2D[] = [
@@ -693,7 +685,7 @@ export function createCapsulePrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [bLeft, bRight, tLeft, tRight],
     edges: [],
-    rings: [lowerRing, upperRing, upperDomeArc, leftSide, rightSide],
+    rings: [lowerRing, upperRing, upperDomeArc, leftSide, rightSide, heightAxis],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };

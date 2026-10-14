@@ -19,7 +19,6 @@ import {
   EyeOff,
   Crosshair,
   Grid,
-  ChevronLeft,
   ChevronRight,
   RotateCcw,
   Trophy,
@@ -608,34 +607,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     <div
       className="relative w-full h-[calc(100vh-65px)] min-h-[500px] bg-white flex flex-col overflow-hidden select-none"
     >
-      {/* 1. BARRA SUPERIOR (HEADER ESTILO PAPLITZ) */}
-      <header className="w-full px-4 py-2.5 flex items-center justify-between border-b-2 border-black bg-white z-20">
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Botón Salir / Regresar */}
-          {onExit && (
-            <button
-              onClick={onExit}
-              className="btn-ink-outline p-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
-              title="Volver"
-            >
-              <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
-            </button>
-          )}
-
-          {/* Indicador de Ronda */}
-          <div className="bg-neutral-100 border-2 border-black px-2.5 py-1 text-xs font-mono font-bold shadow-[2px_2px_0px_#000000]">
-            ROUND {currentRound} / {TOTAL_ROUNDS}
-          </div>
-        </div>
-
-        {/* Lado derecho del header: Identificador sobrio */}
-        <div className="text-xs font-mono font-bold uppercase tracking-widest text-neutral-500 hidden sm:block">
-          LAB PERSPECTIVA 3D
-        </div>
-      </header>
-
       {/* PANEL FLOTANTE IZQUIERDO DE SELECCIÓN DE FORMAS 3D */}
-      <div className="absolute top-16 left-3 sm:left-5 z-20">
+      <div className="absolute top-3 left-3 sm:left-5 z-20">
         <PrimitiveSelectorPanel
           selectedTypes={enabledPrimitives}
           onChangeSelectedTypes={(newSelected) => {
@@ -655,7 +628,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       </div>
 
       {/* 2. TARJETA CON EL MODELO 3D OBJETIVO (SUPERIOR DERECHA) */}
-      <div className="absolute top-16 right-4 sm:right-6 z-20">
+      <div className="absolute top-3 right-4 sm:right-6 z-20">
         <Perspective3DPreviewCard
           model={challenge.previewModel3D}
           primitiveType={challenge.type}
@@ -665,7 +638,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
       {/* 3. BANNER DE CALIFICACIÓN Y PUNTUACIÓN TRAS EVALUAR (ESTILO BRUTALISTA PAPLITZ) */}
       {evaluation && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-top-3 duration-200">
           <div className="card-ink bg-white text-black p-3.5 sm:px-6 sm:py-3.5 flex flex-col items-center min-w-[280px] sm:min-w-[340px]">
             <div className="flex items-center gap-3">
               {/* Caja de Calificación por Letra */}
