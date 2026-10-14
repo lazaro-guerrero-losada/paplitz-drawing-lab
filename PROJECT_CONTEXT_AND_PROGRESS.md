@@ -622,6 +622,14 @@ A continuación se resumen los avances implementados en la última fase de traba
     - **Corrección de Offset del Cursor:** Calibración milimétrica 1:1 mediante `canvas.width / rect.width` y `canvas.height / rect.height`, `pointerCapture` y rechazo de palma para Stylus / Apple Pencil / S-Pen.
     - **Evaluador Analítico y Diagnóstico en Color (`evaluator3d.ts`):** Cálculo de distancia geométrica, letras de calificación S, A, B, C, D con puntajes numéricos de 0 a 100 PTS y visualización diagnóstica simultánea (cyan: trazos del usuario, verde: aristas acertadas, rojo: aristas faltantes o desviadas).
     - **Documentación Técnica Específica:** Guía matemática y arquitectónica completa en `docs/LAB_3D_PERSPECTIVE_ENGINE.md`.
+17. **Sistema de Reporte Técnico y Función REC (Modo Récord) en Lab 3D:**
+    - **Botón y Modal de Reporte (`debugReport3d.ts`):** Incorporación del botón de alerta (`AlertTriangle`) en la barra flotante inferior centrada de Lab 3D. Al pulsarlo, abre un modal neobrutalista con metadatos del reto (forma, semilla, nota), campo de notas del usuario con etiquetas rápidas (`+Nota injusta`, `+Punto de fuga desalineado`, `+Trazo no detectado`, `+Fallo de proporción`, `+Buena sensación`), vista previa en Markdown, y botones de acción rápida para descargar el archivo estructurado `.json` o copiar el informe completo al portapapeles.
+    - **Función REC (Modo Récord) Unificada (`sessionRecorder.ts` & `SessionRecordPanel.tsx`):**
+      - Portado idéntico y sin alteración del repositorio oficial `Paplitz`, adaptado para soportar retos volumétricos de tipo `'3d'`.
+      - Botón `REC` integrado en la barra inferior de Lab 3D, en la barra de navegación superior desktop y en el cajón de menú móvil, con indicador en pulso rojo y contador de ejercicios registrados `REC (N)`.
+      - Al calificar un ejercicio en Lab 3D con `isRecording` activo, el reto se almacena automáticamente en el historial de sesión en memoria React junto con su reporte diagnóstico y nota.
+      - Modal de sesión con métricas globales (nota media, ejercicios aprobados, ejercicios comentados), comentarios editables inline, visualización técnica expandible, y exportación consolidada en lote (Markdown consolidado o JSON completo).
+      - Sesión 100% volátil en memoria sin persistencia residual en almacenamiento local, garantizando limpieza automática al recargar.
 
 ---
 

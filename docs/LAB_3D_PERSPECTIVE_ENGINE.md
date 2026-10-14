@@ -156,3 +156,45 @@ El módulo cumple estrictamente con el sistema de diseño visual de Paplitz:
 - Tipografías:
   - `font-mono`: Metadatos técnicos, coordenadas, rondas y nombres de formas.
   - `font-display` (Eczar serif): Calificaciones, títulos y encabezados.
+
+---
+
+## 7. Sistema de Reporte de Evaluación 3D (`src/lib/perspective3d/debugReport3d.ts`)
+
+Para permitir la depuración analítica de ejercicios, reporte de fallos o discrepancias en la nota y comunicación fluida con otros agentes de IA, se implementó el sistema de reporte idéntico a Práctica:
+1. **Generador `build3DDebugReport`:**
+   - Serializa los parámetros de la cámara (FOV, eye, target).
+   - Registra el estado de los puntos de fuga proyectados ($VP_X, VP_Y, VP_Z$, dentro/fuera de pantalla).
+   - Cuantifica las curvas y aristas objetivo (`targetCurvesCount`), anclas dadas y trazos del usuario (puntos, longitudes, tiempos).
+   - Detalla la calificación (`score`, `grade`, `feedbackMessage`, aciertos/faltas).
+   - Adjunta notas y explicaciones del usuario.
+2. **Modal Neobrutalista de Reporte (`ReportModal` en `Lab3DView`):**
+   - Disparador en la barra inferior: botón con icono `AlertTriangle` (`btn-ink-outline`).
+   - Muestra metadatos inmediatos: Forma, Semilla (`#seed`) y Calificación.
+   - Textarea interactivo para redactar notas con botones de etiquetas rápidas de un clic:
+     - `+Nota injusta`
+     - `+Punto de fuga desalineado`
+     - `+Trazo no detectado`
+     - `+Fallo de proporción`
+     - `+Buena sensación`
+   - Vista previa del informe completo formateado en Markdown.
+   - Acciones de exportación: **Descargar JSON** (`downloadReport3DJson`) y **Copiar Texto** (`copyReport3DToClipboard`).
+
+---
+
+## 8. Función de Grabación de Sesión — Modo Récord (`src/lib/sessionRecorder.ts` & `SessionRecordPanel.tsx`)
+
+Portado de forma fiel y extendido para soportar ejercicios `'3d'`:
+1. **Grabación Continua Unificada:**
+   - Botón `REC` presente en la barra de herramientas inferior de Lab 3D, en la barra de navegación superior desktop y en el menú lateral móvil.
+   - Estado visual: animado con pulso rojo cuando está activo (`REC (N)`) y contador de ejercicios registrados en tiempo real.
+2. **Auto-registro al Comprobar:**
+   - Cada vez que el usuario pulsa "Comprobar" y se califica un reto 3D, si el Modo Récord está activo, el ejercicio se almacena automáticamente en el historial de sesión en memoria React.
+   - Sincronización bidireccional de comentarios: si el usuario añade una nota en el modal de reporte, esta se asocia instantáneamente al ejercicio grabado correspondiente.
+3. **Panel Consolidado (`SessionRecordPanel`):**
+   - Resumen estadístico: Nota media, superados vs fallidos, ejercicios con comentario.
+   - Lista detallada con historial cronológico, edición de comentarios inline y diagnóstico expandible.
+   - **Exportar Sesión**: Copia un reporte consolidado en Markdown listo para compartir con un agente o tutor.
+   - **Descargar JSON**: Exporta todos los datos crudos estructurados de la sesión en un archivo `.json`.
+   - **100% Volátil en Memoria**: La sesión no persiste basura residual en almacenamiento local; se reinicia limpiamente al recargar la página.
+

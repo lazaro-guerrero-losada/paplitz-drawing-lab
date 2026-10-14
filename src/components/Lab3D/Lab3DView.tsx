@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Primitive3DChallenge,
   UserStroke3D,
@@ -24,24 +24,54 @@ import {
   RotateCcw,
   Trophy,
   Check,
+  AlertTriangle,
+  X,
+  Copy,
+  Download,
+  FileText,
 } from 'lucide-react';
+import { SessionRecordItem } from '../../lib/sessionRecorder';
+import {
+  build3DDebugReport,
+  copyReport3DToClipboard,
+  downloadReport3DJson,
+} from '../../lib/perspective3d/debugReport3d';
 
 interface Lab3DViewProps {
   onAwardXP?: (amount: number) => void;
   onAvatarMoodChange?: (mood: any) => void;
   onExit?: () => void;
+  isRecording?: boolean;
+  onToggleRecording?: () => void;
+  onOpenRecordModal?: () => void;
+  recordedCount?: number;
+  onRecordExercise?: (record: SessionRecordItem) => void;
+  onUpdateRecordComment?: (recordId: string, comment: string) => void;
 }
 
 export const Lab3DView: React.FC<Lab3DViewProps> = ({
   onAwardXP,
   onAvatarMoodChange,
   onExit,
+  isRecording = false,
+  onToggleRecording,
+  onOpenRecordModal,
+  recordedCount = 0,
+  onRecordExercise,
+  onUpdateRecordComment,
 }) => {
   // Configuración de la sesión
   const TOTAL_ROUNDS = 8;
   const [currentRound, setCurrentRound] = useState<number>(1);
   const [sessionScores, setSessionScores] = useState<number[]>([]);
   const [isSessionComplete, setIsSessionComplete] = useState<boolean>(false);
+
+  // Estados para Reporte Técnico y Notas
+  const [showReportModal, setShowReportModal] = useState<boolean>(false);
+  const [userNote, setUserNote] = useState<string>('');
+  const [copiedReport, setCopiedReport] = useState<boolean>(false);
+  const [downloadedReport, setDownloadedReport] = useState<boolean>(false);
+  const currentRecordIdRef = useRef<string | null>(null);
 
   // Formas seleccionadas para el entrenamiento
   const [enabledPrimitives, setEnabledPrimitives] = useState<PrimitiveType[]>([...ALL_PRIMITIVES]);
@@ -93,6 +123,11 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       setCurrentLiveStroke([]);
       setEvaluation(null);
       setCurrentRound(roundNum);
+      setUserNote('');
+      setShowReportModal(false);
+      setCopiedReport(false);
+      setDownloadedReport(false);
+      currentRecordIdRef.current = null;
     },
     [canvasDimensions, enabledPrimitives]
   );
@@ -498,12 +533,40 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     setRedoStack([]);
   };
 
+  // Memo para el reporte técnico actual 3D
+  const currentReport = useMemo(() => {
+    return build3DDebugReport(challenge, strokes, evaluation, userNote);
+  }, [challenge, strokes, evaluation, userNote]);
+
   // Evaluación y paso a siguiente ronda
   const handleSubmitOrNext = () => {
     if (!evaluation) {
       // 1. Evaluar trazos
       const result = evaluate3DSubmission(strokes, challenge.targetCurves);
       setEvaluation(result);
+
+      // Si el Modo Récord está activo, registrar ejercicio automáticamente
+      if (isRecording && onRecordExercise) {
+        const rep = build3DDebugReport(challenge, strokes, result, userNote);
+        const newRecordId = `${Date.now()}_${challenge.seed}`;
+        currentRecordIdRef.current = newRecordId;
+        const newRecord: SessionRecordItem = {
+          id: newRecordId,
+          timestamp: new Date().toISOString(),
+          displayTime: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+          type: '3d',
+          nodeCode: `3D-${challenge.type.toUpperCase()}`,
+          nodeTitle: `Perspectiva ${challenge.name}`,
+          seed: challenge.seed,
+          score: Math.round(result.score),
+          passed: result.score >= 70,
+          userComment: userNote.trim(),
+          metricsSummary: `Grado: ${result.grade} · Aciertos: ${result.matchedSegments.length}/${result.targetCount}`,
+          reportMarkdown: rep.markdownText,
+          reportJsonString: rep.jsonString,
+        };
+        onRecordExercise(newRecord);
+      }
 
       // Otorgar XP y feedback
       const awardedXp = Math.round(result.score * 0.4);
@@ -696,6 +759,33 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
           <div className="w-[2px] h-6 bg-black mx-0.5" />
 
+          {/* Botón REC (Modo Récord) */}
+          <button
+            type="button"
+            onClick={isRecording ? onOpenRecordModal : onToggleRecording}
+            className={`px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 transition-colors ${
+              isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+            }`}
+            title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
+          >
+            <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
+            <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
+          </button>
+
+          {/* Botón Reportar Ejercicio */}
+          <button
+            type="button"
+            onClick={() => setShowReportModal(true)}
+            className={`btn-ink-outline p-2 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100 ${
+              userNote.trim() ? 'bg-black text-white' : ''
+            }`}
+            title="Escribir nota y descargar reporte técnico de este ejercicio (JSON / Copiar)"
+          >
+            <AlertTriangle className="w-4 h-4 stroke-[2.2]" />
+          </button>
+
+          <div className="w-[2px] h-6 bg-black mx-0.5" />
+
           {/* Botón de Ayudas 3D: 3 Fases (Off -> Línea gris punteada -> Vértices con dirección) */}
           <button
             onClick={() => {
@@ -806,6 +896,157 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                   Salir
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL DE REPORTE Y DIAGNÓSTICO 3D CON NOTAS */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in font-sans">
+          <div className="bg-white border-4 border-black p-4 sm:p-5 max-w-lg w-full shadow-[8px_8px_0px_#000000] flex flex-col gap-3 max-h-[92vh] overflow-y-auto">
+            {/* Cabecera */}
+            <div className="flex items-center justify-between border-b-2 border-black pb-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-black stroke-[2.5]" />
+                <h3 className="font-display font-bold text-sm sm:text-base uppercase tracking-tight">
+                  Reporte de Perspectiva 3D
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="p-1 hover:bg-neutral-100 border border-black cursor-pointer shadow-[1px_1px_0px_#000000]"
+                title="Cerrar modal (Esc)"
+              >
+                <X className="w-4 h-4 text-black stroke-[2.5]" />
+              </button>
+            </div>
+
+            {/* Metadatos del reto */}
+            <div className="flex items-center justify-between text-xs font-mono bg-neutral-50 p-2 border border-black">
+              <div>
+                <span className="text-neutral-500">Forma:</span> <strong>{challenge.name}</strong>
+              </div>
+              <div>
+                <span className="text-neutral-500">Semilla:</span> <strong>#{challenge.seed}</strong>
+              </div>
+              <div>
+                <span className="text-neutral-500">Nota:</span>{' '}
+                <strong>{evaluation ? `${evaluation.score.toFixed(1)} PTS (${evaluation.grade})` : 'Calculada'}</strong>
+              </div>
+            </div>
+
+            {/* Campo de Nota / Explicación del problema */}
+            <div className="flex flex-col gap-1.5 bg-neutral-50 p-3 border-2 border-black">
+              <label className="text-xs font-mono font-bold text-black flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Nota o apreciación del ejercicio:</span>
+                </span>
+                <span className="text-[10px] text-neutral-500 font-normal hidden sm:inline">
+                  (Se incluirá en el archivo .JSON y en el texto copiado)
+                </span>
+              </label>
+              <textarea
+                value={userNote}
+                onChange={(e) => {
+                  const nextVal = e.target.value;
+                  setUserNote(nextVal);
+                  if (currentRecordIdRef.current && onUpdateRecordComment) {
+                    onUpdateRecordComment(currentRecordIdRef.current, nextVal);
+                  }
+                }}
+                placeholder="Escribe aquí qué ocurrió (ej: 'El punto de fuga Z se percibe forzado', 'Trazo curvado no detectado', 'Buena orientación pero nota baja')..."
+                className="w-full h-20 p-2 text-xs font-mono bg-white border border-black resize-none focus:outline-none focus:ring-2 focus:ring-black selection:bg-black selection:text-white"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-1 items-center pt-0.5">
+                <span className="text-[10px] font-mono text-neutral-500 font-bold mr-1">Rápido:</span>
+                {['Nota injusta', 'Punto de fuga desalineado', 'Trazo no detectado', 'Fallo de proporción', 'Buena sensación'].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const nextVal = userNote.trim() ? `${userNote.trim()} · ${tag}` : tag;
+                      setUserNote(nextVal);
+                      if (currentRecordIdRef.current && onUpdateRecordComment) {
+                        onUpdateRecordComment(currentRecordIdRef.current, nextVal);
+                      }
+                    }}
+                    className="text-[10px] font-mono bg-white hover:bg-black hover:text-white border border-black px-1.5 py-0.5 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000]"
+                  >
+                    +{tag}
+                  </button>
+                ))}
+                {userNote && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserNote('');
+                      if (currentRecordIdRef.current && onUpdateRecordComment) {
+                        onUpdateRecordComment(currentRecordIdRef.current, '');
+                      }
+                    }}
+                    className="text-[10px] font-mono text-neutral-500 hover:text-black ml-auto underline cursor-pointer"
+                  >
+                    Borrar nota
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Vista previa del contenido */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-mono font-bold text-neutral-600">
+                Vista previa del reporte (Markdown / JSON con tu nota):
+              </label>
+              <textarea
+                readOnly
+                value={currentReport.markdownText}
+                className="w-full h-28 p-2 font-mono text-[10px] bg-neutral-50 border border-black resize-none selection:bg-black selection:text-white"
+              />
+            </div>
+
+            {/* Acciones de exportación */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-200">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    downloadReport3DJson(currentReport.jsonString, challenge.seed, challenge.type, userNote);
+                    setDownloadedReport(true);
+                    setTimeout(() => setDownloadedReport(false), 2500);
+                  }}
+                  className="btn-ink px-3 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                  title="Descargar archivo .JSON incluyendo tu nota"
+                >
+                  {downloadedReport ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : <Download className="w-3.5 h-3.5" />}
+                  <span>{downloadedReport ? '¡Descargado!' : 'Descargar JSON'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await copyReport3DToClipboard(currentReport.markdownText);
+                    setCopiedReport(true);
+                    setTimeout(() => setCopiedReport(false), 2500);
+                  }}
+                  className="btn-ink-outline px-3 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                  title="Copiar texto con tu nota al portapapeles"
+                >
+                  {copiedReport ? <Check className="w-3.5 h-3.5 text-black stroke-[2.5]" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedReport ? '¡Copiado!' : 'Copiar Texto'}</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="px-3 py-1.5 text-xs font-mono text-neutral-600 hover:text-black border border-neutral-300 hover:border-black cursor-pointer ml-auto"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

@@ -15,8 +15,11 @@ import { Lab3DView } from './components/Lab3D/Lab3DView';
 import { calculatePlayerLevel } from './lib/levelSystem';
 import { SenseiCubo } from './components/avatar/SenseiCubo';
 import { AvatarMood } from './lib/avatarTypes';
-import { Flame, Printer, Compass, Map, User, RefreshCw, Filter, PenTool, Gamepad2, BookOpen, Zap, Menu, X, ChevronRight, FlaskConical, Boxes } from 'lucide-react';
+import { Flame, Printer, Compass, Map, User, RefreshCw, Filter, PenTool, Gamepad2, BookOpen, Zap, Menu, X, ChevronRight, FlaskConical, Boxes, Radio } from 'lucide-react';
 import { PaplitzSaveData, applySaveDataToLocalStorage, fastForwardCurriculum } from './lib/saveSystem';
+import { SessionRecordItem, addSessionRecord, updateSessionRecordComment } from './lib/sessionRecorder';
+import { SessionRecordPanel } from './components/SessionRecordPanel';
+import { buildDebugReport } from './lib/debugReport';
 
 function GithubIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
   return (
@@ -30,6 +33,18 @@ function GithubIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
 export function App() {
   // Pestañas principales: 'practice' (Home / Práctica Rápida), 'path' (El Camino), 'minigames' (Minijuegos), 'profile' (Perfil), 'strokelab' (Laboratorio de Trazos Beta), 'lab3d' (Laboratorio de Perspectiva 3D)
   const [activeTab, setActiveTab] = useState<'practice' | 'path' | 'minigames' | 'profile' | 'strokelab' | 'lab3d'>('practice');
+
+  // Modo Récord de Sesión (100% volátil en memoria)
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState<boolean>(false);
+  const [sessionRecords, setSessionRecords] = useState<SessionRecordItem[]>([]);
+
+  const handleUpdateSessionRecordComment = (recordId: string, comment: string) => {
+    setSessionRecords((prev) => updateSessionRecordComment(recordId, comment, prev));
+  };
+  const handleRecordExercise = (record: SessionRecordItem) => {
+    setSessionRecords((prev) => addSessionRecord(record, prev));
+  };
 
   // Estado del Menú Lateral Móvil (Drawer) y Detección de Orientación
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -294,10 +309,52 @@ export function App() {
         // Actualizar el estado de la lección activa
         setActiveNode((prev) => (prev ? { ...prev, status: 'completed', score: Math.max(prev.score || 0, recordedScore) } : prev));
       }
+
+      // Si el Modo Récord está activo, registrar ejercicio automáticamente
+      if (isRecording) {
+        const rep = buildDebugReport(challenge, strokes, res, activeNode);
+        const recordToAdd: SessionRecordItem = {
+          id: `${Date.now()}_${challenge.seed}`,
+          timestamp: new Date().toISOString(),
+          displayTime: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+          type: 'cube',
+          nodeCode: activeNode?.code || 'P-LIBRE',
+          nodeTitle: activeNode?.title || 'Práctica de Cubo',
+          seed: challenge.seed,
+          score: res.totalScore ?? res.score,
+          passed: true,
+          userComment: '',
+          metricsSummary: `Rectitud: ${res.straightnessScore}% · Vértices: ${res.vertexAccuracyScore}% · Persp: ${res.perspectiveScore}%`,
+          reportMarkdown: rep.markdownText,
+          reportJsonString: rep.jsonString,
+        };
+        handleRecordExercise(recordToAdd);
+      }
     } else {
       // Suspenso: avatar con espirales y sudor
       setAvatarMood('fail-spiral');
-      setTimeout(() => setAvatarMood('neutral'), 3500);
+      setTimeout(() => setAvatarMood('neutral'), 3000);
+
+      // Si el Modo Récord está activo, registrar ejercicio no superado
+      if (isRecording) {
+        const rep = buildDebugReport(challenge, strokes, res, activeNode);
+        const recordToAdd: SessionRecordItem = {
+          id: `${Date.now()}_${challenge.seed}`,
+          timestamp: new Date().toISOString(),
+          displayTime: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+          type: 'cube',
+          nodeCode: activeNode?.code || 'P-LIBRE',
+          nodeTitle: activeNode?.title || 'Práctica de Cubo',
+          seed: challenge.seed,
+          score: res.totalScore ?? res.score,
+          passed: false,
+          userComment: '',
+          metricsSummary: `Rectitud: ${res.straightnessScore}% · Vértices: ${res.vertexAccuracyScore}% · Persp: ${res.perspectiveScore}%`,
+          reportMarkdown: rep.markdownText,
+          reportJsonString: rep.jsonString,
+        };
+        handleRecordExercise(recordToAdd);
+      }
     }
   };
 
@@ -502,6 +559,29 @@ export function App() {
               <span className="text-[10px] sm:text-[11px] tabular-nums hidden xs:inline">{xp} XP</span>
             </div>
 
+            {/* Botón Modo Récord (REC) Desktop */}
+            <button
+              type="button"
+              onClick={() => {
+                if (isRecording) {
+                  setIsRecordModalOpen(true);
+                } else {
+                  setIsRecording(true);
+                }
+              }}
+              className={`px-2 sm:px-2.5 py-1 text-xs font-mono font-bold border-2 border-black cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center gap-1.5 transition-colors ${
+                isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+              }`}
+              title={
+                isRecording
+                  ? `Grabando: ${sessionRecords.length} ejercicios. Clic para ver o exportar sesión`
+                  : 'Activar Modo Récord (grabar sesión)'
+              }
+            >
+              <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
+              <span>{isRecording ? `REC (${sessionRecords.length})` : 'REC'}</span>
+            </button>
+
             {/* Botón de Guía a la derecha de XP */}
             <button
               onClick={() => setShowLevelGuide(true)}
@@ -525,8 +605,27 @@ export function App() {
             </a>
           </div>
 
-          {/* Barra de Acciones Móvil (< lg): Racha + Nivel + Botón Hamburguesa */}
+          {/* Barra de Acciones Móvil (< lg): REC + Racha + Nivel + Botón Hamburguesa */}
           <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+            {/* REC compacto móvil */}
+            <button
+              type="button"
+              onClick={() => {
+                if (isRecording) {
+                  setIsRecordModalOpen(true);
+                } else {
+                  setIsRecording(true);
+                }
+              }}
+              className={`px-1.5 py-0.5 text-[10px] font-mono font-bold border-2 border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 ${
+                isRecording ? 'bg-black text-white' : 'bg-white text-black'
+              }`}
+              title="Modo Récord"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
+              <span>{isRecording ? `REC (${sessionRecords.length})` : 'REC'}</span>
+            </button>
+
             {/* Racha compacta */}
             <div className="flex items-center gap-0.5 border-2 border-black px-1.5 py-1 text-[11px] font-mono font-bold shadow-[1px_1px_0px_#000000]">
               <Flame className="w-3 h-3 stroke-[2.5]" />
@@ -592,6 +691,24 @@ export function App() {
                 <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 font-bold block mb-1">
                   Secciones
                 </span>
+
+                {/* Botón Modo Récord dentro del menú móvil */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRecordModalOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full p-2.5 text-xs font-mono font-bold flex items-center justify-between border-2 border-black shadow-[2px_2px_0px_#000000] transition-colors cursor-pointer mb-2 ${
+                    isRecording ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Radio className="w-4 h-4 stroke-[2.5]" />
+                    <span className="uppercase font-bold">Modo Récord {isRecording ? `(${sessionRecords.length})` : ''}</span>
+                  </div>
+                  <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400'}`} />
+                </button>
 
                 <button
                   onClick={() => { setActiveTab('practice'); setMobileMenuOpen(false); }}
@@ -972,11 +1089,33 @@ export function App() {
             onAwardXP={(amount) => setXp((prev) => prev + amount)}
             onAvatarMoodChange={(mood) => setAvatarMood(mood)}
             onExit={() => setActiveTab('practice')}
+            isRecording={isRecording}
+            onToggleRecording={() => setIsRecording((prev) => !prev)}
+            onOpenRecordModal={() => setIsRecordModalOpen(true)}
+            recordedCount={sessionRecords.length}
+            onRecordExercise={handleRecordExercise}
+            onUpdateRecordComment={handleUpdateSessionRecordComment}
           />
         )}
       </main>
 
       {/* MODALES */}
+      {/* MODAL MODO RÉCORD DE SESIÓN (EXPORTACIÓN Y COMENTARIOS) */}
+      {isRecordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in font-sans">
+          <div className="max-w-xl w-full max-h-[92vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_#000000]">
+            <SessionRecordPanel
+              records={sessionRecords}
+              onRecordsChange={setSessionRecords}
+              onClearRecords={() => setSessionRecords([])}
+              isRecording={isRecording}
+              onToggleRecording={() => setIsRecording((prev) => !prev)}
+              onClose={() => setIsRecordModalOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
       <PlacementModal
         isOpen={isPlacementModalOpen}
         onClose={() => setIsPlacementModalOpen(false)}
