@@ -59,10 +59,12 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   const [peekHint, setPeekHint] = useState<boolean>(false); // Ojo para ver solución fantasma
 
   // Referencias del Canvas e interactividad
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef<boolean>(false);
   const currentPointsRef = useRef<Point2D[]>([]);
+  const activePointerIdRef = useRef<number | null>(null);
+  const [currentLiveStroke, setCurrentLiveStroke] = useState<Point2D[]>([]);
 
   // Redimensionar canvas manteniendo aspect ratio nítido
   const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number }>({
@@ -84,6 +86,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       setChallenge(newCh);
       setStrokes([]);
       setRedoStack([]);
+      setCurrentLiveStroke([]);
       setEvaluation(null);
       setPeekHint(false);
       setCurrentRound(roundNum);
@@ -91,13 +94,13 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     [canvasDimensions, selectedPrimitiveType]
   );
 
-  // Ajustar dimensiones del canvas al contenedor
+  // Ajustar dimensiones del canvas exactamente al contenedor del área de dibujo
   useEffect(() => {
     const updateSize = () => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
+      if (!canvasContainerRef.current) return;
+      const rect = canvasContainerRef.current.getBoundingClientRect();
       const w = Math.max(320, Math.floor(rect.width));
-      const h = Math.max(380, Math.floor(rect.height));
+      const h = Math.max(320, Math.floor(rect.height));
 
       setCanvasDimensions({ width: w, height: h });
       setChallenge((prev) =>
@@ -280,57 +283,65 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         });
         ctx.stroke();
       });
+
+      // Trazo en curso en tiempo real
+      if (currentLiveStroke.length > 1) {
+        ctx.beginPath();
+        currentLiveStroke.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+      }
     }
-  }, [challenge, strokes, evaluation, showGrid, peekHint, canvasDimensions]);
+  }, [challenge, strokes, currentLiveStroke, evaluation, showGrid, peekHint, canvasDimensions]);
 
   // ==========================================
-  // Manejadores de Eventos del Puntero (Stylus, Touch, Mouse)
+  // Manejadores de Eventos del Puntero (Stylus, Touch, Mouse) con Corrección de Escala
   // ==========================================
   const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>): Point2D => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
     };
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (evaluation) return; // Ya evaluado, no permitir dibujar hasta la siguiente ronda
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) {
+      return; // Rechazo de toques secundarios / palma
+    }
+    e.preventDefault();
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // Ignorar si no es soportado
+    }
+    activePointerIdRef.current = e.pointerId;
     isDrawingRef.current = true;
     const pt = getCanvasCoords(e);
     currentPointsRef.current = [pt];
+    setCurrentLiveStroke([pt]);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawingRef.current) return;
+    if (!isDrawingRef.current || (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId)) return;
+    e.preventDefault();
     const pt = getCanvasCoords(e);
     currentPointsRef.current.push(pt);
-
-    // Actualización visual suave durante el trazo en curso
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const pts = currentPointsRef.current;
-    if (pts.length >= 2) {
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 2.4;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(pts[pts.length - 2].x, pts[pts.length - 2].y);
-      ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
-      ctx.stroke();
-    }
+    setCurrentLiveStroke([...currentPointsRef.current]);
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return;
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
+    activePointerIdRef.current = null;
     const pts = currentPointsRef.current;
     if (pts.length > 1) {
       const newStroke: UserStroke3D = {
@@ -342,6 +353,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       setRedoStack([]);
     }
     currentPointsRef.current = [];
+    setCurrentLiveStroke([]);
   };
 
   // ==========================================
@@ -417,7 +429,6 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
   return (
     <div
-      ref={containerRef}
       className="relative w-full h-[calc(100vh-65px)] min-h-[500px] bg-white flex flex-col overflow-hidden select-none"
     >
       {/* 1. BARRA SUPERIOR (HEADER ESTILO ARTLY) */}
@@ -526,7 +537,10 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       )}
 
       {/* 4. LIENZO PRINCIPAL INTERACTIVO */}
-      <div className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center cursor-crosshair">
+      <div
+        ref={canvasContainerRef}
+        className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center cursor-crosshair"
+      >
         <canvas
           ref={canvasRef}
           width={canvasDimensions.width}
