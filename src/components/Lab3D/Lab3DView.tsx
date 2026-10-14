@@ -21,6 +21,7 @@ import {
   RotateCcw,
   Trophy,
   Zap,
+  Check,
 } from 'lucide-react';
 
 interface Lab3DViewProps {
@@ -431,24 +432,24 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     <div
       className="relative w-full h-[calc(100vh-65px)] min-h-[500px] bg-white flex flex-col overflow-hidden select-none"
     >
-      {/* 1. BARRA SUPERIOR (HEADER ESTILO ARTLY) */}
+      {/* 1. BARRA SUPERIOR (HEADER ESTILO PAPLITZ) */}
       <header className="w-full px-4 py-2.5 flex items-center justify-between border-b-2 border-black bg-white z-20">
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Botón Salir / Regresar */}
           {onExit && (
             <button
               onClick={onExit}
-              className="p-1.5 border-2 border-black rounded-lg hover:bg-neutral-100 shadow-[2px_2px_0px_#000000] cursor-pointer transition-transform active:translate-x-0.5 active:translate-y-0.5"
+              className="btn-ink-outline p-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
               title="Volver"
             >
               <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
             </button>
           )}
 
-          {/* Modo / Categoría Pill */}
+          {/* Modo / Categoría Badge */}
           <button
             onClick={() => setPracticeMode((prev) => (prev === 'rounds' ? 'free' : 'rounds'))}
-            className="flex items-center gap-1.5 bg-black hover:bg-neutral-800 text-white px-3 py-1 rounded-full text-xs font-mono font-bold tracking-wider uppercase shadow-[2px_2px_0px_#000000] cursor-pointer transition-colors"
+            className="btn-ink px-3 py-1 text-xs font-mono font-bold tracking-wider uppercase shadow-[2px_2px_0px_#000000] cursor-pointer flex items-center gap-1.5"
             title="Clic para cambiar entre Desafío (8 Rondas) y Práctica Libre"
           >
             <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
@@ -456,7 +457,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           </button>
 
           {/* Indicador de Ronda */}
-          <div className="bg-neutral-100 border-2 border-black px-2.5 py-1 rounded-full text-xs font-mono font-bold shadow-[2px_2px_0px_#000000]">
+          <div className="bg-neutral-100 border-2 border-black px-2.5 py-1 text-xs font-mono font-bold shadow-[2px_2px_0px_#000000]">
             {practiceMode === 'rounds' ? `ROUND ${currentRound} / ${TOTAL_ROUNDS}` : `RETO #${currentRound}`}
           </div>
         </div>
@@ -470,7 +471,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
               setSelectedPrimitiveType(val);
               loadNewChallenge(currentRound, val === 'RANDOM' ? undefined : val);
             }}
-            className="hidden sm:inline-block border-2 border-black px-2 py-1 text-xs font-mono font-bold rounded-lg bg-white shadow-[2px_2px_0px_#000000] cursor-pointer"
+            className="hidden sm:inline-block border-2 border-black px-2.5 py-1 text-xs font-mono font-bold bg-white shadow-[2px_2px_0px_#000000] cursor-pointer"
           >
             <option value="RANDOM">🎲 Primitiva Aleatoria</option>
             {ALL_PRIMITIVES.map((p) => (
@@ -482,16 +483,16 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
           <button
             onClick={() => loadNewChallenge(currentRound)}
-            className="btn-ink-outline p-1.5 text-xs font-mono font-bold flex items-center gap-1 rounded-lg cursor-pointer"
+            className="btn-ink-outline px-2.5 py-1 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
             title="Generar otro ángulo o perspectiva"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3.5 h-3.5 stroke-[2.2]" />
             <span className="hidden md:inline">Nuevo Ángulo</span>
           </button>
         </div>
       </header>
 
-      {/* 2. TARJETA FLOTANTE CON EL MODELO 3D OBJETIVO (SUPERIOR DERECHA) */}
+      {/* 2. TARJETA CON EL MODELO 3D OBJETIVO (SUPERIOR DERECHA) */}
       <div className="absolute top-16 right-4 sm:right-6 z-20">
         <Perspective3DPreviewCard
           model={challenge.previewModel3D}
@@ -500,47 +501,61 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         />
       </div>
 
-      {/* 3. BANNER DE CALIFICACIÓN Y PUNTUACIÓN TRAS EVALUAR (SUPERIOR CENTRO, COMO EN SCREENSHOT 3 & 5) */}
+      {/* 3. BANNER DE CALIFICACIÓN Y PUNTUACIÓN TRAS EVALUAR (ESTILO BRUTALISTA PAPLITZ) */}
       {evaluation && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="bg-slate-900/95 text-white border-2 border-black rounded-2xl px-5 py-3 shadow-[4px_4px_0px_#000000] flex flex-col items-center max-w-sm sm:max-w-md text-center backdrop-blur-md">
-            <div className="flex items-center gap-2.5">
-              {/* Letra de Calificación */}
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="card-ink bg-white text-black p-3.5 sm:px-6 sm:py-3.5 flex flex-col items-center min-w-[280px] sm:min-w-[340px]">
+            <div className="flex items-center gap-3">
+              {/* Caja de Calificación por Letra */}
               <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center font-display font-black text-lg text-white shadow-inner ${
+                className={`w-10 h-10 border-2 border-black flex items-center justify-center font-display font-black text-2xl text-white shadow-[2px_2px_0px_#000000] ${
                   evaluation.grade === 'S'
-                    ? 'bg-amber-500'
+                    ? 'bg-amber-400 text-black'
                     : evaluation.grade === 'A'
-                    ? 'bg-emerald-500'
+                    ? 'bg-emerald-500 text-white'
                     : evaluation.grade === 'B'
-                    ? 'bg-blue-500'
+                    ? 'bg-blue-600 text-white'
                     : evaluation.grade === 'C'
-                    ? 'bg-yellow-500'
-                    : 'bg-red-500'
+                    ? 'bg-yellow-400 text-black'
+                    : 'bg-red-500 text-white'
                 }`}
               >
                 {evaluation.grade}
               </div>
 
               {/* Puntaje Numérico */}
-              <span className="text-xl sm:text-2xl font-mono font-extrabold tracking-tight">
-                {evaluation.score.toFixed(1)} <span className="text-sm font-sans text-neutral-400">PTS</span>
-              </span>
+              <div className="flex items-baseline gap-1 font-mono">
+                <span className="text-3xl font-black text-black tracking-tight">
+                  {evaluation.score.toFixed(1)}
+                </span>
+                <span className="text-xs font-bold text-neutral-500 uppercase">PTS</span>
+              </div>
             </div>
 
             {/* Mensaje de retroalimentación didáctica */}
-            <p className="mt-1.5 text-xs sm:text-sm font-sans text-neutral-200">
+            <p className="mt-2 text-xs font-mono font-bold text-neutral-800 border-t-2 border-black pt-1.5 w-full text-center">
               {evaluation.feedbackMessage}
             </p>
           </div>
         </div>
       )}
 
-      {/* 4. LIENZO PRINCIPAL INTERACTIVO */}
+      {/* 4. LIENZO PRINCIPAL INTERACTIVO CON DETALLES TÉCNICOS PAPLITZ */}
       <div
         ref={canvasContainerRef}
         className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center cursor-crosshair"
       >
+        {/* Etiqueta Técnica Superior Izquierda */}
+        <div className="absolute top-3 left-3 text-[10px] font-mono font-bold uppercase bg-white border-2 border-black px-2 py-0.5 pointer-events-none shadow-[2px_2px_0px_#000000] z-10 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 bg-black" />
+          <span>{challenge.name} · PERSPECTIVA 3D</span>
+        </div>
+
+        {/* Indicador de 6 Paredes Inferior Izquierdo */}
+        <div className="absolute bottom-3 left-3 text-[9px] font-mono font-bold uppercase bg-white border border-black px-1.5 py-0.5 pointer-events-none shadow-[1px_1px_0px_#000000] z-10 opacity-75 hidden sm:block">
+          <span>6 PAREDES · VP X, Y, Z</span>
+        </div>
+
         <canvas
           ref={canvasRef}
           width={canvasDimensions.width}
@@ -549,44 +564,44 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          className="touch-none block w-full h-full"
+          className="touch-none block w-full h-full select-none"
         />
       </div>
 
-      {/* 5. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (ESTILO ARTLY / PAPLITZ) */}
+      {/* 5. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (NEOBRUTALISTA PAPLITZ) */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
-        <div className="bg-slate-900/95 text-white border-2 border-black rounded-full px-4 py-2 sm:px-6 sm:py-2.5 shadow-[4px_4px_0px_#000000] flex items-center gap-3 sm:gap-4 backdrop-blur-md">
+        <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
           {/* Deshacer */}
           <button
             onClick={handleUndo}
             disabled={strokes.length === 0 || !!evaluation}
-            className="p-1.5 text-neutral-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title="Deshacer trazo"
+            className="btn-ink-outline p-2 text-xs disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
+            title="Deshacer trazo (Ctrl+Z)"
           >
-            <Undo2 className="w-5 h-5 stroke-[2.2]" />
+            <Undo2 className="w-4 h-4 stroke-[2.2]" />
           </button>
 
           {/* Rehacer */}
           <button
             onClick={handleRedo}
             disabled={redoStack.length === 0 || !!evaluation}
-            className="p-1.5 text-neutral-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            className="btn-ink-outline p-2 text-xs disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
             title="Rehacer trazo"
           >
-            <Redo2 className="w-5 h-5 stroke-[2.2]" />
+            <Redo2 className="w-4 h-4 stroke-[2.2]" />
           </button>
 
           {/* Borrar Todo */}
           <button
             onClick={handleClear}
             disabled={strokes.length === 0 || !!evaluation}
-            className="p-1.5 text-neutral-300 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title="Limpiar lienzo"
+            className="btn-ink-outline p-2 text-xs hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
+            title="Borrar todos los trazos"
           >
-            <Trash2 className="w-5 h-5 stroke-[2.2]" />
+            <Trash2 className="w-4 h-4 stroke-[2.2]" />
           </button>
 
-          <div className="w-[1px] h-6 bg-slate-700" />
+          <div className="w-[2px] h-6 bg-black mx-0.5" />
 
           {/* Ojo (Peek): Permite echar un vistazo a la solución fantasma */}
           <button
@@ -594,32 +609,34 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             onMouseUp={() => setPeekHint(false)}
             onTouchStart={() => setPeekHint(true)}
             onTouchEnd={() => setPeekHint(false)}
-            className={`p-1.5 transition-colors cursor-pointer ${
-              peekHint ? 'text-indigo-400' : 'text-neutral-300 hover:text-white'
+            className={`p-2 text-xs font-mono font-bold border-2 border-black transition-colors cursor-pointer shadow-[1px_1px_0px_#000000] ${
+              peekHint ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
             }`}
             title="Mantén presionado para ver la solución fantasma"
           >
-            {peekHint ? <Eye className="w-5 h-5 stroke-[2.2]" /> : <EyeOff className="w-5 h-5 stroke-[2.2]" />}
+            {peekHint ? <Eye className="w-4 h-4 stroke-[2.2]" /> : <EyeOff className="w-4 h-4 stroke-[2.2]" />}
           </button>
 
-          {/* Rejilla 3D (Toggles 3D guidelines on/off, como Screenshot 1 vs 2) */}
+          {/* Rejilla 3D (Toggles 3D guidelines on/off) */}
           <button
             onClick={() => setShowGrid((prev) => !prev)}
-            className={`p-1.5 transition-colors cursor-pointer ${
-              showGrid ? 'text-blue-400' : 'text-neutral-500 hover:text-neutral-300'
+            className={`p-2 text-xs font-mono font-bold border-2 border-black transition-colors cursor-pointer shadow-[1px_1px_0px_#000000] ${
+              showGrid ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 border-neutral-300 shadow-none'
             }`}
             title={showGrid ? 'Ocultar guías de perspectiva 3D' : 'Mostrar guías de perspectiva 3D'}
           >
-            <Grid className="w-5 h-5 stroke-[2.2]" />
+            <Grid className="w-4 h-4 stroke-[2.2]" />
           </button>
 
           {/* Botón Principal: Submit (cuando se dibuja) o Next (tras evaluar) */}
           <button
             onClick={handleSubmitOrNext}
-            className="ml-1 sm:ml-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-mono font-bold text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-full border border-slate-600 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+            className={`btn-ink px-4 sm:px-5 py-2 text-xs font-mono uppercase font-bold flex items-center gap-1.5 shadow-[2px_2px_0px_#000000] ${
+              evaluation ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''
+            }`}
           >
-            <span>{evaluation ? 'Next' : 'Submit'}</span>
-            {evaluation && <ChevronRight className="w-4 h-4 stroke-[2.5]" />}
+            <span>{evaluation ? 'Siguiente' : 'Comprobar'}</span>
+            {evaluation ? <ChevronRight className="w-4 h-4 stroke-[2.5]" /> : <Check className="w-4 h-4 stroke-[3]" />}
           </button>
         </div>
       </div>
@@ -627,8 +644,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       {/* 6. MODAL DE RESUMEN FINAL TRAS COMPLETAR 8 RONDAS */}
       {isSessionComplete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border-2 border-black rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-[6px_6px_0px_#000000] text-center animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 bg-amber-400 border-2 border-black rounded-2xl mx-auto flex items-center justify-center shadow-[3px_3px_0px_#000000] mb-4">
+          <div className="card-ink bg-white p-6 sm:p-8 max-w-md w-full text-center animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-amber-400 border-2 border-black mx-auto flex items-center justify-center shadow-[3px_3px_0px_#000000] mb-4">
               <Trophy className="w-8 h-8 text-black stroke-[2.5]" />
             </div>
 
@@ -637,8 +654,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             </span>
             <h2 className="text-2xl sm:text-3xl font-display font-black mt-1">¡Perspectiva Dominada!</h2>
 
-            <div className="my-6 bg-neutral-50 border-2 border-black rounded-xl p-4 shadow-[2px_2px_0px_#000000]">
-              <div className="text-xs font-mono text-neutral-600 uppercase">Puntuación Media</div>
+            <div className="my-6 bg-neutral-50 border-2 border-black p-4 shadow-[2px_2px_0px_#000000]">
+              <div className="text-xs font-mono text-neutral-600 uppercase font-bold">Puntuación Media</div>
               <div className="text-4xl font-mono font-black mt-1 text-black">
                 {averageScore} <span className="text-lg font-sans text-neutral-500">PTS</span>
               </div>
@@ -646,9 +663,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
               {/* Récord por rondas */}
               <div className="grid grid-cols-4 gap-2 mt-4 pt-3 border-t border-neutral-300 text-xs font-mono">
                 {sessionScores.map((sc, idx) => (
-                  <div key={idx} className="bg-white border border-black rounded p-1">
-                    <div className="text-[10px] text-neutral-500">R{idx + 1}</div>
-                    <div className="font-bold">{sc.toFixed(0)}</div>
+                  <div key={idx} className="bg-white border-2 border-black p-1 shadow-[1px_1px_0px_#000000]">
+                    <div className="text-[10px] text-neutral-500 font-bold">R{idx + 1}</div>
+                    <div className="font-black">{sc.toFixed(0)}</div>
                   </div>
                 ))}
               </div>
@@ -659,7 +676,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                 onClick={handleRestartSession}
                 className="btn-ink flex-1 py-3 text-sm font-mono font-bold uppercase flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_#000000]"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-4 h-4 stroke-[2.5]" />
                 <span>Jugar Otra Vez</span>
               </button>
 

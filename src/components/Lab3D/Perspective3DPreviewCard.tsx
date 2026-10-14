@@ -118,7 +118,7 @@ export const Perspective3DPreviewCard: React.FC<Perspective3DPreviewCardProps> =
 
   return (
     <div
-      className="bg-white border-2 border-black rounded-2xl p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] flex flex-col items-center select-none cursor-grab active:cursor-grabbing transition-transform hover:scale-[1.02]"
+      className="bg-white border-2 border-black p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] flex flex-col items-center select-none cursor-grab active:cursor-grabbing transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
       title="Modelo 3D objetivo. Arrastra con el ratón para inspeccionar la figura en 360°"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -132,13 +132,13 @@ export const Perspective3DPreviewCard: React.FC<Perspective3DPreviewCardProps> =
           height={120}
           className="w-full h-full block"
         />
-        <span className="absolute top-0 right-0 text-[9px] font-mono font-bold text-neutral-400 opacity-60">
+        <span className="absolute top-0 right-0 text-[9px] font-mono font-bold text-neutral-400 bg-neutral-100 border border-black px-1 leading-none shadow-[1px_1px_0px_#000000]">
           3D
         </span>
       </div>
 
-      {/* Badge negro inferior con el nombre exacto de la figura (como en la captura) */}
-      <div className="mt-1 w-full bg-black text-white text-center py-0.5 px-3 rounded-lg text-[10px] sm:text-xs font-mono font-extrabold tracking-wider uppercase">
+      {/* Badge negro inferior con el nombre exacto de la figura al estilo Paplitz */}
+      <div className="mt-1.5 w-full bg-black text-white text-center py-0.5 px-2 border border-black text-[10px] sm:text-xs font-mono font-black tracking-widest uppercase shadow-[1px_1px_0px_#000000]">
         {title || primitiveType}
       </div>
     </div>
