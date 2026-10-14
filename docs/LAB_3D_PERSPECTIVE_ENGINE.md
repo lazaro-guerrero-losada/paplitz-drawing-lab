@@ -130,18 +130,26 @@ Se aplica `pointerCapture` y rechazo de palma (`activePointerIdRef`) para evitar
 
 ---
 
-## 5. Algoritmo de Evaluación y Calificación (`src/lib/perspective3d/evaluator3d.ts`)
+## 5. Algoritmo de Evaluación y Calificación Rigurosa (`src/lib/perspective3d/evaluator3d.ts`)
 
-La evaluación compara los trazos libres del usuario con las curvas tridimensionales objetivo:
-1. **Distancia Hausdorff & Fréchet Muestreada:** Se calcula la distancia mínima cuadrática entre los puntos del trazo y la curva de referencia.
-2. **Alineación Angular de Tangentes:** Verifica que el usuario haya dibujado en la dirección de fuga correcta y no en sentido perpendicular.
-3. **Puntaje y Letras:**
-   - **S (90 - 100 PTS):** Precisión quirúrgica de aristas y proporciones.
-   - **A (80 - 89.9 PTS):** Excelente control de fuga.
-   - **B (65 - 79.9 PTS):** Buena aproximación con ligeras desviaciones.
-   - **C (45 - 64.9 PTS):** Proporciones deformadas o fugas divergentes.
-   - **D (< 45 PTS):** Trazos ausentes o fuera de perspectiva.
-4. **Retroalimentación Diagnóstica en Color:**
+La evaluación compara los trazos libres del usuario con las curvas tridimensionales objetivo aplicando rigurosidad geométrica y didáctica:
+1. **Alineación Direccional Tangente ($|\cos\theta| \ge 0.65$):**
+   - Para cada punto de una curva objetivo, se deriva su vector tangente unitario $\vec{u}_T$ (con soporte continuo para ciclos cerrados como elipses y anillos).
+   - Para cada segmento del trazo del usuario, se extrae su vector unitario $\vec{u}_S$.
+   - Solo se consideran coincidencias si $|\vec{u}_T \cdot \vec{u}_S| \ge 0.65$ ($\approx 49.5^\circ$ de desvío angular máximo). Trazos cruzados u ortogonales (por ejemplo, aristas verticales cruzando la elipse superior de un cilindro) son rechazados taxativamente.
+2. **Umbral de Fuga Calibrado (`MATCH_THRESHOLD = 18.0`px):**
+   - Ajustado para penalizar líneas que se dibujan en paralelo sin converger hacia los puntos de fuga ($VP_X, VP_Y, VP_Z$).
+   - Conforme la línea paralela del usuario se aleja de la perspectiva cónica real, la distancia supera los 18px y el tramo se tiñe de rojo en pantalla.
+3. **Integridad Estructural Curva a Curva (`CurveEvaluationDetail`):**
+   - Se evalúa independientemente cada contorno (cobertura $C_k$, precisión $P_k$ y nota individual $s_k$).
+   - **Regla de Figura Incompleta:** Si cualquier contorno esencial tiene una cobertura $< 35\%$ (por ejemplo, si no se dibujó la elipse superior de un cilindro o faltan caras de un cubo), la calificación queda automáticamente topada en un máximo de **$48.0$ PTS (Grado D)** y el feedback nombra explícitamente el contorno faltante.
+4. **Puntaje y Letras:**
+   - **S (90 - 100 PTS):** Precisión quirúrgica de aristas, convergencia exacta y todas las curvas completadas.
+   - **A (80 - 89.9 PTS):** Excelente control de fuga sin contornos omitidos.
+   - **B (65 - 79.9 PTS):** Buena aproximación espacial con ligeras desviaciones.
+   - **C (50 - 64.9 PTS):** Proporciones deformadas o fugas divergentes.
+   - **D (< 50 PTS):** Trazos ausentes, figuras incompletas o aristas fuera de perspectiva.
+5. **Retroalimentación Diagnóstica en Color:**
    - **Cyan (`#38bdf8`):** Trazos originales del usuario.
    - **Verde Esmeralda (`#22c55e`):** Aristas y curvas correctamente identificadas y dibujadas.
    - **Rojo Carmesí (`#ef4444`):** Aristas faltantes o con desviación geométrica excesiva.
@@ -237,8 +245,11 @@ Para un cono con ápice $\vec{A} = (0, y_{apex}, 0)$ y base circular en $y = y_{
 - **Pirámide y Cápsula:** Incorporan igualmente la base cerrada sólida y el eje vertical fino de altura para comunicar la cota volumétrica sin necesidad de activar pistas.
 - **Toroide (`createRingPrimitive`):** Envolventes tangenciales superior e inferior calculadas analíticamente para cada sección transversal según el vector visual.
 
-### 9.5 Muestreo Continuo y Evaluación Justa (`evaluator3d.ts`)
+### 9.5 Muestreo Continuo y Evaluación Rigurosa (`evaluator3d.ts`)
 - Todas las aristas rectas y curvas se muestrean con 24 a 48 puntos mediante `sampleDenseSegment3D`.
-- Umbral de tolerancia de stylus/mano alzada calibrado a $28.0\,\text{px}$, reconociendo trazos precisos sin penalizar la vibración natural del lápiz óptico o el ratón.
+- **Umbral de Distancia a $18.0\,\text{px}$ (`MATCH_THRESHOLD`):** Calibrado para admitir la vibración natural del lápiz óptico o el ratón a mano alzada, pero penalizando de forma inmediata y visible las líneas que no convergen hacia los puntos de fuga o trazos dibujados a ojo sin seguir la perspectiva de la habitación.
+- **Alineación Tangente Obligatoria ($|\cos\theta| \ge 0.65$):** Impide que trazos orientados en una dirección coincidan espuriamente con curvas orientadas ortogonalmente.
+- **Evaluación Estructural Curva a Curva:** Garantiza que no se puedan obtener calificaciones elevadas omitiendo partes completas del volumen (como la elipse superior o caras laterales).
+
 
 

@@ -43,9 +43,16 @@ export interface DebugReport3DData {
     grade: string;
     feedbackMessage: string;
     matchedSegmentsCount: number;
-    missingSegmentsCount: number;
     drawnCount: number;
     targetCount: number;
+    curves?: {
+      id: string;
+      label: string;
+      coveragePct: number;
+      precisionPct: number;
+      score: number;
+      isCompleted: boolean;
+    }[];
   };
   environment: {
     userAgent: string;
@@ -138,9 +145,16 @@ export function build3DDebugReport(
       grade: evaluation?.grade ?? 'N/A',
       feedbackMessage: evaluation?.feedbackMessage ?? 'Sin evaluar',
       matchedSegmentsCount: evaluation?.matchedSegments.length ?? 0,
-      missingSegmentsCount: evaluation?.missingSegments.length ?? 0,
       drawnCount: evaluation?.drawnCount ?? strokes.length,
       targetCount: evaluation?.targetCount ?? challenge.targetCurves.length,
+      curves: evaluation?.curveDetails?.map((c) => ({
+        id: c.id,
+        label: c.label,
+        coveragePct: Math.round(c.coverage * 100),
+        precisionPct: Math.round(c.precision * 100),
+        score: Math.round(c.score * 10) / 10,
+        isCompleted: c.isCompleted,
+      })),
     },
     environment: {
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
@@ -157,14 +171,25 @@ export function build3DDebugReport(
     ? `\n- **📝 NOTA DEL USUARIO / USER NOTE:**\n> "${userNote.trim()}"`
     : '';
 
+  const curvesBreakdown =
+    evaluation?.curveDetails && evaluation.curveDetails.length > 0
+      ? `\n- **Desglose de Contornos:**\n` +
+        evaluation.curveDetails
+          .map(
+            (c) =>
+              `  - \`${c.label}\`: ${Math.round(c.coverage * 100)}% cobertura · ${Math.round(c.precision * 100)}% precisión (${c.isCompleted ? '✓ Completado' : '✗ Incompleto'})`
+          )
+          .join('\n')
+      : '';
+
   const markdownText = `
 ### 📐 REPORTE DE PERSPECTIVA 3D (LAB 3D)
 - **Forma:** \`${challenge.name}\` (\`${challenge.type}\`)
 - **Semilla (Seed):** \`#${challenge.seed}\`
 - **Cámara:** FOV: \`${challenge.camera.fov}°\` | Eye: \`(${reportData.challenge.camera.eye.x}, ${reportData.challenge.camera.eye.y}, ${reportData.challenge.camera.eye.z})\`
 - **Calificación:** **${scoreDisplay}** (${passedStatus})
-- **Trazos / Aristas:** ${evaluation?.drawnCount ?? strokes.length}/${evaluation?.targetCount ?? challenge.targetCurves.length} objetivo
-- **Diagnóstico:** *"${evaluation?.feedbackMessage || 'N/A'}"*${noteSection}
+- **Trazos / Aristas:** ${evaluation?.drawnCount ?? strokes.length}/${evaluation?.targetCount ?? challenge.targetCurves.length} completados
+- **Diagnóstico:** *"${evaluation?.feedbackMessage || 'N/A'}"*${curvesBreakdown}${noteSection}
 
 <details>
 <summary>📦 Ver JSON Completo de Diagnóstico 3D (clic para desplegar)</summary>

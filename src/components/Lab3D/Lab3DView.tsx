@@ -560,7 +560,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           score: Math.round(result.score),
           passed: result.score >= 70,
           userComment: userNote.trim(),
-          metricsSummary: `Grado: ${result.grade} · Aciertos: ${result.matchedSegments.length}/${result.targetCount}`,
+          metricsSummary: `Grado: ${result.grade} · Completadas: ${result.drawnCount}/${result.targetCount}`,
           reportMarkdown: rep.markdownText,
           reportJsonString: rep.jsonString,
         };

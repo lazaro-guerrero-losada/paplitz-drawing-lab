@@ -92,6 +92,15 @@ export interface UserStroke3D {
 
 export type GradeLevel = 'S' | 'A' | 'B' | 'C' | 'D';
 
+export interface CurveEvaluationDetail {
+  id: string;
+  label: string;
+  coverage: number; // 0.0 - 1.0
+  precision: number; // 0.0 - 1.0
+  score: number; // 0.0 - 100.0
+  isCompleted: boolean;
+}
+
 export interface EvaluationResult3D {
   score: number; // 0.0 - 100.0
   grade: GradeLevel;
@@ -106,4 +115,6 @@ export interface EvaluationResult3D {
   userStrokes: UserStroke3D[];
   drawnCount: number;
   targetCount: number;
+  curveDetails?: CurveEvaluationDetail[];
 }
+
