@@ -102,7 +102,8 @@ export function evaluate3DSubmission(
     }));
 
     return {
-      score: 0.0,
+      score: 0,
+      passed: false,
       grade: 'D',
       feedbackMessage: 'No lines drawn: start by tracing the missing forms in perspective.',
       matchedSegments: [],
@@ -278,14 +279,15 @@ export function evaluate3DSubmission(
     rawScore = Math.min(rawScore, 58.0);
   }
 
-  rawScore = Math.max(0, Math.min(100, Math.round(rawScore * 10) / 10));
+  const finalScore = Math.max(0, Math.min(100, Math.round(rawScore)));
+  const passed = finalScore >= 70;
 
-  // Asignación de Calificación por Letra
+  // Asignación de Calificación por Letra (mantenida internamente por compatibilidad)
   let grade: GradeLevel = 'D';
-  if (rawScore >= 90.0 && missingCurves.length === 0) grade = 'S';
-  else if (rawScore >= 80.0 && missingCurves.length === 0) grade = 'A';
-  else if (rawScore >= 65.0 && missingCurves.length === 0) grade = 'B';
-  else if (rawScore >= 50.0) grade = 'C';
+  if (finalScore >= 90 && missingCurves.length === 0) grade = 'S';
+  else if (finalScore >= 80 && missingCurves.length === 0) grade = 'A';
+  else if (finalScore >= 65 && missingCurves.length === 0) grade = 'B';
+  else if (finalScore >= 50) grade = 'C';
   else grade = 'D';
 
   // Mensaje de diagnóstico didáctico y contextualizado
@@ -302,18 +304,19 @@ export function evaluate3DSubmission(
     feedbackMessage = 'Perspective lines diverge from vanishing points. Align strokes with the 3D room grid.';
   } else if (overallCoverage < 0.65) {
     feedbackMessage = 'Partial figure: complete the full length of each contour in red.';
-  } else if (rawScore >= 90.0) {
+  } else if (finalScore >= 90) {
     feedbackMessage = 'Flawless 3D perspective construction! Exact vanishing convergence.';
-  } else if (rawScore >= 80.0) {
+  } else if (finalScore >= 80) {
     feedbackMessage = 'Great perspective execution! Clean alignment with the guide grid.';
-  } else if (rawScore >= 65.0) {
-    feedbackMessage = 'Good spatial intuition. Tighten line curvature towards the vanishing points.';
+  } else if (finalScore >= 70) {
+    feedbackMessage = 'Good spatial intuition. Clean vanishing alignment.';
   } else {
     feedbackMessage = 'Perspective contours need improvement: check alignment with vanishing points.';
   }
 
   return {
-    score: rawScore,
+    score: finalScore,
+    passed,
     grade,
     feedbackMessage,
     matchedSegments,

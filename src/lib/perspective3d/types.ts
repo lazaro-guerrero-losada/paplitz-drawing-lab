@@ -102,8 +102,9 @@ export interface CurveEvaluationDetail {
 }
 
 export interface EvaluationResult3D {
-  score: number; // 0.0 - 100.0
-  grade: GradeLevel;
+  score: number; // 0 - 100 (%)
+  passed: boolean; // >= 70% idéntico a Práctica
+  grade?: GradeLevel; // Mantenido opcional por compatibilidad técnica
   feedbackMessage: string;
   matchedSegments: {
     points: Point2D[];

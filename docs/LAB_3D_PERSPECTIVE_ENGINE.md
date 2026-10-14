@@ -142,13 +142,13 @@ La evaluación compara los trazos libres del usuario con las curvas tridimension
    - Conforme la línea paralela del usuario se aleja de la perspectiva cónica real, la distancia supera los 18px y el tramo se tiñe de rojo en pantalla.
 3. **Integridad Estructural Curva a Curva (`CurveEvaluationDetail`):**
    - Se evalúa independientemente cada contorno (cobertura $C_k$, precisión $P_k$ y nota individual $s_k$).
-   - **Regla de Figura Incompleta:** Si cualquier contorno esencial tiene una cobertura $< 35\%$ (por ejemplo, si no se dibujó la elipse superior de un cilindro o faltan caras de un cubo), la calificación queda automáticamente topada en un máximo de **$48.0$ PTS (Grado D)** y el feedback nombra explícitamente el contorno faltante.
-4. **Puntaje y Letras:**
-   - **S (90 - 100 PTS):** Precisión quirúrgica de aristas, convergencia exacta y todas las curvas completadas.
-   - **A (80 - 89.9 PTS):** Excelente control de fuga sin contornos omitidos.
-   - **B (65 - 79.9 PTS):** Buena aproximación espacial con ligeras desviaciones.
-   - **C (50 - 64.9 PTS):** Proporciones deformadas o fugas divergentes.
-   - **D (< 50 PTS):** Trazos ausentes, figuras incompletas o aristas fuera de perspectiva.
+   - **Regla de Figura Incompleta:** Si cualquier contorno esencial tiene una cobertura $< 35\%$ (por ejemplo, si no se dibujó la elipse superior de un cilindro o faltan caras de un cubo), la calificación queda automáticamente topada en un máximo de **$48\%$ (No Superado)** y el feedback nombra explícitamente el contorno faltante.
+4. **Sistema de Calificación Unificado con la Pestaña de Práctica:**
+   - **Porcentaje Numérico (%)**: La puntuación se expresa directamente en porcentaje del $0\%$ al $100\%$, eliminando las letras anglosajonas (S, A, B, C, D).
+   - **Estado de Aprobación**:
+     - **`Aprobado ✓`** (badge negro `bg-black text-white` con icono `CheckCircle`): cuando se alcanza o supera el $70\%$ (`score >= 70%`).
+     - **`No Superado`** (badge blanco con borde negro `bg-white text-black border-2 border-black` con icono `AlertTriangle`): cuando la nota es inferior al umbral mínimo del $70\%$.
+   - **Barra Inferior con Píldora de Puntuación**: Al evaluar, la barra de herramientas muestra la píldora `[✓ / ⚠] [Score]%` junto al botón `Siguiente`, idéntica a la barra de Práctica.
 5. **Retroalimentación Diagnóstica en Color:**
    - **Cyan (`#38bdf8`):** Trazos originales del usuario.
    - **Verde Esmeralda (`#22c55e`):** Aristas y curvas correctamente identificadas y dibujadas.

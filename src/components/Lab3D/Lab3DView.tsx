@@ -23,6 +23,7 @@ import {
   RotateCcw,
   Trophy,
   Check,
+  CheckCircle,
   AlertTriangle,
   X,
   Copy,
@@ -560,7 +561,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           score: Math.round(result.score),
           passed: result.score >= 70,
           userComment: userNote.trim(),
-          metricsSummary: `Grado: ${result.grade} · Completadas: ${result.drawnCount}/${result.targetCount}`,
+          metricsSummary: `${Math.round(result.score)}% · ${result.passed ? 'Aprobado ✓' : 'No Superado'} · Completadas: ${result.drawnCount}/${result.targetCount}`,
           reportMarkdown: rep.markdownText,
           reportJsonString: rep.jsonString,
         };
@@ -574,7 +575,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       }
 
       if (onAvatarMoodChange) {
-        if (result.score >= 80) onAvatarMoodChange('happy');
+        if (result.passed) onAvatarMoodChange('happy');
         else if (result.score >= 50) onAvatarMoodChange('thinking');
         else onAvatarMoodChange('fail-spiral');
       }
@@ -633,34 +634,37 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         />
       </div>
 
-      {/* 3. BANNER DE CALIFICACIÓN Y PUNTUACIÓN TRAS EVALUAR (ESTILO BRUTALISTA PAPLITZ) */}
+      {/* 3. BANNER DE CALIFICACIÓN Y PUNTUACIÓN TRAS EVALUAR (MÉTODO IDÉNTICO A PRÁCTICA) */}
       {evaluation && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="card-ink bg-white text-black p-3.5 sm:px-6 sm:py-3.5 flex flex-col items-center min-w-[280px] sm:min-w-[340px]">
+          <div className="card-ink bg-white text-black p-3 sm:px-5 sm:py-3 flex flex-col items-center min-w-[280px] sm:min-w-[340px] shadow-[4px_4px_0px_#000000]">
             <div className="flex items-center gap-3">
-              {/* Caja de Calificación por Letra */}
-              <div
-                className={`w-10 h-10 border-2 border-black flex items-center justify-center font-display font-black text-2xl text-white shadow-[2px_2px_0px_#000000] ${
-                  evaluation.grade === 'S'
-                    ? 'bg-amber-400 text-black'
-                    : evaluation.grade === 'A'
-                    ? 'bg-emerald-500 text-white'
-                    : evaluation.grade === 'B'
-                    ? 'bg-blue-600 text-white'
-                    : evaluation.grade === 'C'
-                    ? 'bg-yellow-400 text-black'
-                    : 'bg-red-500 text-white'
-                }`}
-              >
-                {evaluation.grade}
+              {/* Badge Aprobado / No Superado idéntico a Práctica */}
+              <div className="flex items-center gap-1.5">
+                {evaluation.passed ? (
+                  <CheckCircle className="w-5 h-5 text-black stroke-[2.5]" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-black stroke-[2.5]" />
+                )}
+                <span
+                  className={`text-[11px] font-mono px-2 py-0.5 font-bold uppercase shadow-[1px_1px_0px_#000000] ${
+                    evaluation.passed
+                      ? 'bg-black text-white'
+                      : 'bg-white text-black border-2 border-black'
+                  }`}
+                >
+                  {evaluation.passed ? 'Aprobado ✓' : 'No Superado'}
+                </span>
               </div>
 
-              {/* Puntaje Numérico */}
+              {/* Puntaje Numérico en Porcentaje (%) */}
               <div className="flex items-baseline gap-1 font-mono">
                 <span className="text-3xl font-black text-black tracking-tight">
-                  {evaluation.score.toFixed(1)}
+                  {Math.round(evaluation.score)}%
                 </span>
-                <span className="text-xs font-bold text-neutral-500 uppercase">PTS</span>
+                <span className="text-[10px] font-bold text-neutral-500 uppercase">
+                  (Mín. 70%)
+                </span>
               </div>
             </div>
 
@@ -806,16 +810,37 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             </span>
           </button>
 
-          {/* Botón Principal: Submit (cuando se dibuja) o Next (tras evaluar) */}
-          <button
-            onClick={handleSubmitOrNext}
-            className={`btn-ink px-4 sm:px-5 py-2 text-xs font-mono uppercase font-bold flex items-center gap-1.5 shadow-[2px_2px_0px_#000000] ${
-              evaluation ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''
-            }`}
-          >
-            <span>{evaluation ? 'Siguiente' : 'Comprobar'}</span>
-            {evaluation ? <ChevronRight className="w-4 h-4 stroke-[2.5]" /> : <Check className="w-4 h-4 stroke-[3]" />}
-          </button>
+          {/* Botón Principal: Submit (cuando se dibuja) o Next con porcentaje (tras evaluar, idéntico a Práctica) */}
+          {evaluation ? (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-1 border-2 border-black bg-neutral-100 px-2.5 py-1.5 font-mono text-xs font-bold shadow-[1px_1px_0px_#000000] shrink-0">
+                {evaluation.passed ? (
+                  <CheckCircle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+                )}
+                <span>{Math.round(evaluation.score)}%</span>
+              </div>
+              <button
+                onClick={handleSubmitOrNext}
+                className="btn-ink px-3 sm:px-4 py-2 text-xs font-mono uppercase font-bold flex items-center gap-1 cursor-pointer shadow-[2px_2px_0px_#000000] shrink-0"
+                title="Siguiente ejercicio (Enter)"
+              >
+                <span>Siguiente</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleSubmitOrNext}
+              disabled={strokes.length === 0}
+              className="btn-ink px-3.5 sm:px-5 py-2 text-xs font-mono uppercase font-bold disabled:opacity-30 cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center gap-1.5 shrink-0"
+              title="Comprobar perspectiva (Enter)"
+            >
+              <span>Comprobar</span>
+              <Check className="w-4 h-4 stroke-[3]" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -835,7 +860,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             <div className="my-6 bg-neutral-50 border-2 border-black p-4 shadow-[2px_2px_0px_#000000]">
               <div className="text-xs font-mono text-neutral-600 uppercase font-bold">Puntuación Media</div>
               <div className="text-4xl font-mono font-black mt-1 text-black">
-                {averageScore} <span className="text-lg font-sans text-neutral-500">PTS</span>
+                {averageScore} <span className="text-lg font-sans text-neutral-500">%</span>
               </div>
 
               {/* Récord por rondas */}
@@ -843,7 +868,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                 {sessionScores.map((sc, idx) => (
                   <div key={idx} className="bg-white border-2 border-black p-1 shadow-[1px_1px_0px_#000000]">
                     <div className="text-[10px] text-neutral-500 font-bold">R{idx + 1}</div>
-                    <div className="font-black">{sc.toFixed(0)}</div>
+                    <div className="font-black">{sc.toFixed(0)}%</div>
                   </div>
                 ))}
               </div>
@@ -903,7 +928,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
               </div>
               <div>
                 <span className="text-neutral-500">Nota:</span>{' '}
-                <strong>{evaluation ? `${evaluation.score.toFixed(1)} PTS (${evaluation.grade})` : 'Calculada'}</strong>
+                <strong>{evaluation ? `${Math.round(evaluation.score)}% (${evaluation.passed ? 'Aprobado ✓' : 'No Superado'})` : 'Calculada'}</strong>
               </div>
             </div>
 

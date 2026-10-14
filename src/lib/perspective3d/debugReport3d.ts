@@ -40,7 +40,7 @@ export interface DebugReport3DData {
   evaluation: {
     evaluated: boolean;
     score: number;
-    grade: string;
+    passed: boolean;
     feedbackMessage: string;
     matchedSegmentsCount: number;
     drawnCount: number;
@@ -141,8 +141,8 @@ export function build3DDebugReport(
     },
     evaluation: {
       evaluated: !!evaluation,
-      score: evaluation?.score ?? 0,
-      grade: evaluation?.grade ?? 'N/A',
+      score: evaluation?.score ? Math.round(evaluation.score) : 0,
+      passed: evaluation?.passed ?? false,
       feedbackMessage: evaluation?.feedbackMessage ?? 'Sin evaluar',
       matchedSegmentsCount: evaluation?.matchedSegments.length ?? 0,
       drawnCount: evaluation?.drawnCount ?? strokes.length,
@@ -165,8 +165,8 @@ export function build3DDebugReport(
 
   const jsonString = JSON.stringify(reportData, null, 2);
 
-  const scoreDisplay = evaluation ? `${evaluation.score.toFixed(1)} PTS (Grado ${evaluation.grade})` : 'N/A';
-  const passedStatus = evaluation ? (evaluation.score >= 70 ? 'APROBADO ✓' : 'A MEJORAR ✗') : 'NO EVALUADO';
+  const scoreDisplay = evaluation ? `${Math.round(evaluation.score)}%` : 'N/A';
+  const passedStatus = evaluation ? (evaluation.passed ? 'APROBADO ✓' : 'NO SUPERADO ✗') : 'NO EVALUADO';
   const noteSection = userNote?.trim()
     ? `\n- **📝 NOTA DEL USUARIO / USER NOTE:**\n> "${userNote.trim()}"`
     : '';
@@ -187,7 +187,7 @@ export function build3DDebugReport(
 - **Forma:** \`${challenge.name}\` (\`${challenge.type}\`)
 - **Semilla (Seed):** \`#${challenge.seed}\`
 - **Cámara:** FOV: \`${challenge.camera.fov}°\` | Eye: \`(${reportData.challenge.camera.eye.x}, ${reportData.challenge.camera.eye.y}, ${reportData.challenge.camera.eye.z})\`
-- **Calificación:** **${scoreDisplay}** (${passedStatus})
+- **Nota Obtenida:** **${scoreDisplay}** (${passedStatus})
 - **Trazos / Aristas:** ${evaluation?.drawnCount ?? strokes.length}/${evaluation?.targetCount ?? challenge.targetCurves.length} completados
 - **Diagnóstico:** *"${evaluation?.feedbackMessage || 'N/A'}"*${curvesBreakdown}${noteSection}
 
