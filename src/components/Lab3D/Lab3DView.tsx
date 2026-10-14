@@ -5,16 +5,19 @@ import {
   EvaluationResult3D,
   Point2D,
   PrimitiveType,
+  AidMode,
 } from '../../lib/perspective3d/types';
 import { generate3DChallenge, ALL_PRIMITIVES } from '../../lib/perspective3d/primitives';
 import { evaluate3DSubmission } from '../../lib/perspective3d/evaluator3d';
 import { Perspective3DPreviewCard } from './Perspective3DPreviewCard';
+import { PrimitiveSelectorPanel } from './PrimitiveSelectorPanel';
 import {
   Undo2,
   Redo2,
   Trash2,
   Eye,
   EyeOff,
+  Crosshair,
   Grid,
   ChevronLeft,
   ChevronRight,
@@ -44,10 +47,11 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   // Modo de práctica: 'rounds' (Desafío de 8 rondas) o 'free' (Práctica Libre Infinita)
   const [practiceMode, setPracticeMode] = useState<'rounds' | 'free'>('rounds');
   const [selectedPrimitiveType, setSelectedPrimitiveType] = useState<PrimitiveType | 'RANDOM'>('RANDOM');
+  const [enabledPrimitives, setEnabledPrimitives] = useState<PrimitiveType[]>([...ALL_PRIMITIVES]);
 
   // Reto actual
   const [challenge, setChallenge] = useState<Primitive3DChallenge>(() =>
-    generate3DChallenge(Date.now(), undefined, 800, 600)
+    generate3DChallenge(Date.now(), undefined, 800, 600, ALL_PRIMITIVES)
   );
 
   // Estados del lienzo
@@ -55,9 +59,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   const [redoStack, setRedoStack] = useState<UserStroke3D[]>([]);
   const [evaluation, setEvaluation] = useState<EvaluationResult3D | null>(null);
 
-  // Opciones de visualización (como en las capturas 1 y 2)
+  // Opciones de visualización y Ayudas 3D
   const [showGrid, setShowGrid] = useState<boolean>(true); // Activar / desactivar rejilla 3D
-  const [peekHint, setPeekHint] = useState<boolean>(false); // Ojo para ver solución fantasma
+  const [aidMode, setAidMode] = useState<AidMode>('off'); // 3 Estados: off, line, vertices
 
   // Referencias del Canvas e interactividad
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
@@ -75,24 +79,25 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
   // Cargar nuevo reto
   const loadNewChallenge = useCallback(
-    (roundNum: number, forcedType?: PrimitiveType) => {
+    (roundNum: number, forcedType?: PrimitiveType, allowedOverride?: PrimitiveType[]) => {
+      const allowed = allowedOverride || enabledPrimitives;
       const type = forcedType || (selectedPrimitiveType === 'RANDOM' ? undefined : selectedPrimitiveType);
       const newSeed = Math.floor(Math.random() * 1000000);
       const newCh = generate3DChallenge(
         newSeed,
         type,
         canvasDimensions.width,
-        canvasDimensions.height
+        canvasDimensions.height,
+        allowed
       );
       setChallenge(newCh);
       setStrokes([]);
       setRedoStack([]);
       setCurrentLiveStroke([]);
       setEvaluation(null);
-      setPeekHint(false);
       setCurrentRound(roundNum);
     },
-    [canvasDimensions, selectedPrimitiveType]
+    [canvasDimensions, selectedPrimitiveType, enabledPrimitives]
   );
 
   // Ajustar dimensiones del canvas exactamente al contenedor del área de dibujo
@@ -105,7 +110,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
       setCanvasDimensions({ width: w, height: h });
       setChallenge((prev) =>
-        generate3DChallenge(prev.seed, prev.type, w, h)
+        generate3DChallenge(prev.seed, prev.type, w, h, enabledPrimitives)
       );
     };
 
@@ -207,21 +212,137 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       ctx.setLineDash([]);
     });
 
-    // 3. MODO PEEK (OJO): Muestra fantasma de las líneas objetivo si el usuario mantiene presionado el ojo
-    if (peekHint && !evaluation) {
-      ctx.strokeStyle = 'rgba(99, 102, 241, 0.45)';
-      ctx.lineWidth = 2.2;
-      ctx.setLineDash([6, 4]);
-      challenge.targetCurves.forEach((tc) => {
-        if (tc.points.length < 2) return;
-        ctx.beginPath();
-        tc.points.forEach((pt, idx) => {
-          if (idx === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
+    // 3. AYUDAS VISUALES 3D (3 Estados: Off, Línea, Vértices)
+    if (!evaluation) {
+      if (aidMode === 'line') {
+        // ESTADO 1: Línea gris de puntos que muestra el trazo completo para terminar la forma
+        ctx.save();
+        ctx.strokeStyle = '#94a3b8'; // Slate 400
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([3, 5]); // Línea de puntos gris
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        challenge.targetCurves.forEach((tc) => {
+          if (tc.points.length < 2) return;
+          ctx.beginPath();
+          tc.points.forEach((pt, idx) => {
+            if (idx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
         });
-        ctx.stroke();
-      });
-      ctx.setLineDash([]);
+        ctx.restore();
+      } else if (aidMode === 'vertices') {
+        // ESTADO 2: Solo vértices y una línea fina que apunta hacia el otro vértice
+        ctx.save();
+        ctx.strokeStyle = '#2563eb'; // Azul técnico
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.setLineDash([]);
+
+        const drawnVertices: Point2D[] = [];
+        const addVertex = (p: Point2D) => {
+          if (!drawnVertices.some((v) => Math.hypot(v.x - p.x, v.y - p.y) < 4)) {
+            drawnVertices.push(p);
+          }
+        };
+
+        challenge.targetCurves.forEach((tc) => {
+          if (tc.points.length < 2) return;
+          const pts = tc.points;
+
+          if (pts.length === 2) {
+            // Segmento recto entre 2 vértices
+            const pA = pts[0];
+            const pB = pts[1];
+            addVertex(pA);
+            addVertex(pB);
+
+            const dx = pB.x - pA.x;
+            const dy = pB.y - pA.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 8) {
+              const ux = dx / dist;
+              const uy = dy / dist;
+              const stubLen = Math.min(32, Math.max(10, dist * 0.28));
+
+              // Línea fina desde pA que apunta hacia pB
+              ctx.beginPath();
+              ctx.moveTo(pA.x, pA.y);
+              ctx.lineTo(pA.x + ux * stubLen, pA.y + uy * stubLen);
+              ctx.stroke();
+
+              // Línea fina desde pB que apunta hacia pA
+              ctx.beginPath();
+              ctx.moveTo(pB.x, pB.y);
+              ctx.lineTo(pB.x - ux * stubLen, pB.y - uy * stubLen);
+              ctx.stroke();
+            }
+          } else {
+            // Segmento curvo (anillos o siluetas)
+            const isClosed = Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 4;
+            if (isClosed) {
+              const step = Math.floor(pts.length / 4);
+              for (let k = 0; k < 4; k++) {
+                const idxA = (k * step) % pts.length;
+                const pA = pts[idxA];
+                addVertex(pA);
+
+                const stubCount = Math.max(3, Math.floor(step * 0.28));
+                ctx.beginPath();
+                for (let s = 0; s <= stubCount; s++) {
+                  const pt = pts[(idxA + s) % pts.length];
+                  if (s === 0) ctx.moveTo(pt.x, pt.y);
+                  else ctx.lineTo(pt.x, pt.y);
+                }
+                ctx.stroke();
+              }
+            } else {
+              const pA = pts[0];
+              const pB = pts[pts.length - 1];
+              addVertex(pA);
+              addVertex(pB);
+
+              const stubCount = Math.max(3, Math.floor(pts.length * 0.28));
+              ctx.beginPath();
+              for (let s = 0; s <= stubCount && s < pts.length; s++) {
+                const pt = pts[s];
+                if (s === 0) ctx.moveTo(pt.x, pt.y);
+                else ctx.lineTo(pt.x, pt.y);
+              }
+              ctx.stroke();
+
+              ctx.beginPath();
+              for (let s = pts.length - 1; s >= pts.length - 1 - stubCount && s >= 0; s--) {
+                const pt = pts[s];
+                if (s === pts.length - 1) ctx.moveTo(pt.x, pt.y);
+                else ctx.lineTo(pt.x, pt.y);
+              }
+              ctx.stroke();
+            }
+          }
+        });
+
+        // Dibujar los marcadores de vértices con estilo técnico brutalista
+        drawnVertices.forEach((v) => {
+          ctx.fillStyle = '#2563eb';
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(v.x, v.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Centro blanco nítido
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(v.x, v.y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        ctx.restore();
+      }
     }
 
     // 4. TRAZOS DEL USUARIO
@@ -295,7 +416,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         ctx.stroke();
       }
     }
-  }, [challenge, strokes, currentLiveStroke, evaluation, showGrid, peekHint, canvasDimensions]);
+  }, [challenge, strokes, currentLiveStroke, evaluation, showGrid, aidMode, canvasDimensions]);
 
   // ==========================================
   // Manejadores de Eventos del Puntero (Stylus, Touch, Mouse) con Corrección de Escala
@@ -492,6 +613,23 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         </div>
       </header>
 
+      {/* PANEL FLOTANTE IZQUIERDO DE SELECCIÓN DE FORMAS 3D */}
+      <div className="absolute top-16 left-3 sm:left-5 z-20">
+        <PrimitiveSelectorPanel
+          selectedTypes={enabledPrimitives}
+          onChangeSelectedTypes={(newSelected) => {
+            setEnabledPrimitives(newSelected);
+            if (!newSelected.includes(challenge.type)) {
+              loadNewChallenge(currentRound, undefined, newSelected);
+            }
+          }}
+          onSelectImmediate={(type) => {
+            loadNewChallenge(currentRound, type);
+          }}
+          currentType={challenge.type}
+        />
+      </div>
+
       {/* 2. TARJETA CON EL MODELO 3D OBJETIVO (SUPERIOR DERECHA) */}
       <div className="absolute top-16 right-4 sm:right-6 z-20">
         <Perspective3DPreviewCard
@@ -603,18 +741,31 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
           <div className="w-[2px] h-6 bg-black mx-0.5" />
 
-          {/* Ojo (Peek): Permite echar un vistazo a la solución fantasma */}
+          {/* Botón de Ayudas 3D: 3 Fases (Off -> Línea gris punteada -> Vértices con dirección) */}
           <button
-            onMouseDown={() => setPeekHint(true)}
-            onMouseUp={() => setPeekHint(false)}
-            onTouchStart={() => setPeekHint(true)}
-            onTouchEnd={() => setPeekHint(false)}
-            className={`p-2 text-xs font-mono font-bold border-2 border-black transition-colors cursor-pointer shadow-[1px_1px_0px_#000000] ${
-              peekHint ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+            onClick={() => {
+              setAidMode((prev) => {
+                if (prev === 'off') return 'line';
+                if (prev === 'line') return 'vertices';
+                return 'off';
+              });
+            }}
+            className={`p-2 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
+              aidMode === 'line'
+                ? 'bg-amber-300 text-black'
+                : aidMode === 'vertices'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-neutral-600 hover:bg-neutral-100'
             }`}
-            title="Mantén presionado para ver la solución fantasma"
+            title="Ciclar ayudas 3D: Apagado → Línea gris punteada → Vértices con dirección"
           >
-            {peekHint ? <Eye className="w-4 h-4 stroke-[2.2]" /> : <EyeOff className="w-4 h-4 stroke-[2.2]" />}
+            {aidMode === 'off' && <EyeOff className="w-4 h-4 stroke-[2.2]" />}
+            {aidMode === 'line' && <Eye className="w-4 h-4 stroke-[2.2]" />}
+            {aidMode === 'vertices' && <Crosshair className="w-4 h-4 stroke-[2.5]" />}
+
+            <span className="hidden sm:inline uppercase text-[10px] tracking-wider font-mono">
+              {aidMode === 'off' ? 'Ayuda: Off' : aidMode === 'line' ? 'Ayuda: Línea' : 'Ayuda: Vértices'}
+            </span>
           </button>
 
           {/* Rejilla 3D (Toggles 3D guidelines on/off) */}

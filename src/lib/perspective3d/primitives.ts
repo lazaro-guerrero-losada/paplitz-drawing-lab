@@ -643,11 +643,13 @@ export function generate3DChallenge(
   seed: number = Math.floor(Math.random() * 1000000),
   forcedType?: PrimitiveType,
   canvasWidth: number = 800,
-  canvasHeight: number = 600
+  canvasHeight: number = 600,
+  allowedTypes?: PrimitiveType[]
 ): Primitive3DChallenge {
   const rng = seededRng(seed);
 
-  const type = forcedType || ALL_PRIMITIVES[Math.floor(rng() * ALL_PRIMITIVES.length)];
+  const pool = allowedTypes && allowedTypes.length > 0 ? allowedTypes : ALL_PRIMITIVES;
+  const type = forcedType || pool[Math.floor(rng() * pool.length)];
   const camera = generateDynamicCamera(rng, canvasWidth, canvasHeight);
 
   const viewMatrix = createLookAtMatrix(camera.eye, camera.target, camera.up);

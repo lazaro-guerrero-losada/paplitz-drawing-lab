@@ -58,6 +58,8 @@ export type PrimitiveType =
   | 'CAPSULE'
   | 'PRISM';
 
+export type AidMode = 'off' | 'line' | 'vertices';
+
 export interface WireframeModel3D {
   vertices: Vector3D[];
   edges: [number, number][];
