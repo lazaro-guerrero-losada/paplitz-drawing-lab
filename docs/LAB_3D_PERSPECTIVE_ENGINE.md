@@ -78,15 +78,15 @@ Para evitar que un prisma o cilindro parezca extenderse en la dirección erróne
 ## 4. Componentes de Interfaz de Usuario (UI)
 
 ### 4.1 Panel Flotante Lateral de Selección de Formas (`src/components/Lab3D/PrimitiveSelectorPanel.tsx`)
-- **Ubicación:** Lateral izquierdo superior flotante (`top-16 left-3`).
+- **Ubicación:** Lateral izquierdo superior flotante (`top-3 left-3 sm:left-5`).
 - **Funcionalidades:**
   - Checkboxes neobrutalistas para habilitar/deshabilitar cualquiera de las 8 formas (`CUBE`, `SPHERE`, `CYLINDER`, `CONE`, `PYRAMID`, `RING`, `CAPSULE`, `PRISM`).
   - Botón **Todas** para seleccionar el catálogo completo.
   - Botón **Solo Actual** para enfocar la sesión en una única figura.
-  - Botón **🎲 Azar** para cargar de inmediato un reto aleatorio extraído del subconjunto activo.
   - Botón **Reto** por cada figura para cargar inmediatamente una perspectiva de esa geometría específica.
   - Mecanismo de seguridad: impide deseleccionar todas las formas a la vez (siempre mantiene al menos una forma seleccionada).
   - Pestaña colapsable: se minimiza a un botón compacto `[ 📐 Formas (X/8) ]` para maximizar el área de dibujo en pantallas pequeñas o tablets.
+  - Control de perspectiva centrado: la rotación de ángulo se gestiona exclusivamente desde el botón ergonómico **Nuevo Ángulo** de la barra de herramientas inferior.
 
 ### 4.2 Barra de Herramientas Flotante Centrada Inferior
 Diseñada bajo el sistema neobrutalista `card-ink` con borde negro y sombra sólida `shadow-[4px_4px_0px_#000000]`, integra en un único bloque ergonómico:

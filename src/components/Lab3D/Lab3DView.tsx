@@ -620,9 +620,6 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           onSelectImmediate={(type) => {
             loadNewChallenge(currentRound, type);
           }}
-          onSelectRandom={() => {
-            loadNewChallenge(currentRound);
-          }}
           currentType={challenge.type}
         />
       </div>
