@@ -75,9 +75,11 @@ export function build3DDebugReport(
     const pts = s.points;
     const pStart = pts[0] || { x: 0, y: 0 };
     const pEnd = pts[pts.length - 1] || { x: 0, y: 0 };
-    const dx = pEnd.x - pStart.x;
-    const dy = pEnd.y - pStart.y;
-    const lengthPx = Math.round(Math.hypot(dx, dy) * 10) / 10;
+    let pathLength = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      pathLength += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+    }
+    const lengthPx = Math.round(pathLength * 10) / 10;
 
     return {
       pointCount: pts.length,
