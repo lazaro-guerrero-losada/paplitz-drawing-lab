@@ -264,14 +264,31 @@ En dibujo técnico y croquis analítico existe una distinción fundamental entre
   - En el **Toroide / Anillo:** Trazar las envolventes tangenciales y 2 secciones transversales satisface la cuota de construcción.
   - Las líneas de construcción no activan penalizaciones de figura incompleta.
 
-### 9.7 Muestreo Continuo y Evaluación Calibrada (`evaluator3d.ts`)
+### 9.7 Muestreo Continuo, Asignación Exclusiva y Evaluación Calibrada (`evaluator3d.ts`)
 - Todas las aristas y curvas se muestrean densamente (24 a 48 puntos mediante `sampleDenseSegment3D`).
-- **Umbral Adaptativo de Distancia (`MATCH_THRESHOLD`):**
-  - **$20.0\,\text{px}$ para Aristas Rectas:** Exige convergencia estricta hacia los puntos de fuga e impide líneas paralelas o divergentes en poliedros y fustes cilíndricos.
-  - **$26.0\,\text{px}$ para Curvas Libres y Elipses:** Acomoda la vibración y oscilación natural del lápiz óptico o stylus sobre pantallas táctiles de cristal, evitando suspensos artificiales cuando la geometría es correcta.
-- **Alineación Tangente por Cosenos ($|\cos\theta| \ge 0.60 - 0.68$):** Impide coincidencias espurias de trazos que crucen perpendicularmente la trayectoria de la curva.
-- **Puntuación Ponderada y Progresiva:** Cada curva pondera 70% por cobertura de longitud y 30% por precisión de proximidad. Se eliminan los topes arbitrarios (como el clamp en 58%), premiando fielmente el esfuerzo del alumno.
-- **Sistema de Calificación Unificado:** Porcentaje directo ($0 - 100\%$, con aprobado $\ge 70\%$) idéntico a la pestaña de Práctica.
+- **Asignación Exclusiva de Segmentos (Segment-to-Curve Bipartite Matching):**
+  - Cada segmento del trazo del alumno se asocia a la arista objetivo con la que presenta mayor correspondencia geométrica y angular mediante la función de aptitud $\text{fitness} = \frac{|\cos\theta|}{1.0 + d / 4.0}$.
+  - Impide de raíz que una línea vertical de fuste cilíndrico satisfaga fraudulentamente los laterales de la elipse superior, o que un único trazo horizontal satisfaga aristas opuestas.
+  - Vértices compartidos: se admite co-asignación únicamente en uniones extremas ($d \le 8.0\,\text{px}$) con $\text{fitness} \ge 0.85 \times \text{bestFitness}$.
+- **Límite Físico de Cobertura por Longitud Trazada:**
+  - La cobertura de una curva no puede exceder la longitud real trazada por el usuario para esa arista:
+    $$\text{maxPossibleCoverage} = \min\left(1.0, \frac{L_{\text{asignada}} + 1.5 \times \text{threshold}}{L_{\text{objetivo}}}\right)$$
+  - Evita que un pequeño amago de $18\,\text{px}$ obtenga falsamente un $76\%$ de cobertura sobre una elipse de $380\,\text{px}$.
+- **Umbrales Calibrados de Distancia (`matchThreshold`):**
+  - **$16.0\,\text{px}$ para Aristas Rectas:** Exige convergencia estricta hacia los puntos de fuga e impide líneas paralelas o divergentes en poliedros y fustes cilíndricos.
+  - **$20.0\,\text{px}$ para Curvas Libres y Elipses:** Acomoda la vibración y oscilación natural del stylus sobre cristal sin admitir figuras desproporcionadas o desplazadas.
+- **Alineación Tangente por Cosenos:**
+  - $|\cos\theta| \ge 0.72$ para aristas rectas (desviación angular máxima $\le 44^\circ$).
+  - $|\cos\theta| \ge 0.65$ para curvas (desviación angular máxima $\le 49.5^\circ$).
+- **Precisión No Lineal y Puntuación Rigurosa:**
+  - Precisión de distancia con decaimiento no lineal: $\text{precision} = \max(0, 1 - (d_{\text{media}} / \text{threshold})^{1.3})$.
+    - Errores mínimos ($d \le 3\,\text{px}$) obtienen precisión $\ge 90\%$.
+    - Desviaciones apreciables de fuga ($d \approx 11\,\text{px}$) caen bruscamente a precisión $\approx 38\%$.
+  - Modulación de la nota por precisión: $\text{score} = \text{coverage} \times 100 \times \text{precision}^{1.15}$.
+    - Un trazo con $96\%$ de cobertura pero con fuga desalineada ($45\%$ precisión) puntúa $\sim 35-40\%$, suspendiendo justificadamente la arista (`✗ Desviado de la fuga`).
+    - Trazos convergentes limpios ($d \le 3\,\text{px}$) mantienen calificaciones excelentes ($92-97\%$).
+- **Diagnóstico Transparente en Reportes:**
+  - Se distingue con exactitud el estado de cada contorno: `✓ Completado`, `✗ Desviado de la fuga` (trazado completo pero con fuga errónea), `✗ Incompleto` o `✗ No Dibujado`.
 
 
 

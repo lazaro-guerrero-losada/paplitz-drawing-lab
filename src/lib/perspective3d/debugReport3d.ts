@@ -176,6 +176,13 @@ export function build3DDebugReport(
   const formDetails = evaluation?.curveDetails?.filter((c) => c.role !== 'construction') || [];
   const constDetails = evaluation?.curveDetails?.filter((c) => c.role === 'construction') || [];
 
+  const getStatusLabel = (c: { isCompleted: boolean; coverage: number; precision: number }) => {
+    if (c.isCompleted) return '✓ Completado';
+    if (c.coverage < 0.35) return '✗ No Dibujado';
+    if (c.coverage < 0.60) return '✗ Incompleto';
+    return '✗ Desviado de la fuga';
+  };
+
   let curvesBreakdown = '';
   if (formDetails.length > 0) {
     curvesBreakdown +=
@@ -183,7 +190,7 @@ export function build3DDebugReport(
       formDetails
         .map(
           (c) =>
-            `  - \`${c.label}\`: ${Math.round(c.coverage * 100)}% cobertura · ${Math.round(c.precision * 100)}% precisión (${c.isCompleted ? '✓ Completado' : '✗ Incompleto'})`
+            `  - \`${c.label}\`: ${Math.round(c.coverage * 100)}% cobertura · ${Math.round(c.precision * 100)}% precisión (${getStatusLabel(c)})`
         )
         .join('\n');
   }
@@ -193,7 +200,7 @@ export function build3DDebugReport(
       constDetails
         .map(
           (c) =>
-            `  - \`${c.label}\`: ${Math.round(c.coverage * 100)}% cobertura · ${Math.round(c.precision * 100)}% precisión (${c.isCompleted ? '✓ Completado' : '✗ Opcional / Pendiente'})`
+            `  - \`${c.label}\`: ${Math.round(c.coverage * 100)}% cobertura · ${Math.round(c.precision * 100)}% precisión (${c.isCompleted ? '✓ Completado' : (c.coverage >= 0.60 ? '✗ Desviado' : '✗ Opcional / Pendiente')})`
         )
         .join('\n');
   }

@@ -42,8 +42,39 @@ function pointToSegmentDistance(p: Point2D, a: Point2D, b: Point2D): number {
 interface UserSegment {
   a: Point2D;
   b: Point2D;
+  mid: Point2D;
   dir: Point2D; // Vector unitario de dirección
   length: number;
+  assignedCurveIds: string[]; // IDs de curvas objetivo a las que se asigna exclusivamente
+}
+
+function computeCurveLength(points: Point2D[]): number {
+  let len = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    len += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+  }
+  return len;
+}
+
+function findDistanceAndTangentToCurve(
+  p: Point2D,
+  curvePoints: Point2D[],
+  curveTangents: Point2D[]
+): { dist: number; tangent: Point2D } {
+  let bestDist = Infinity;
+  let bestTangent: Point2D = { x: 1, y: 0 };
+
+  for (let i = 0; i < curvePoints.length - 1; i++) {
+    const pA = curvePoints[i];
+    const pB = curvePoints[i + 1];
+    const d = pointToSegmentDistance(p, pA, pB);
+    if (d < bestDist) {
+      bestDist = d;
+      bestTangent = curveTangents[i] || { x: 1, y: 0 };
+    }
+  }
+
+  return { dist: bestDist, tangent: bestTangent };
 }
 
 /**
@@ -116,9 +147,10 @@ export function evaluate3DSubmission(
     };
   }
 
-  // Pre-aplanar los segmentos de todos los trazos del usuario con sus vectores unitarios de dirección
+  // Pre-aplanar los segmentos de todos los trazos del usuario
   const userSegments: UserSegment[] = [];
   let totalUserPoints = 0;
+  let totalUserDrawnLength = 0;
 
   userStrokes.forEach((s) => {
     totalUserPoints += s.points.length;
@@ -129,13 +161,93 @@ export function evaluate3DSubmission(
       const dy = b.y - a.y;
       const length = Math.hypot(dx, dy);
       if (length >= 0.5) {
+        totalUserDrawnLength += length;
         userSegments.push({
           a,
           b,
+          mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
           dir: { x: dx / length, y: dy / length },
           length,
+          assignedCurveIds: [],
         });
       }
+    }
+  });
+
+  // Precalcular tangentes, longitudes y parámetros de cada curva objetivo
+  const curveTangentsList: Point2D[][] = targetCurves.map((c) => computeCurveTangents(c.points));
+  const curveLengths: number[] = targetCurves.map((c) => computeCurveLength(c.points));
+  const curveThresholds: { matchThreshold: number; minAlignmentCos: number }[] = targetCurves.map((curve) => {
+    const isCurved =
+      curve.points.length > 24 ||
+      curve.id.includes('ellipse') ||
+      curve.id.includes('dome') ||
+      curve.id.includes('ring') ||
+      curve.id.includes('silhouette') ||
+      curve.id.includes('meridian') ||
+      curve.role === 'construction';
+
+    return {
+      matchThreshold: isCurved ? 20.0 : 16.0,
+      minAlignmentCos: isCurved ? 0.65 : 0.72,
+    };
+  });
+
+  // ASIGNACIÓN EXCLUSIVA DE SEGMENTOS:
+  // Cada trazo del alumno debe asociarse a la arista objetivo con la que tiene mayor correspondencia
+  // geométrica y angular. Esto evita que una línea vertical lateral de un cilindro satisfaga a la vez
+  // la elipse superior, o que un amago de 18px cubra el 76% de un círculo.
+  userSegments.forEach((seg) => {
+    let bestCurveId: string | null = null;
+    let bestFitness = 0;
+
+    targetCurves.forEach((curve, idx) => {
+      const { matchThreshold, minAlignmentCos } = curveThresholds[idx];
+      const { dist: d, tangent } = findDistanceAndTangentToCurve(
+        seg.mid,
+        curve.points,
+        curveTangentsList[idx]
+      );
+
+      if (d <= matchThreshold) {
+        const dot = seg.dir.x * tangent.x + seg.dir.y * tangent.y;
+        const absCos = Math.abs(dot);
+
+        if (absCos >= minAlignmentCos) {
+          const fitness = absCos / (1.0 + d / 4.0);
+          if (fitness > bestFitness) {
+            bestFitness = fitness;
+            bestCurveId = curve.id;
+          }
+        }
+      }
+    });
+
+    if (bestCurveId) {
+      seg.assignedCurveIds.push(bestCurveId);
+
+      // Si se encuentra en una unión o vértice exacto (distancia <= 8px y fitness cercano al óptimo),
+      // se permite asistir a la arista adyacente para no penalizar vértices compartidos
+      targetCurves.forEach((curve, idx) => {
+        if (curve.id === bestCurveId) return;
+        const { matchThreshold, minAlignmentCos } = curveThresholds[idx];
+        const { dist: d, tangent } = findDistanceAndTangentToCurve(
+          seg.mid,
+          curve.points,
+          curveTangentsList[idx]
+        );
+
+        if (d <= 8.0 && d <= matchThreshold) {
+          const dot = seg.dir.x * tangent.x + seg.dir.y * tangent.y;
+          const absCos = Math.abs(dot);
+          if (absCos >= minAlignmentCos) {
+            const fitness = absCos / (1.0 + d / 4.0);
+            if (fitness >= bestFitness * 0.85) {
+              seg.assignedCurveIds.push(curve.id);
+            }
+          }
+        }
+      });
     }
   });
 
@@ -147,24 +259,21 @@ export function evaluate3DSubmission(
   let totalMatchedPoints = 0;
   let totalDistanceErrors = 0;
 
-  targetCurves.forEach((curve) => {
+  targetCurves.forEach((curve, curveIdx) => {
     if (curve.points.length < 2) return;
 
-    // Umbral adaptativo: 26.0px para curvas libres/elipses/construcción (acomoda la vibración natural
-    // del lápiz en pantallas de cristal); 20.0px para aristas rectas de poliedros.
-    const isCurved =
-      curve.points.length > 24 ||
-      curve.id.includes('ellipse') ||
-      curve.id.includes('dome') ||
-      curve.id.includes('ring') ||
-      curve.id.includes('silhouette') ||
-      curve.id.includes('meridian') ||
-      curve.role === 'construction';
+    const { matchThreshold, minAlignmentCos } = curveThresholds[curveIdx];
+    const tangents = curveTangentsList[curveIdx];
+    const targetLength = curveLengths[curveIdx];
 
-    const matchThreshold = isCurved ? 26.0 : 20.0;
-    const minAlignmentCos = isCurved ? 0.60 : 0.68;
+    // Obtener los segmentos de usuario que han sido asignados a esta curva
+    const assignedSegments = userSegments.filter((s) => s.assignedCurveIds.includes(curve.id));
+    const assignedLength = assignedSegments.reduce((sum, s) => sum + s.length, 0);
 
-    const tangents = computeCurveTangents(curve.points);
+    // Límite físico: la cobertura no puede superar la longitud real trazada por el alumno para esta arista
+    const maxPossibleCoverage =
+      targetLength > 0 ? Math.min(1.0, (assignedLength + 1.5 * matchThreshold) / targetLength) : 1.0;
+
     let curveMatchedCount = 0;
     let curveDistanceErrorSum = 0;
 
@@ -175,11 +284,11 @@ export function evaluate3DSubmission(
       totalTargetSamplePoints++;
       const targetTangent = tangents[ptIdx];
 
-      // Buscar distancia mínima con segmentos del usuario alineados angularmente
+      // Buscar distancia mínima únicamente entre segmentos asignados a esta curva
       let bestDist = Infinity;
 
-      for (let j = 0; j < userSegments.length; j++) {
-        const seg = userSegments[j];
+      for (let j = 0; j < assignedSegments.length; j++) {
+        const seg = assignedSegments[j];
         const d = pointToSegmentDistance(targetPt, seg.a, seg.b);
 
         if (d <= matchThreshold) {
@@ -189,7 +298,7 @@ export function evaluate3DSubmission(
           if (absCos >= minAlignmentCos) {
             if (d < bestDist) {
               bestDist = d;
-              if (bestDist < 3.0) break; // Optimización de salida temprana
+              if (bestDist < 2.0) break; // Optimización de salida temprana
             }
           }
         }
@@ -233,13 +342,24 @@ export function evaluate3DSubmission(
 
     // Métricas específicas de esta curva individual
     const curveTotal = curve.points.length;
-    const curveCoverage = curveTotal > 0 ? curveMatchedCount / curveTotal : 0;
+    const rawCoverage = curveTotal > 0 ? curveMatchedCount / curveTotal : 0;
+    // Cobertura real acotada por la longitud efectiva de trazos dedicados a esta curva
+    const curveCoverage = Math.min(rawCoverage, maxPossibleCoverage);
     const curveAvgDist = curveMatchedCount > 0 ? curveDistanceErrorSum / curveMatchedCount : matchThreshold;
-    const curvePrecision = Math.max(0, 1 - curveAvgDist / matchThreshold);
 
-    // Puntuación de la curva (0 - 100): 70% cobertura de longitud, 30% precisión de distancia
-    const curveScore = curveCoverage * (70 + 30 * curvePrecision);
-    const isCompleted = curveCoverage >= 0.45;
+    // Precisión no lineal calibrada:
+    // Trazos a < 3px obtienen precisión >= 0.90
+    // Trazos a ~6px obtienen precisión ~0.75
+    // Trazos a > 10px decaen bruscamente (< 0.50), penalizando fugas que no convergen a los puntos de fuga
+    const curvePrecision = Math.max(0, 1 - Math.pow(curveAvgDist / matchThreshold, 1.3));
+
+    // Puntuación de la curva (0 - 100):
+    // La precisión modula directamente la nota: una arista con precisión 0.45 (11px desviada)
+    // puntuará ~35-40% (No Superado), mientras que una línea precisa (< 3px) puntuará 90-97%.
+    const curveScore = curveCoverage * 100 * Math.pow(curvePrecision, 1.15);
+
+    // Se considera completada si tiene al menos 60% de cobertura y 50% de precisión geométrica
+    const isCompleted = curveCoverage >= 0.60 && curvePrecision >= 0.50;
 
     curveDetails.push({
       id: curve.id,
@@ -256,7 +376,8 @@ export function evaluate3DSubmission(
   const formCurves = curveDetails.filter((c) => c.role !== 'construction');
   const constructionCurves = curveDetails.filter((c) => c.role === 'construction');
 
-  const missingFormCurves = formCurves.filter((c) => c.coverage < 0.35);
+  // Aristas de la forma omitidas o gravemente defectuosas (< 35% de cobertura o nota mínima < 30)
+  const missingFormCurves = formCurves.filter((c) => c.coverage < 0.35 || (c.coverage < 0.50 && c.score < 30));
   const avgFormScore =
     formCurves.length > 0
       ? formCurves.reduce((sum, c) => sum + c.score, 0) / formCurves.length
@@ -268,7 +389,7 @@ export function evaluate3DSubmission(
   // - Para esfera (2 meridianos): dibujar 1 meridiano satisface el requisito de construcción.
   // - Para toroide/anillo (4+ secciones): dibujar 2 secciones satisface el requisito.
   let avgConstructionScore = 0;
-  let hasConstruction = constructionCurves.length > 0;
+  const hasConstruction = constructionCurves.length > 0;
 
   if (hasConstruction) {
     const sortedConstruction = [...constructionCurves].sort((a, b) => b.score - a.score);
@@ -285,18 +406,19 @@ export function evaluate3DSubmission(
   // - Si la figura tiene líneas de construcción: 70% siluetas/aristas de la forma + 30% líneas de construcción
   // - Si no tiene líneas de construcción (poliedros, cilindros): 100% aristas de la forma
   let rawScore = hasConstruction
-    ? avgFormScore * 0.7 + avgConstructionScore * 0.3
+    ? avgFormScore * 0.70 + avgConstructionScore * 0.30
     : avgFormScore;
 
-  // Penalización leve por exceso masivo de garabatos (evita relleno aleatorio con el lápiz)
-  const excessFactor = totalUserPoints > totalTargetSamplePoints * 4.0 ? 0.92 : 1.0;
+  // Penalización leve por exceso masivo de garabateo descontrolado
+  const totalTargetLength = curveLengths.reduce((sum, l) => sum + l, 0);
+  const excessFactor = totalTargetLength > 0 && totalUserDrawnLength > totalTargetLength * 3.5 ? 0.90 : 1.0;
   rawScore *= excessFactor;
 
   // CONTROL DE INTEGRIDAD ESTRUCTURAL (exclusivo para aristas de la FORMA):
   // Si falta una arista o tapa de la forma visible (< 35% cobertura), no se puede aprobar.
   if (missingFormCurves.length > 0) {
     if (missingFormCurves.length >= 2) {
-      rawScore = Math.min(rawScore, 35.0);
+      rawScore = Math.min(rawScore, 30.0);
     } else {
       rawScore = Math.min(rawScore, 48.0);
     }
@@ -315,6 +437,7 @@ export function evaluate3DSubmission(
 
   const completedCurvesCount = curveDetails.filter((c) => c.isCompleted).length;
   const overallCoverage = totalTargetSamplePoints > 0 ? totalMatchedPoints / totalTargetSamplePoints : 0;
+  const avgPrecision = curveDetails.length > 0 ? curveDetails.reduce((sum, c) => sum + c.precision, 0) / curveDetails.length : 0;
 
   // Mensaje de diagnóstico didáctico en español
   let feedbackMessage = '';
@@ -328,16 +451,18 @@ export function evaluate3DSubmission(
     }
   } else if (hasConstruction && avgConstructionScore < 40) {
     feedbackMessage = 'Forma dibujada. Traza las líneas de construcción (meridianos / secciones) para consolidar el volumen 3D.';
-  } else if (overallCoverage < 0.65) {
+  } else if (avgPrecision < 0.55) {
+    feedbackMessage = 'Perspectiva desalineada: los trazos no convergen correctamente a los puntos de fuga.';
+  } else if (overallCoverage < 0.70) {
     feedbackMessage = 'Figura parcial: completa el recorrido entero de cada contorno en perspectiva.';
   } else if (finalScore >= 90) {
     feedbackMessage = '¡Construcción en perspectiva impecable! Convergencia exacta a los puntos de fuga.';
   } else if (finalScore >= 80) {
-    feedbackMessage = '¡Gran ejecución de perspectiva! Excelente alineación espacial y proporciones.';
+    feedbackMessage = '¡Gran ejecución de perspectiva! Buena alineación espacial y proporciones.';
   } else if (finalScore >= 70) {
-    feedbackMessage = 'Aprobado. Buena intuición espacial y solidez de volumen.';
+    feedbackMessage = 'Aprobado. Intuición espacial correcta; afina la convergencia para mayor solidez.';
   } else {
-    feedbackMessage = 'Los contornos necesitan ajuste: revisa la fuga y convergencia hacia la retícula 3D.';
+    feedbackMessage = 'Los trazos se alejan de la perspectiva real: ajusta la fuga y proporción hacia la retícula 3D.';
   }
 
   return {
