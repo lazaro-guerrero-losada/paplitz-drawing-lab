@@ -245,11 +245,33 @@ Para un cono con ápice $\vec{A} = (0, y_{apex}, 0)$ y base circular en $y = y_{
 - **Pirámide y Cápsula:** Incorporan igualmente la base cerrada sólida y el eje vertical fino de altura para comunicar la cota volumétrica sin necesidad de activar pistas.
 - **Toroide (`createRingPrimitive`):** Envolventes tangenciales superior e inferior calculadas analíticamente para cada sección transversal según el vector visual.
 
-### 9.5 Muestreo Continuo y Evaluación Rigurosa (`evaluator3d.ts`)
-- Todas las aristas rectas y curvas se muestrean con 24 a 48 puntos mediante `sampleDenseSegment3D`.
-- **Umbral de Distancia a $18.0\,\text{px}$ (`MATCH_THRESHOLD`):** Calibrado para admitir la vibración natural del lápiz óptico o el ratón a mano alzada, pero penalizando de forma inmediata y visible las líneas que no convergen hacia los puntos de fuga o trazos dibujados a ojo sin seguir la perspectiva de la habitación.
-- **Alineación Tangente Obligatoria ($|\cos\theta| \ge 0.65$):** Impide que trazos orientados en una dirección coincidan espuriamente con curvas orientadas ortogonalmente.
-- **Evaluación Estructural Curva a Curva:** Garantiza que no se puedan obtener calificaciones elevadas omitiendo partes completas del volumen (como la elipse superior o caras laterales).
+### 9.5 Back-Face Culling de Aristas Ocultas en Poliedros Opacos (`primitives.ts`)
+En cuerpos geométricos planos poliédricos sólidos (Cubo, Pirámide, Prisma):
+- **Oclusión Realista del Sólido:** Las aristas posteriores que quedan ocultas dentro o detrás del volumen sólido no se exigen al usuario ni se penalizan si no se dibujan.
+- **Cálculo de Visibilidad por Caras Adyacentes:** Cada arista pertenece a dos caras adyacentes $F_1, F_2$. La arista es visible si y solo si al menos una cara está orientada hacia el observador:
+  $$\text{EsVisible}(E) = (\vec{N}_1 \cdot \vec{V} > 0) \lor (\vec{N}_2 \cdot \vec{V} > 0)$$
+  donde $\vec{N}$ es la normal exterior de la cara y $\vec{V} = \vec{E} - \vec{P}_{\text{centro}}$.
+- Si ambas caras adyacentes miran en sentido contrario a la cámara ($\vec{N}_1 \cdot \vec{V} \le 0$ y $\vec{N}_2 \cdot \vec{V} \le 0$), la arista queda clasificada como ocluida y se excluye de `targetCurves`.
+- **Cubo:** Exige las 3 aristas verticales visibles y las aristas del techo orientadas al observador.
+- **Pirámide:** Exige únicamente las aristas oblicuas inclinadas hacia la cámara.
+- **Prisma Triangular:** Exige la arista de cresta y las aristas longitudinales y rampas correspondientes a las caras iluminadas hacia la cámara.
+
+### 9.6 Diferenciación entre Contornos de Forma y Líneas de Construcción (`role: 'form' | 'construction'`)
+En dibujo técnico y croquis analítico existe una distinción fundamental entre el perfil externo del objeto y las líneas de andamiaje:
+- **`role: 'form'` (Contornos de la Forma):** Siluetas exteriores tangenciales y aristas de arista viva visibles. Son esenciales para delimitar el volumen (peso 70% cuando hay construcción, 100% en poliedros). La omisión de un contorno de forma (< 35% de cobertura) bloquea la aprobación de la figura.
+- **`role: 'construction'` (Líneas de Construcción):** Meridianos ortogonales en la esfera, secciones transversales elípticas en el toroide o anillo divisor en la cápsula.
+  - En la **Esfera:** Trazar la silueta exterior y al menos 1 meridiano satisface el 100% de la cuota de construcción sin penalizar la omisión del segundo meridiano.
+  - En el **Toroide / Anillo:** Trazar las envolventes tangenciales y 2 secciones transversales satisface la cuota de construcción.
+  - Las líneas de construcción no activan penalizaciones de figura incompleta.
+
+### 9.7 Muestreo Continuo y Evaluación Calibrada (`evaluator3d.ts`)
+- Todas las aristas y curvas se muestrean densamente (24 a 48 puntos mediante `sampleDenseSegment3D`).
+- **Umbral Adaptativo de Distancia (`MATCH_THRESHOLD`):**
+  - **$20.0\,\text{px}$ para Aristas Rectas:** Exige convergencia estricta hacia los puntos de fuga e impide líneas paralelas o divergentes en poliedros y fustes cilíndricos.
+  - **$26.0\,\text{px}$ para Curvas Libres y Elipses:** Acomoda la vibración y oscilación natural del lápiz óptico o stylus sobre pantallas táctiles de cristal, evitando suspensos artificiales cuando la geometría es correcta.
+- **Alineación Tangente por Cosenos ($|\cos\theta| \ge 0.60 - 0.68$):** Impide coincidencias espurias de trazos que crucen perpendicularmente la trayectoria de la curva.
+- **Puntuación Ponderada y Progresiva:** Cada curva pondera 70% por cobertura de longitud y 30% por precisión de proximidad. Se eliminan los topes arbitrarios (como el clamp en 58%), premiando fielmente el esfuerzo del alumno.
+- **Sistema de Calificación Unificado:** Porcentaje directo ($0 - 100\%$, con aprobado $\ge 70\%$) idéntico a la pestaña de Práctica.
 
 
 

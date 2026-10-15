@@ -48,6 +48,7 @@ export interface DebugReport3DData {
     curves?: {
       id: string;
       label: string;
+      role?: 'form' | 'construction' | 'hidden';
       coveragePct: number;
       precisionPct: number;
       score: number;
@@ -150,6 +151,7 @@ export function build3DDebugReport(
       curves: evaluation?.curveDetails?.map((c) => ({
         id: c.id,
         label: c.label,
+        role: c.role || 'form',
         coveragePct: Math.round(c.coverage * 100),
         precisionPct: Math.round(c.precision * 100),
         score: Math.round(c.score * 10) / 10,
@@ -171,16 +173,30 @@ export function build3DDebugReport(
     ? `\n- **📝 NOTA DEL USUARIO / USER NOTE:**\n> "${userNote.trim()}"`
     : '';
 
-  const curvesBreakdown =
-    evaluation?.curveDetails && evaluation.curveDetails.length > 0
-      ? `\n- **Desglose de Contornos:**\n` +
-        evaluation.curveDetails
-          .map(
-            (c) =>
-              `  - \`${c.label}\`: ${Math.round(c.coverage * 100)}% cobertura · ${Math.round(c.precision * 100)}% precisión (${c.isCompleted ? '✓ Completado' : '✗ Incompleto'})`
-          )
-          .join('\n')
-      : '';
+  const formDetails = evaluation?.curveDetails?.filter((c) => c.role !== 'construction') || [];
+  const constDetails = evaluation?.curveDetails?.filter((c) => c.role === 'construction') || [];
+
+  let curvesBreakdown = '';
+  if (formDetails.length > 0) {
+    curvesBreakdown +=
+      `\n- **Contornos de la Forma:**\n` +
+      formDetails
+        .map(
+          (c) =>
+            `  - \`${c.label}\`: ${Math.round(c.coverage * 100)}% cobertura · ${Math.round(c.precision * 100)}% precisión (${c.isCompleted ? '✓ Completado' : '✗ Incompleto'})`
+        )
+        .join('\n');
+  }
+  if (constDetails.length > 0) {
+    curvesBreakdown +=
+      `\n- **Líneas de Construcción:**\n` +
+      constDetails
+        .map(
+          (c) =>
+            `  - \`${c.label}\`: ${Math.round(c.coverage * 100)}% cobertura · ${Math.round(c.precision * 100)}% precisión (${c.isCompleted ? '✓ Completado' : '✗ Opcional / Pendiente'})`
+        )
+        .join('\n');
+  }
 
   const markdownText = `
 ### 📐 REPORTE DE PERSPECTIVA 3D (LAB 3D)

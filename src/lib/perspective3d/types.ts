@@ -46,6 +46,7 @@ export interface CurveSegment2D {
   isGiven: boolean; // Si es parte del ancla inicial proporcionada
   label: string;
   style?: 'solid' | 'dashed' | 'faint';
+  role?: 'form' | 'construction' | 'hidden';
 }
 
 export type PrimitiveType =
@@ -99,6 +100,7 @@ export interface CurveEvaluationDetail {
   precision: number; // 0.0 - 1.0
   score: number; // 0.0 - 100.0
   isCompleted: boolean;
+  role?: 'form' | 'construction' | 'hidden';
 }
 
 export interface EvaluationResult3D {

@@ -651,7 +651,16 @@ A continuación se resumen los avances implementados en la última fase de traba
       - Barra inferior con píldora de acierto `[✓ / ⚠] [Score]%` y botón `Siguiente`, idéntica a la experiencia de `DrawingCanvas.tsx`.
     - **Métrica Precisa de Trazos Completados:** El contador de aristas en pantalla y reportes muestra el número de curvas efectivamente completadas ($\ge 50\%$ de cobertura) sobre el total objetivo (ej. `2/3 completados`).
     - **Diagnóstico Transparente en Reportes:** El informe de depuración (`debugReport3d.ts`) detalla el desglose porcentaje a porcentaje de cobertura y precisión para cada contorno individual (`Elipse Superior: 8% cobertura · ✗ Incompleto`).
-
+21. **Back-Face Culling de Aristas Ocultas, Distinción Forma vs Construcción y Calibración Adaptativa (`primitives.ts` & `evaluator3d.ts`):**
+    - **Oclusión Realista en Poliedros Opacos (Cubo, Pirámide, Prisma):** En sólidos geométricos opacos no se exigen aristas traseras ocluidas ni se penaliza si no se dibujan. Cada arista se evalúa con back-face culling contra la posición de la cámara $\vec{E}$; solo se incluyen en `targetCurves` las aristas visibles para el observador (ej. en el cubo, los 3 pilares verticales visibles y las aristas del techo orientadas al frente; en el prisma, la cresta y caras frontales visibles).
+    - **Diferenciación entre Contornos de Forma y Líneas de Construcción (`role: 'form' | 'construction'`):**
+      - `role: 'form'`: Siluetas exteriores y aristas visibles reales de la geometría sólida (peso 70% cuando hay líneas de construcción, 100% en poliedros). Son obligatorias para la integridad volumétrica.
+      - `role: 'construction'`: Meridianos en esfera, secciones transversales en toroide/anillo, anillo divisor en cápsula.
+      - **Flexibilidad Didáctica en Figuras Curvas Complejas:** En la esfera, trazar la silueta exterior y al menos 1 meridiano de construcción satisface el 100% de la cuota de construcción. En el anillo, trazar las envolventes tangenciales y 2 secciones transversales satisface la cuota de construcción sin obligar a repetir las 6 secciones. Las líneas de construcción no activan penalizaciones por contorno omitido.
+    - **Umbrales Adaptativos y Eliminación de Topes Arbitrarios (`evaluator3d.ts`):**
+      - Umbral de proximidad adaptativo: $20.0\,\text{px}$ para aristas rectas (garantizando convergencia a puntos de fuga) y $26.0\,\text{px}$ para elipses, siluetas esféricas y curvas a mano alzada (acomodando la oscilación natural del lápiz en pantallas de cristal).
+      - Eliminación del recorte artificial a $58\%$: la precisión modula gradualmente la nota ($70\%$ cobertura $+ 30\%$ precisión) sin caídas bruscas de puntuación.
+    - **Reporte de Diagnóstico Estructurado (`debugReport3d.ts`):** Agrupación visual en Markdown del desglose de contornos en dos categorías: **Contornos de la Forma** y **Líneas de Construcción**.
 
 ---
 

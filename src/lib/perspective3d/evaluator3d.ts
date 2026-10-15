@@ -99,13 +99,14 @@ export function evaluate3DSubmission(
       precision: 0,
       score: 0,
       isCompleted: false,
+      role: c.role || 'form',
     }));
 
     return {
       score: 0,
       passed: false,
       grade: 'D',
-      feedbackMessage: 'No lines drawn: start by tracing the missing forms in perspective.',
+      feedbackMessage: 'No se han detectado trazos: dibuja los contornos de la forma en perspectiva.',
       matchedSegments: [],
       missingSegments: targetCurves.map((c) => ({ points: c.points })),
       userStrokes: [],
@@ -138,13 +139,6 @@ export function evaluate3DSubmission(
     }
   });
 
-  // Umbral estricto y calibrado: 18.0px para acomodar trazos a mano alzada pero penalizar
-  // desvíos notables de ángulo o líneas paralelas que no convergen hacia los puntos de fuga.
-  const MATCH_THRESHOLD = 18.0;
-
-  // Umbral de colinealidad tangente: |cos(theta)| >= 0.65 (~49.5° de desvío angular máximo)
-  const MIN_ALIGNMENT_COS = 0.65;
-
   const matchedSegments: { points: Point2D[]; accuracy: number }[] = [];
   const missingSegments: { points: Point2D[] }[] = [];
 
@@ -155,6 +149,20 @@ export function evaluate3DSubmission(
 
   targetCurves.forEach((curve) => {
     if (curve.points.length < 2) return;
+
+    // Umbral adaptativo: 26.0px para curvas libres/elipses/construcción (acomoda la vibración natural
+    // del lápiz en pantallas de cristal); 20.0px para aristas rectas de poliedros.
+    const isCurved =
+      curve.points.length > 24 ||
+      curve.id.includes('ellipse') ||
+      curve.id.includes('dome') ||
+      curve.id.includes('ring') ||
+      curve.id.includes('silhouette') ||
+      curve.id.includes('meridian') ||
+      curve.role === 'construction';
+
+    const matchThreshold = isCurved ? 26.0 : 20.0;
+    const minAlignmentCos = isCurved ? 0.60 : 0.68;
 
     const tangents = computeCurveTangents(curve.points);
     let curveMatchedCount = 0;
@@ -167,19 +175,18 @@ export function evaluate3DSubmission(
       totalTargetSamplePoints++;
       const targetTangent = tangents[ptIdx];
 
-      // Buscar distancia mínima únicamente con segmentos del usuario que tengan alineación angular válida
+      // Buscar distancia mínima con segmentos del usuario alineados angularmente
       let bestDist = Infinity;
 
       for (let j = 0; j < userSegments.length; j++) {
         const seg = userSegments[j];
         const d = pointToSegmentDistance(targetPt, seg.a, seg.b);
 
-        if (d <= MATCH_THRESHOLD) {
-          // Comprobar colinealidad entre la tangente de la curva y el trazo del usuario
+        if (d <= matchThreshold) {
           const dot = targetTangent.x * seg.dir.x + targetTangent.y * seg.dir.y;
           const absCos = Math.abs(dot);
 
-          if (absCos >= MIN_ALIGNMENT_COS) {
+          if (absCos >= minAlignmentCos) {
             if (d < bestDist) {
               bestDist = d;
               if (bestDist < 3.0) break; // Optimización de salida temprana
@@ -188,7 +195,7 @@ export function evaluate3DSubmission(
         }
       }
 
-      const isMatched = bestDist <= MATCH_THRESHOLD;
+      const isMatched = bestDist <= matchThreshold;
 
       if (isMatched) {
         totalMatchedPoints++;
@@ -204,7 +211,6 @@ export function evaluate3DSubmission(
       } else if (currentIsMatched === isMatched) {
         currentSegment.push(targetPt);
       } else {
-        // Cambio de estado
         if (currentSegment.length > 1) {
           if (currentIsMatched) {
             matchedSegments.push({ points: currentSegment, accuracy: 1.0 });
@@ -228,12 +234,12 @@ export function evaluate3DSubmission(
     // Métricas específicas de esta curva individual
     const curveTotal = curve.points.length;
     const curveCoverage = curveTotal > 0 ? curveMatchedCount / curveTotal : 0;
-    const curveAvgDist = curveMatchedCount > 0 ? curveDistanceErrorSum / curveMatchedCount : MATCH_THRESHOLD;
-    const curvePrecision = Math.max(0, 1 - curveAvgDist / MATCH_THRESHOLD);
-    
-    // Puntuación de la curva (0 - 100)
-    const curveScore = curveCoverage * (75 + 25 * curvePrecision);
-    const isCompleted = curveCoverage >= 0.50; // Se considera dibujada si se cubrió al menos el 50%
+    const curveAvgDist = curveMatchedCount > 0 ? curveDistanceErrorSum / curveMatchedCount : matchThreshold;
+    const curvePrecision = Math.max(0, 1 - curveAvgDist / matchThreshold);
+
+    // Puntuación de la curva (0 - 100): 70% cobertura de longitud, 30% precisión de distancia
+    const curveScore = curveCoverage * (70 + 30 * curvePrecision);
+    const isCompleted = curveCoverage >= 0.45;
 
     curveDetails.push({
       id: curve.id,
@@ -242,41 +248,58 @@ export function evaluate3DSubmission(
       precision: curvePrecision,
       score: Math.round(curveScore * 10) / 10,
       isCompleted,
+      role: curve.role || 'form',
     });
   });
 
-  // Métricas agregadas
-  const completedCurvesCount = curveDetails.filter((c) => c.isCompleted).length;
-  const missingCurves = curveDetails.filter((c) => c.coverage < 0.35); // Aristas omitidas o apenas tocadas
-  const overallCoverage = totalTargetSamplePoints > 0 ? totalMatchedPoints / totalTargetSamplePoints : 0;
-  const avgDistance = totalMatchedPoints > 0 ? totalDistanceErrors / totalMatchedPoints : MATCH_THRESHOLD;
-  const avgPrecision = Math.max(0, 1 - avgDistance / MATCH_THRESHOLD);
+  // Separar curvas de la Forma (siluetas y aristas visibles esenciales) vs Curvas de Construcción (meridianos, secciones)
+  const formCurves = curveDetails.filter((c) => c.role !== 'construction');
+  const constructionCurves = curveDetails.filter((c) => c.role === 'construction');
 
-  // Promedio de puntuación curva por curva (evita que dos líneas largas opaquen un círculo omitido)
-  const avgCurveScore =
-    curveDetails.length > 0
-      ? curveDetails.reduce((sum, c) => sum + c.score, 0) / curveDetails.length
+  const missingFormCurves = formCurves.filter((c) => c.coverage < 0.35);
+  const avgFormScore =
+    formCurves.length > 0
+      ? formCurves.reduce((sum, c) => sum + c.score, 0) / formCurves.length
       : 0;
 
-  // Penalización por trazos superfluos o descontrolados
-  const excessFactor = totalUserPoints > totalTargetSamplePoints * 3.5 ? 0.9 : 1.0;
+  // Evaluación de Líneas de Construcción:
+  // En esferas o toroides, el usuario dibuja líneas de soporte para proyectar el volumen.
+  // No se requiere dibujar TODAS las secciones generadas:
+  // - Para esfera (2 meridianos): dibujar 1 meridiano satisface el requisito de construcción.
+  // - Para toroide/anillo (4+ secciones): dibujar 2 secciones satisface el requisito.
+  let avgConstructionScore = 0;
+  let hasConstruction = constructionCurves.length > 0;
 
-  let rawScore = avgCurveScore * excessFactor;
-
-  // CONTROL DE INTEGRIDAD ESTRUCTURAL:
-  // Si falta alguna curva o arista crítica (< 35% de cobertura), la figura es incompleta.
-  // Es imposible obtener una calificación aprobatoria de nivel A o B si falta una cara o tapa.
-  if (missingCurves.length > 0) {
-    if (missingCurves.length >= 2) {
-      rawScore = Math.min(rawScore, 32.0); // Calificación D baja
-    } else {
-      rawScore = Math.min(rawScore, 48.0); // Calificación D alta / límite de reprobado
-    }
+  if (hasConstruction) {
+    const sortedConstruction = [...constructionCurves].sort((a, b) => b.score - a.score);
+    const requiredCount = Math.min(
+      constructionCurves.length,
+      constructionCurves.length >= 4 ? 2 : 1
+    );
+    const topConstruction = sortedConstruction.slice(0, requiredCount);
+    avgConstructionScore =
+      topConstruction.reduce((sum, c) => sum + c.score, 0) / requiredCount;
   }
 
-  // Si las líneas son muy imprecisas o divergentes respecto a las fugas
-  if (avgPrecision < 0.45 && rawScore > 60.0) {
-    rawScore = Math.min(rawScore, 58.0);
+  // Ponderación de la Nota:
+  // - Si la figura tiene líneas de construcción: 70% siluetas/aristas de la forma + 30% líneas de construcción
+  // - Si no tiene líneas de construcción (poliedros, cilindros): 100% aristas de la forma
+  let rawScore = hasConstruction
+    ? avgFormScore * 0.7 + avgConstructionScore * 0.3
+    : avgFormScore;
+
+  // Penalización leve por exceso masivo de garabatos (evita relleno aleatorio con el lápiz)
+  const excessFactor = totalUserPoints > totalTargetSamplePoints * 4.0 ? 0.92 : 1.0;
+  rawScore *= excessFactor;
+
+  // CONTROL DE INTEGRIDAD ESTRUCTURAL (exclusivo para aristas de la FORMA):
+  // Si falta una arista o tapa de la forma visible (< 35% cobertura), no se puede aprobar.
+  if (missingFormCurves.length > 0) {
+    if (missingFormCurves.length >= 2) {
+      rawScore = Math.min(rawScore, 35.0);
+    } else {
+      rawScore = Math.min(rawScore, 48.0);
+    }
   }
 
   const finalScore = Math.max(0, Math.min(100, Math.round(rawScore)));
@@ -284,34 +307,37 @@ export function evaluate3DSubmission(
 
   // Asignación de Calificación por Letra (mantenida internamente por compatibilidad)
   let grade: GradeLevel = 'D';
-  if (finalScore >= 90 && missingCurves.length === 0) grade = 'S';
-  else if (finalScore >= 80 && missingCurves.length === 0) grade = 'A';
-  else if (finalScore >= 65 && missingCurves.length === 0) grade = 'B';
+  if (finalScore >= 90 && missingFormCurves.length === 0) grade = 'S';
+  else if (finalScore >= 80 && missingFormCurves.length === 0) grade = 'A';
+  else if (finalScore >= 65 && missingFormCurves.length === 0) grade = 'B';
   else if (finalScore >= 50) grade = 'C';
   else grade = 'D';
 
-  // Mensaje de diagnóstico didáctico y contextualizado
+  const completedCurvesCount = curveDetails.filter((c) => c.isCompleted).length;
+  const overallCoverage = totalTargetSamplePoints > 0 ? totalMatchedPoints / totalTargetSamplePoints : 0;
+
+  // Mensaje de diagnóstico didáctico en español
   let feedbackMessage = '';
   if (completedCurvesCount === 0 || overallCoverage < 0.15) {
-    feedbackMessage = 'No lines drawn: trace the missing contours in perspective.';
-  } else if (missingCurves.length > 0) {
-    if (missingCurves.length === 1) {
-      feedbackMessage = `Incomplete figure: "${missingCurves[0].label}" in red was not drawn.`;
+    feedbackMessage = 'No se han detectado trazos suficientes. Dibuja los contornos de la figura en perspectiva.';
+  } else if (missingFormCurves.length > 0) {
+    if (missingFormCurves.length === 1) {
+      feedbackMessage = `Figura incompleta: falta dibujar "${missingFormCurves[0].label}" (en rojo).`;
     } else {
-      feedbackMessage = `Incomplete figure: ${missingCurves.length} contours in red were not drawn.`;
+      feedbackMessage = `Figura incompleta: faltan ${missingFormCurves.length} contornos esenciales (en rojo).`;
     }
-  } else if (avgPrecision < 0.55) {
-    feedbackMessage = 'Perspective lines diverge from vanishing points. Align strokes with the 3D room grid.';
+  } else if (hasConstruction && avgConstructionScore < 40) {
+    feedbackMessage = 'Forma dibujada. Traza las líneas de construcción (meridianos / secciones) para consolidar el volumen 3D.';
   } else if (overallCoverage < 0.65) {
-    feedbackMessage = 'Partial figure: complete the full length of each contour in red.';
+    feedbackMessage = 'Figura parcial: completa el recorrido entero de cada contorno en perspectiva.';
   } else if (finalScore >= 90) {
-    feedbackMessage = 'Flawless 3D perspective construction! Exact vanishing convergence.';
+    feedbackMessage = '¡Construcción en perspectiva impecable! Convergencia exacta a los puntos de fuga.';
   } else if (finalScore >= 80) {
-    feedbackMessage = 'Great perspective execution! Clean alignment with the guide grid.';
+    feedbackMessage = '¡Gran ejecución de perspectiva! Excelente alineación espacial y proporciones.';
   } else if (finalScore >= 70) {
-    feedbackMessage = 'Good spatial intuition. Clean vanishing alignment.';
+    feedbackMessage = 'Aprobado. Buena intuición espacial y solidez de volumen.';
   } else {
-    feedbackMessage = 'Perspective contours need improvement: check alignment with vanishing points.';
+    feedbackMessage = 'Los contornos necesitan ajuste: revisa la fuga y convergencia hacia la retícula 3D.';
   }
 
   return {

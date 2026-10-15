@@ -98,7 +98,8 @@ function sample3DCurveTo2D(
   id: string,
   label: string,
   isGiven: boolean,
-  style: 'solid' | 'dashed' | 'faint' = 'solid'
+  style: 'solid' | 'dashed' | 'faint' = 'solid',
+  role: 'form' | 'construction' | 'hidden' = 'form'
 ): CurveSegment2D {
   const points2D: Point2D[] = [];
   points3D.forEach((p3) => {
@@ -114,6 +115,7 @@ function sample3DCurveTo2D(
     isGiven,
     label,
     style,
+    role,
   };
 }
 
@@ -217,9 +219,9 @@ export function createSpherePrimitive(
   }
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(silhouette3D, viewProj, W, H, 'silhouette', 'Silueta Exterior Tangencial', false, 'solid'),
-    sample3DCurveTo2D(frontMeridianXY.length > 1 ? frontMeridianXY : fullMeridianXY, viewProj, W, H, 'meridian-1', 'Meridiano Ortogonal XY', false, 'solid'),
-    sample3DCurveTo2D(frontMeridianYZ.length > 1 ? frontMeridianYZ : fullMeridianYZ, viewProj, W, H, 'meridian-2', 'Meridiano Ortogonal YZ', false, 'solid'),
+    sample3DCurveTo2D(silhouette3D, viewProj, W, H, 'silhouette', 'Silueta Exterior Tangencial', false, 'solid', 'form'),
+    sample3DCurveTo2D(frontMeridianXY.length > 1 ? frontMeridianXY : fullMeridianXY, viewProj, W, H, 'meridian-1', 'Meridiano de Construcción XY', false, 'solid', 'construction'),
+    sample3DCurveTo2D(frontMeridianYZ.length > 1 ? frontMeridianYZ : fullMeridianYZ, viewProj, W, H, 'meridian-2', 'Meridiano de Construcción YZ', false, 'solid', 'construction'),
   ];
 
   const previewModel3D: WireframeModel3D = {
@@ -315,10 +317,10 @@ export function createRingPrimitive(
   });
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(upperEnvelope3D, viewProj, W, H, 'envelope-upper', 'Silueta Tangencial Superior', false, 'solid'),
-    sample3DCurveTo2D(lowerEnvelope3D, viewProj, W, H, 'envelope-lower', 'Silueta Tangencial Inferior', false, 'solid'),
+    sample3DCurveTo2D(upperEnvelope3D, viewProj, W, H, 'envelope-upper', 'Silueta Tangencial Superior', false, 'solid', 'form'),
+    sample3DCurveTo2D(lowerEnvelope3D, viewProj, W, H, 'envelope-lower', 'Silueta Tangencial Inferior', false, 'solid', 'form'),
     ...crossSections.map((cs, idx) =>
-      sample3DCurveTo2D(cs, viewProj, W, H, `cross-${idx}`, `Sección Transversal ${idx + 1}`, false, 'solid')
+      sample3DCurveTo2D(cs, viewProj, W, H, `cross-${idx}`, `Sección de Construcción ${idx + 1}`, false, 'solid', 'construction')
     ),
   ];
 
@@ -332,7 +334,7 @@ export function createRingPrimitive(
 }
 
 export function createCubePrimitive(
-  _camera: Camera3D,
+  camera: Camera3D,
   viewProj: number[],
   W: number,
   H: number
@@ -356,23 +358,34 @@ export function createCubePrimitive(
   // Base en el suelo dada
   const basePoints = [v[0], v[1], v[2], v[3], v[0]];
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(basePoints, viewProj, W, H, 'base-quad', 'Plano Base del Cubo', true, 'solid'),
+    sample3DCurveTo2D(basePoints, viewProj, W, H, 'base-quad', 'Plano Base del Cubo', true, 'solid', 'form'),
   ];
 
-  const edgePairs: [number, number, string][] = [
-    [0, 4, 'Pilar Izq-Atrás'],
-    [1, 5, 'Pilar Der-Atrás'],
-    [2, 6, 'Pilar Der-Frente'],
-    [3, 7, 'Pilar Izq-Frente'],
-    [4, 5, 'Techo Posterior'],
-    [5, 6, 'Techo Lateral'],
-    [6, 7, 'Techo Frontal'],
-    [7, 4, 'Techo Izquierdo'],
+  // Visibilidad de caras del cubo respecto a la cámara (Back-Face Culling)
+  const isRightVisible = camera.eye.x > 0;
+  const isLeftVisible = camera.eye.x < 0;
+  const isFrontVisible = camera.eye.z > 0;
+  const isBackVisible = camera.eye.z < 0;
+  const isTopVisible = camera.eye.y > 0;
+
+  // Cada arista pertenece a 2 caras. Si ambas caras están ocultas, la arista está OCULTA en el cubo sólido
+  const rawEdgePairs: [number, number, string, boolean][] = [
+    [0, 4, 'Pilar Izq-Atrás', isLeftVisible || isBackVisible],
+    [1, 5, 'Pilar Der-Atrás', isRightVisible || isBackVisible],
+    [2, 6, 'Pilar Der-Frente', isRightVisible || isFrontVisible],
+    [3, 7, 'Pilar Izq-Frente', isLeftVisible || isFrontVisible],
+    [4, 5, 'Techo Posterior', isTopVisible || isBackVisible],
+    [5, 6, 'Techo Lateral Derecho', isTopVisible || isRightVisible],
+    [6, 7, 'Techo Frontal', isTopVisible || isFrontVisible],
+    [7, 4, 'Techo Lateral Izquierdo', isTopVisible || isLeftVisible],
   ];
 
-  const targetCurves: CurveSegment2D[] = edgePairs.map(([startIdx, endIdx, name], idx) => {
+  // Exigir ÚNICAMENTE las aristas visibles para la figura sólida (las aristas ocultas traseras no se exigen)
+  const visibleEdgePairs = rawEdgePairs.filter((e) => e[3]);
+
+  const targetCurves: CurveSegment2D[] = visibleEdgePairs.map(([startIdx, endIdx, name], idx) => {
     const densePts = sampleDenseSegment3D(v[startIdx], v[endIdx], 24);
-    return sample3DCurveTo2D(densePts, viewProj, W, H, `edge-${idx}`, name, false, 'solid');
+    return sample3DCurveTo2D(densePts, viewProj, W, H, `edge-${idx}`, name, false, 'solid', 'form');
   });
 
   const previewModel3D: WireframeModel3D = {
@@ -449,15 +462,15 @@ export function createCylinderPrimitive(
   }
 
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(bottomRing, viewProj, W, H, 'bottom-ellipse', 'Elipse Base Inferior', true, 'solid'),
-    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint'),
-    sample3DCurveTo2D(topAxisTick, viewProj, W, H, 'height-tick', 'Límite Superior de Altura', true, 'faint'),
+    sample3DCurveTo2D(bottomRing, viewProj, W, H, 'bottom-ellipse', 'Elipse Base Inferior', true, 'solid', 'form'),
+    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint', 'construction'),
+    sample3DCurveTo2D(topAxisTick, viewProj, W, H, 'height-tick', 'Límite Superior de Altura', true, 'faint', 'construction'),
   ];
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(topRing, viewProj, W, H, 'top-ellipse', 'Elipse Superior', false, 'solid'),
-    sample3DCurveTo2D(leftSide, viewProj, W, H, 'left-side', 'Contorno Lateral Izquierdo', false, 'solid'),
-    sample3DCurveTo2D(rightSide, viewProj, W, H, 'right-side', 'Contorno Lateral Derecho', false, 'solid'),
+    sample3DCurveTo2D(topRing, viewProj, W, H, 'top-ellipse', 'Elipse Superior', false, 'solid', 'form'),
+    sample3DCurveTo2D(leftSide, viewProj, W, H, 'left-side', 'Contorno Lateral Izquierdo', false, 'solid', 'form'),
+    sample3DCurveTo2D(rightSide, viewProj, W, H, 'right-side', 'Contorno Lateral Derecho', false, 'solid', 'form'),
   ];
 
   const previewModel3D: WireframeModel3D = {
@@ -530,14 +543,14 @@ export function createConePrimitive(
   const apexTick = [v3(-0.06, apexY, 0), v3(0.06, apexY, 0)];
 
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(baseRing, viewProj, W, H, 'cone-base', 'Base Circular del Cono', true, 'solid'),
-    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint'),
-    sample3DCurveTo2D(apexTick, viewProj, W, H, 'apex-tick', 'Ápice del Cono', true, 'faint'),
+    sample3DCurveTo2D(baseRing, viewProj, W, H, 'cone-base', 'Base Circular del Cono', true, 'solid', 'form'),
+    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint', 'construction'),
+    sample3DCurveTo2D(apexTick, viewProj, W, H, 'apex-tick', 'Ápice del Cono', true, 'faint', 'construction'),
   ];
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(leftSlant3D, viewProj, W, H, 'left-slant', 'Arista Tangente Izquierda', false, 'solid'),
-    sample3DCurveTo2D(rightSlant3D, viewProj, W, H, 'right-slant', 'Arista Tangente Derecha', false, 'solid'),
+    sample3DCurveTo2D(leftSlant3D, viewProj, W, H, 'left-slant', 'Arista Tangente Izquierda', false, 'solid', 'form'),
+    sample3DCurveTo2D(rightSlant3D, viewProj, W, H, 'right-slant', 'Arista Tangente Derecha', false, 'solid', 'form'),
   ];
 
   const previewModel3D: WireframeModel3D = {
@@ -550,7 +563,7 @@ export function createConePrimitive(
 }
 
 export function createPyramidPrimitive(
-  _camera: Camera3D,
+  camera: Camera3D,
   viewProj: number[],
   W: number,
   H: number
@@ -576,17 +589,31 @@ export function createPyramidPrimitive(
   const apexTick = [v3(-0.06, halfH + 0.1, 0), v3(0.06, halfH + 0.1, 0)];
 
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(baseQuad, viewProj, W, H, 'pyramid-base', 'Base Cuadrada en Perspectiva', true, 'solid'),
-    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint'),
-    sample3DCurveTo2D(apexTick, viewProj, W, H, 'apex-tick', 'Cúspide de la Pirámide', true, 'faint'),
+    sample3DCurveTo2D(baseQuad, viewProj, W, H, 'pyramid-base', 'Base Cuadrada en Perspectiva', true, 'solid', 'form'),
+    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint', 'construction'),
+    sample3DCurveTo2D(apexTick, viewProj, W, H, 'apex-tick', 'Cúspide de la Pirámide', true, 'faint', 'construction'),
   ];
 
-  const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(sampleDenseSegment3D(b0, apex, 24), viewProj, W, H, 'slant-0', 'Arista a la Cúspide (Atrás-Izq)', false, 'solid'),
-    sample3DCurveTo2D(sampleDenseSegment3D(b1, apex, 24), viewProj, W, H, 'slant-1', 'Arista a la Cúspide (Atrás-Der)', false, 'solid'),
-    sample3DCurveTo2D(sampleDenseSegment3D(b2, apex, 24), viewProj, W, H, 'slant-2', 'Arista a la Cúspide (Frente-Der)', false, 'solid'),
-    sample3DCurveTo2D(sampleDenseSegment3D(b3, apex, 24), viewProj, W, H, 'slant-3', 'Arista a la Cúspide (Frente-Izq)', false, 'solid'),
+  // Visibilidad de caras triangulares según la cámara
+  const isRightVisible = camera.eye.x > 0;
+  const isLeftVisible = camera.eye.x < 0;
+  const isFrontVisible = camera.eye.z > 0;
+  const isBackVisible = camera.eye.z < 0;
+
+  // Cada arista oblicua conecta una esquina con la cúspide. Si ambas caras adyacentes están ocultas, la arista está OCULTA
+  const rawSlants: [Vector3D, string, boolean][] = [
+    [b0, 'Arista a la Cúspide (Atrás-Izq)', isLeftVisible || isBackVisible],
+    [b1, 'Arista a la Cúspide (Atrás-Der)', isRightVisible || isBackVisible],
+    [b2, 'Arista a la Cúspide (Frente-Der)', isRightVisible || isFrontVisible],
+    [b3, 'Arista a la Cúspide (Frente-Izq)', isLeftVisible || isFrontVisible],
   ];
+
+  // Exigir ÚNICAMENTE las aristas visibles para la pirámide sólida
+  const visibleSlants = rawSlants.filter((e) => e[2]);
+
+  const targetCurves: CurveSegment2D[] = visibleSlants.map(([basePt, name], idx) => {
+    return sample3DCurveTo2D(sampleDenseSegment3D(basePt, apex, 24), viewProj, W, H, `slant-${idx}`, name, false, 'solid', 'form');
+  });
 
   const previewModel3D: WireframeModel3D = {
     vertices: [b0, b1, b2, b3, apex],
@@ -670,16 +697,16 @@ export function createCapsulePrimitive(
   }
 
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(lowerRing, viewProj, W, H, 'capsule-lower-ring', 'Anillo Inferior Cápsula', true, 'solid'),
-    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint'),
-    sample3DCurveTo2D(topAxisTick, viewProj, W, H, 'height-tick', 'Límite Superior Cilíndrico', true, 'faint'),
+    sample3DCurveTo2D(lowerRing, viewProj, W, H, 'capsule-lower-ring', 'Anillo Inferior Cápsula', true, 'solid', 'form'),
+    sample3DCurveTo2D(heightAxis, viewProj, W, H, 'height-axis', 'Eje de Altura Vertical', true, 'faint', 'construction'),
+    sample3DCurveTo2D(topAxisTick, viewProj, W, H, 'height-tick', 'Límite Superior Cilíndrico', true, 'faint', 'construction'),
   ];
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(upperRing, viewProj, W, H, 'capsule-upper-ring', 'Anillo Divisor Superior', false, 'solid'),
-    sample3DCurveTo2D(upperDomeArc, viewProj, W, H, 'capsule-upper-dome', 'Cúpula Semiesférica Superior', false, 'solid'),
-    sample3DCurveTo2D(leftSide, viewProj, W, H, 'capsule-left', 'Lateral Tangente Izquierdo', false, 'solid'),
-    sample3DCurveTo2D(rightSide, viewProj, W, H, 'capsule-right', 'Lateral Tangente Derecho', false, 'solid'),
+    sample3DCurveTo2D(upperRing, viewProj, W, H, 'capsule-upper-ring', 'Anillo Divisor de Construcción', false, 'solid', 'construction'),
+    sample3DCurveTo2D(upperDomeArc, viewProj, W, H, 'capsule-upper-dome', 'Cúpula Semiesférica Superior', false, 'solid', 'form'),
+    sample3DCurveTo2D(leftSide, viewProj, W, H, 'capsule-left', 'Lateral Tangente Izquierdo', false, 'solid', 'form'),
+    sample3DCurveTo2D(rightSide, viewProj, W, H, 'capsule-right', 'Lateral Tangente Derecho', false, 'solid', 'form'),
   ];
 
   const previewModel3D: WireframeModel3D = {
@@ -731,21 +758,38 @@ export function createPrismPrimitive(
 
   // La cara frontal dada al usuario es SIEMPRE la cara más cercana a la cámara
   const anchorCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(nearTriangle, viewProj, W, H, 'prism-near', 'Cara Triangular Frontal', true, 'solid'),
+    sample3DCurveTo2D(nearTriangle, viewProj, W, H, 'prism-near', 'Cara Triangular Frontal', true, 'solid', 'form'),
   ];
 
-  // Cara posterior y aristas longitudinales que fugan hacia el fondo
-  const farEdge0 = sampleDenseSegment3D(farPts[0], farPts[1], 24);
-  const farEdge1 = sampleDenseSegment3D(farPts[1], farPts[2], 24);
-  const farEdge2 = sampleDenseSegment3D(farPts[2], farPts[0], 24);
-  const farTriangleDense = [...farEdge0, ...farEdge1, ...farEdge2];
+  // Visibilidad de caras del prisma triangular para back-face culling de aristas ocultas
+  // 1. Cara inferior (suelo): normal (0, -1, 0)
+  const isBottomVisible = camera.eye.y < -h / 2;
+  // 2. Cara techo izquierdo: vector (-w, -h/2) a (0, h/2) -> normal normalizada perpendicular hacia el exterior: (-h, w, 0)
+  const isLeftRoofVisible = (-h * camera.eye.x + w * camera.eye.y) > 0;
+  // 3. Cara techo derecho: vector (0, h/2) a (w, -h/2) -> normal normalizada perpendicular hacia el exterior: (h, w, 0)
+  const isRightRoofVisible = (h * camera.eye.x + w * camera.eye.y) > 0;
 
-  const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(farTriangleDense, viewProj, W, H, 'prism-far', 'Cara Triangular Posterior', false, 'solid'),
-    sample3DCurveTo2D(sampleDenseSegment3D(nearPts[0], farPts[0], 24), viewProj, W, H, 'prism-edge-0', 'Arista Longitudinal Izquierda', false, 'solid'),
-    sample3DCurveTo2D(sampleDenseSegment3D(nearPts[1], farPts[1], 24), viewProj, W, H, 'prism-edge-1', 'Arista Longitudinal Derecha', false, 'solid'),
-    sample3DCurveTo2D(sampleDenseSegment3D(nearPts[2], farPts[2], 24), viewProj, W, H, 'prism-edge-2', 'Arista Longitudinal Superior', false, 'solid'),
+  // Aristas visibles de la figura sólida:
+  // Cresta superior: visible si techo izq o der es visible
+  // Longitudinal izq: visible si techo izq o base visible
+  // Longitudinal der: visible si techo der o base visible
+  // Rampa posterior der: visible si techo der visible
+  // Rampa posterior izq: visible si techo izq visible
+  // Base posterior: visible si cara inferior es visible
+  const rawEdges: [Vector3D, Vector3D, string, boolean][] = [
+    [nearPts[2], farPts[2], 'Cresta Superior Longitudinal', isLeftRoofVisible || isRightRoofVisible],
+    [nearPts[0], farPts[0], 'Arista Longitudinal Izquierda', isLeftRoofVisible || isBottomVisible],
+    [nearPts[1], farPts[1], 'Arista Longitudinal Derecha', isRightRoofVisible || isBottomVisible],
+    [farPts[1], farPts[2], 'Rampa Posterior Derecha', isRightRoofVisible],
+    [farPts[2], farPts[0], 'Rampa Posterior Izquierda', isLeftRoofVisible],
+    [farPts[0], farPts[1], 'Base Posterior', isBottomVisible],
   ];
+
+  const visiblePrismEdges = rawEdges.filter((e) => e[3]);
+
+  const targetCurves: CurveSegment2D[] = visiblePrismEdges.map(([pStart, pEnd, name], idx) => {
+    return sample3DCurveTo2D(sampleDenseSegment3D(pStart, pEnd, 24), viewProj, W, H, `prism-edge-${idx}`, name, false, 'solid', 'form');
+  });
 
   const previewModel3D: WireframeModel3D = {
     vertices: [a0, a1, a2, b0, b1, b2],
