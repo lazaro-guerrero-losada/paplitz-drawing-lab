@@ -666,7 +666,13 @@ A continuación se resumen los avances implementados en la última fase de traba
     - **Asignación Exclusiva de Segmentos (Bipartite Match):** Cada segmento de trazo del alumno se asocia a la arista objetivo con la que presenta mayor compatibilidad angular y distancia ($\text{fitness} = \frac{|\cos\theta|}{1.0 + d / 4.0}$). Impide que una línea vertical del cilindro satisfaga fraudulentamente la elipse superior, o que un arco satisfaga simultáneamente el anillo y la cúpula.
     - **Límite Físico de Cobertura por Longitud Trazada:** La cobertura no puede superar la longitud real dibujada por el usuario para esa arista ($\text{maxPossibleCoverage} = \min(1.0, (L_{\text{asignada}} + 1.5 \times \text{threshold}) / L_{\text{objetivo}})$), evitando falsos aprobados ante figuras incompletas.
     - **Umbrales Calibrados y Decaimiento No Lineal:** Umbrales ajustados a $16.0\,\text{px}$ para aristas rectas (coseno $\ge 0.72$) y $20.0\,\text{px}$ para curvas (coseno $\ge 0.65$). La precisión no lineal $\text{precision} = \max(0, 1 - (d / \text{threshold})^{1.3})$ y la puntuación $\text{score} = \text{coverage} \times 100 \times \text{precision}^{1.15}$ premian con $92-97\%$ los trazos de perspectiva impecable ($d \le 3\,\text{px}$, como en Cono y Pirámide) pero castigan severamente a $\sim 35-45\%$ los trazos que divergen de las líneas de fuga reales.
-    - **Etiquetado Específico en Reportes:** Los contornos completos pero desviados de los puntos de fuga se identifican explícitamente como `✗ Desviado de la fuga`.
+23. **Eje Longitudinal de Profundidad en el Prisma Triangular (`primitives.ts`):**
+    - **Problema Detectado en Práctica:** Al presentarse únicamente la cara triangular frontal (`prism-near`) en tinta sólida negra sin una referencia de fuga, el usuario no podía deducir si el prisma se extendía hacia el fondo, hacia el frente o en sentido opuesto, provocando que se dibujaran las aristas longitudinales en sentido invertido.
+    - **Solución Geométrica Analítica:**
+      - Se calculó el baricentro de la cara triangular frontal $\vec{C}_{\text{frontal}} = \frac{1}{3}\sum \vec{P}_{\text{frontal}, i}$ y el baricentro de la cara posterior $\vec{C}_{\text{posterior}} = \frac{1}{3}\sum \vec{P}_{\text{posterior}, i}$.
+      - Se añadió a `anchorCurves` un eje longitudinal de profundidad (`depth-axis`, `style: 'faint'`, `role: 'construction'`) trazado en línea discontinua tenue que va desde $\vec{C}_{\text{frontal}}$ hasta $\vec{C}_{\text{posterior}}$, rematado con un delimitador transversal posterior (`depth-tick`).
+      - Se incorporó el eje en `previewModel3D.rings` para reflejarlo en la tarjeta de previsualización 3D rotatoria.
+      - Se actualizó el texto de ayuda (`tipText`) a: *"Sigue el eje de profundidad longitudinal para fugar las aristas hacia la cara posterior."*
 
 ---
 

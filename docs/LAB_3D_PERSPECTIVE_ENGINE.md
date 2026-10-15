@@ -241,11 +241,20 @@ Para un cono con ápice $\vec{A} = (0, y_{apex}, 0)$ y base circular en $y = y_{
 - El círculo de contacto $3D$ se proyecta exactamente sobre la silueta aparente exterior de la esfera.
 - Líneas ortogonales canónicas: Meridianos ortogonales en $XY$ ($Z=0$) y $YZ$ ($X=0$) cuyos arcos frontales visibles son los objetivos a dibujar.
 
-### 9.4 Toroide, Pirámide y Cápsula
+### 9.4 Prisma Triangular con Eje Longitudinal de Profundidad (`createPrismPrimitive`)
+- **Cara Triangular Frontal Calibrada:** La cara triangular más cercana a la cámara se proporciona como guía sólida negra (`solid`).
+- **Eje Longitudinal de Profundidad (`depth-axis`):** Para evitar que el alumno dibuje el prisma en sentido invertido o desvíe la dirección de extrusión, se traza un eje técnico tenue discontinuo (`faint`, `role: 'construction'`) desde el baricentro de la cara triangular frontal:
+  $$\vec{C}_{\text{frontal}} = \frac{1}{3}\sum_{i=0}^2 \vec{P}_{\text{frontal}, i}$$
+  hasta el baricentro de la cara triangular posterior:
+  $$\vec{C}_{\text{posterior}} = \frac{1}{3}\sum_{i=0}^2 \vec{P}_{\text{posterior}, i}$$
+  rematado con un delimitador transversal posterior (`depth-tick`).
+- Permite al usuario comprender de inmediato la orientación y longitud en fuga hacia el fondo sin recurrir a ayudas completas.
+
+### 9.5 Toroide, Pirámide y Cápsula
 - **Pirámide y Cápsula:** Incorporan igualmente la base cerrada sólida y el eje vertical fino de altura para comunicar la cota volumétrica sin necesidad de activar pistas.
 - **Toroide (`createRingPrimitive`):** Envolventes tangenciales superior e inferior calculadas analíticamente para cada sección transversal según el vector visual.
 
-### 9.5 Back-Face Culling de Aristas Ocultas en Poliedros Opacos (`primitives.ts`)
+### 9.6 Back-Face Culling de Aristas Ocultas en Poliedros Opacos (`primitives.ts`)
 En cuerpos geométricos planos poliédricos sólidos (Cubo, Pirámide, Prisma):
 - **Oclusión Realista del Sólido:** Las aristas posteriores que quedan ocultas dentro o detrás del volumen sólido no se exigen al usuario ni se penalizan si no se dibujan.
 - **Cálculo de Visibilidad por Caras Adyacentes:** Cada arista pertenece a dos caras adyacentes $F_1, F_2$. La arista es visible si y solo si al menos una cara está orientada hacia el observador:
@@ -256,7 +265,7 @@ En cuerpos geométricos planos poliédricos sólidos (Cubo, Pirámide, Prisma):
 - **Pirámide:** Exige únicamente las aristas oblicuas inclinadas hacia la cámara.
 - **Prisma Triangular:** Exige la arista de cresta y las aristas longitudinales y rampas correspondientes a las caras iluminadas hacia la cámara.
 
-### 9.6 Diferenciación entre Contornos de Forma y Líneas de Construcción (`role: 'form' | 'construction'`)
+### 9.7 Diferenciación entre Contornos de Forma y Líneas de Construcción (`role: 'form' | 'construction'`)
 En dibujo técnico y croquis analítico existe una distinción fundamental entre el perfil externo del objeto y las líneas de andamiaje:
 - **`role: 'form'` (Contornos de la Forma):** Siluetas exteriores tangenciales y aristas de arista viva visibles. Son esenciales para delimitar el volumen (peso 70% cuando hay construcción, 100% en poliedros). La omisión de un contorno de forma (< 35% de cobertura) bloquea la aprobación de la figura.
 - **`role: 'construction'` (Líneas de Construcción):** Meridianos ortogonales en la esfera, secciones transversales elípticas en el toroide o anillo divisor en la cápsula.
@@ -264,7 +273,7 @@ En dibujo técnico y croquis analítico existe una distinción fundamental entre
   - En el **Toroide / Anillo:** Trazar las envolventes tangenciales y 2 secciones transversales satisface la cuota de construcción.
   - Las líneas de construcción no activan penalizaciones de figura incompleta.
 
-### 9.7 Muestreo Continuo, Asignación Exclusiva y Evaluación Calibrada (`evaluator3d.ts`)
+### 9.8 Muestreo Continuo, Asignación Exclusiva y Evaluación Calibrada (`evaluator3d.ts`)
 - Todas las aristas y curvas se muestrean densamente (24 a 48 puntos mediante `sampleDenseSegment3D`).
 - **Asignación Exclusiva de Segmentos (Segment-to-Curve Bipartite Matching):**
   - Cada segmento del trazo del alumno se asocia a la arista objetivo con la que presenta mayor correspondencia geométrica y angular mediante la función de aptitud $\text{fitness} = \frac{|\cos\theta|}{1.0 + d / 4.0}$.

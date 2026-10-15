@@ -756,9 +756,31 @@ export function createPrismPrimitive(
   const nearPts = isACcloser ? [a0, a1, a2] : [b0, b1, b2];
   const farPts = isACcloser ? [b0, b1, b2] : [a0, a1, a2];
 
-  // La cara frontal dada al usuario es SIEMPRE la cara más cercana a la cámara
+  // Centroide de la cara frontal y de la cara posterior para marcar la dirección y profundidad
+  const nearCenter = v3(
+    (nearPts[0].x + nearPts[1].x + nearPts[2].x) / 3,
+    (nearPts[0].y + nearPts[1].y + nearPts[2].y) / 3,
+    (nearPts[0].z + nearPts[1].z + nearPts[2].z) / 3
+  );
+  const farCenter = v3(
+    (farPts[0].x + farPts[1].x + farPts[2].x) / 3,
+    (farPts[0].y + farPts[1].y + farPts[2].y) / 3,
+    (farPts[0].z + farPts[1].z + farPts[2].z) / 3
+  );
+
+  // Eje de profundidad longitudinal y delimitador posterior que indican la dirección de extrusión
+  const depthAxis = sampleDenseSegment3D(nearCenter, farCenter, 20);
+  const farAxisTick = [
+    v3(farCenter.x - 0.08, farCenter.y, farCenter.z),
+    v3(farCenter.x + 0.08, farCenter.y, farCenter.z),
+  ];
+
+  // La cara frontal dada al usuario es SIEMPRE la cara más cercana a la cámara,
+  // complementada con el eje de profundidad tenue que indica hacia dónde fuga el prisma
   const anchorCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(nearTriangle, viewProj, W, H, 'prism-near', 'Cara Triangular Frontal', true, 'solid', 'form'),
+    sample3DCurveTo2D(depthAxis, viewProj, W, H, 'depth-axis', 'Eje de Profundidad Longitudinal', true, 'faint', 'construction'),
+    sample3DCurveTo2D(farAxisTick, viewProj, W, H, 'depth-tick', 'Límite Posterior de Profundidad', true, 'faint', 'construction'),
   ];
 
   // Visibilidad de caras del prisma triangular para back-face culling de aristas ocultas
@@ -798,6 +820,7 @@ export function createPrismPrimitive(
       [3, 4], [4, 5], [5, 3], // Cara B
       [0, 3], [1, 4], [2, 5], // Aristas longitudinales
     ],
+    rings: [depthAxis],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -889,7 +912,7 @@ export function generate3DChallenge(
     case 'PRISM':
       primitiveData = createPrismPrimitive(camera, viewProjMatrix, canvasWidth, canvasHeight);
       name = 'PRISM';
-      tipText = 'Proyecta las aristas longitudinales hacia el fondo para la cara posterior.';
+      tipText = 'Sigue el eje de profundidad longitudinal para fugar las aristas hacia la cara posterior.';
       break;
   }
 
