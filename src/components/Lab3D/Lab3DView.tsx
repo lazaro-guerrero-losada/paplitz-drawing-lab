@@ -272,9 +272,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         });
         ctx.restore();
       } else if (aidMode === 'vertices') {
-        // ESTADO 2: Solo vértices y una línea fina que apunta hacia el otro vértice
+        // ESTADO 2: Solo vértices y una línea fina que apunta hacia el otro vértice (Estética monocromática)
         ctx.save();
-        ctx.strokeStyle = '#2563eb'; // Azul técnico
+        ctx.strokeStyle = '#000000'; // Trazo técnico negro
         ctx.lineWidth = 1.6;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -363,9 +363,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           }
         });
 
-        // Dibujar los marcadores de vértices con estilo técnico brutalista
+        // Dibujar los marcadores de vértices con estilo técnico brutalista (sin colores)
         drawnVertices.forEach((v) => {
-          ctx.fillStyle = '#2563eb';
+          ctx.fillStyle = '#000000';
           ctx.strokeStyle = '#000000';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
@@ -376,7 +376,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           // Centro blanco nítido
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.arc(v.x, v.y, 1.5, 0, Math.PI * 2);
+          ctx.arc(v.x, v.y, 1.8, 0, Math.PI * 2);
           ctx.fill();
         });
 
@@ -387,9 +387,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     // 4. TRAZOS DEL USUARIO
     if (evaluation) {
       // SI YA FUE EVALUADO:
-      // Trazos del usuario: si la solución está activa se muestran en cyan para contrastar con verde/rojo.
-      // Si la solución está oculta, los trazos de forma vuelven a su tinta negra sólida original.
-      // Los trazos de construcción se muestran siempre en gris técnico fino discontinuo.
+      // Trazos del usuario: siempre en su tinta negra original (#0f172a).
+      // Los trazos de construcción se muestran en gris técnico fino discontinuo.
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       strokes.forEach((stroke) => {
@@ -400,8 +399,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           ctx.lineWidth = 1.2;
           ctx.setLineDash([4, 4]); // Discontinua
         } else {
-          ctx.strokeStyle = showSolution ? '#38bdf8' : '#0f172a';
-          ctx.lineWidth = showSolution ? 2.2 : 2.4;
+          ctx.strokeStyle = '#0f172a'; // Tinta negra sólida original sin colores
+          ctx.lineWidth = 2.4;
           ctx.setLineDash([]);
         }
         stroke.points.forEach((pt, idx) => {
@@ -412,33 +411,52 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         ctx.setLineDash([]);
       });
 
-      // SUPERPOSICIÓN DE EVALUACIÓN (SOLUCIÓN):
+      // SUPERPOSICIÓN DE EVALUACIÓN (SOLUCIÓN TÉCNICA MONOCROMÁTICA):
+      // Estética 100% sin colores: trazo discontinuo negro técnico y vértices con aros vacíos
       if (showSolution) {
-        // Líneas Verdes (Acertadas)
-        ctx.strokeStyle = '#22c55e'; // Verde esmeralda vivo
-        ctx.lineWidth = 3.2;
-        evaluation.matchedSegments.forEach((seg) => {
-          if (seg.points.length < 2) return;
+        ctx.save();
+        ctx.strokeStyle = '#000000'; // Solución técnica negra en línea discontinua
+        ctx.lineWidth = 2.4;
+        ctx.setLineDash([6, 4]);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        challenge.targetCurves.forEach((curve) => {
+          if (curve.points.length < 2) return;
           ctx.beginPath();
-          seg.points.forEach((pt, idx) => {
+          curve.points.forEach((pt, idx) => {
             if (idx === 0) ctx.moveTo(pt.x, pt.y);
             else ctx.lineTo(pt.x, pt.y);
           });
           ctx.stroke();
         });
 
-        // Líneas Rojas (Faltantes o Desviadas)
-        ctx.strokeStyle = '#ef4444'; // Rojo carmesí
-        ctx.lineWidth = 3.2;
-        evaluation.missingSegments.forEach((seg) => {
-          if (seg.points.length < 2) return;
+        // Vértices clave de referencia técnica con anillas blancas de borde negro
+        const keyVertices: Point2D[] = [];
+        const addKeyVertex = (p: Point2D) => {
+          if (!keyVertices.some((v) => Math.hypot(v.x - p.x, v.y - p.y) < 6)) {
+            keyVertices.push(p);
+          }
+        };
+        challenge.targetCurves.forEach((curve) => {
+          if (curve.points.length >= 2) {
+            addKeyVertex(curve.points[0]);
+            addKeyVertex(curve.points[curve.points.length - 1]);
+          }
+        });
+
+        keyVertices.forEach((v) => {
           ctx.beginPath();
-          seg.points.forEach((pt, idx) => {
-            if (idx === 0) ctx.moveTo(pt.x, pt.y);
-            else ctx.lineTo(pt.x, pt.y);
-          });
+          ctx.arc(v.x, v.y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([]);
           ctx.stroke();
         });
+
+        ctx.restore();
       }
     } else {
       // MIENTRAS EL USUARIO DIBUJA (Screenshot 1, 2, 4):
@@ -765,7 +783,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
               <button
                 onClick={handleClear}
                 disabled={strokes.length === 0}
-                className="btn-ink-outline p-2 text-xs hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
+                className="btn-ink-outline p-2 text-xs hover:bg-neutral-200 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
                 title="Borrar todos los trazos"
               >
                 <Trash2 className="w-4 h-4 stroke-[2.2]" />
@@ -807,7 +825,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                 className={`px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
                   showSolution ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
                 }`}
-                title={showSolution ? 'Ocultar solución (mostrar solo mi dibujo)' : 'Ver solución (superposición verde y roja)'}
+                title={showSolution ? 'Ocultar solución (mostrar solo mi dibujo)' : 'Ver solución técnica de referencia'}
               >
                 {showSolution ? <EyeOff className="w-4 h-4 stroke-[2.2]" /> : <Eye className="w-4 h-4 stroke-[2.2]" />}
                 <span className="text-[10px] uppercase tracking-wider font-mono">
@@ -828,7 +846,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             }`}
             title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
           >
-            <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
+            <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-black animate-pulse' : 'bg-neutral-300 border border-black'}`} />
             <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
           </button>
 
@@ -870,10 +888,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                   });
                 }}
                 className={`p-2 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
-                  aidMode === 'line'
-                    ? 'bg-amber-300 text-black'
-                    : aidMode === 'vertices'
-                    ? 'bg-blue-600 text-white'
+                  aidMode !== 'off'
+                    ? 'bg-black text-white'
                     : 'bg-white text-neutral-600 hover:bg-neutral-100'
                 }`}
                 title="Ciclar ayudas 3D: Apagado → Línea gris punteada → Vértices con dirección"
