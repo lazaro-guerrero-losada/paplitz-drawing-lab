@@ -29,6 +29,8 @@ import {
   Copy,
   Download,
   FileText,
+  Sparkles,
+  PenTool,
 } from 'lucide-react';
 import { SessionRecordItem } from '../../lib/sessionRecorder';
 import {
@@ -88,8 +90,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
   // Herramienta de trazo activa: 'ink' (tinta de forma) o 'construction' (línea guía fina gris discontinua)
   const [strokeTool, setStrokeTool] = useState<'ink' | 'construction'>('ink');
-  // Visualización de la solución en modo corrección
-  const [showSolution, setShowSolution] = useState<boolean>(true);
+  // Visualización en modo corrección (3-4 etapas: 'all' [ambos], 'solution' [solo solución], 'drawing' [solo dibujo], 'off' [apagado])
+  const [visionMode, setVisionMode] = useState<'all' | 'solution' | 'drawing' | 'off'>('all');
 
   // Opciones de visualización y Ayudas 3D
   const [showGrid, setShowGrid] = useState<boolean>(true); // Activar / desactivar rejilla 3D
@@ -128,7 +130,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       setCurrentLiveStroke([]);
       setEvaluation(null);
       setStrokeTool('ink');
-      setShowSolution(true);
+      setVisionMode('all');
       setCurrentRound(roundNum);
       setUserNote('');
       setShowReportModal(false);
@@ -384,36 +386,44 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       }
     }
 
-    // 4. TRAZOS DEL USUARIO
+    // 4. TRAZOS DEL USUARIO Y SOLUCIÓN DE EVALUACIÓN
     if (evaluation) {
       // SI YA FUE EVALUADO:
-      // Trazos del usuario: siempre en su tinta negra original (#0f172a).
-      // Los trazos de construcción se muestran en gris técnico fino discontinuo.
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      strokes.forEach((stroke) => {
-        if (stroke.points.length < 2) return;
-        ctx.beginPath();
-        if (stroke.isConstruction) {
-          ctx.strokeStyle = '#94a3b8'; // Gris técnico fino
-          ctx.lineWidth = 1.2;
-          ctx.setLineDash([4, 4]); // Discontinua
-        } else {
-          ctx.strokeStyle = '#0f172a'; // Tinta negra sólida original sin colores
-          ctx.lineWidth = 2.4;
+      // Control de visibilidad según visionMode:
+      // - 'all': se dibuja el dibujo del usuario Y la solución técnica.
+      // - 'solution': se oculta el dibujo del usuario, se dibuja la solución técnica (oculta mi dibujo).
+      // - 'drawing': se dibuja el dibujo del usuario, se oculta la solución técnica.
+      // - 'off': se oculta tanto el dibujo como la solución técnica (lienzo limpio con guías 3D).
+      const shouldDrawUserStrokes = visionMode === 'all' || visionMode === 'drawing';
+      const shouldDrawSolution = visionMode === 'all' || visionMode === 'solution';
+
+      if (shouldDrawUserStrokes) {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        strokes.forEach((stroke) => {
+          if (stroke.points.length < 2) return;
+          ctx.beginPath();
+          if (stroke.isConstruction) {
+            ctx.strokeStyle = '#94a3b8'; // Gris técnico fino
+            ctx.lineWidth = 1.2;
+            ctx.setLineDash([4, 4]); // Discontinua
+          } else {
+            ctx.strokeStyle = '#0f172a'; // Tinta negra sólida original sin colores
+            ctx.lineWidth = 2.4;
+            ctx.setLineDash([]);
+          }
+          stroke.points.forEach((pt, idx) => {
+            if (idx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
           ctx.setLineDash([]);
-        }
-        stroke.points.forEach((pt, idx) => {
-          if (idx === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
         });
-        ctx.stroke();
-        ctx.setLineDash([]);
-      });
+      }
 
       // SUPERPOSICIÓN DE EVALUACIÓN (SOLUCIÓN TÉCNICA MONOCROMÁTICA):
       // Estética 100% sin colores: trazo discontinuo negro técnico y vértices con aros vacíos
-      if (showSolution) {
+      if (shouldDrawSolution) {
         ctx.save();
         ctx.strokeStyle = '#000000'; // Solución técnica negra en línea discontinua
         ctx.lineWidth = 2.4;
@@ -502,7 +512,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         ctx.setLineDash([]);
       }
     }
-  }, [challenge, strokes, currentLiveStroke, evaluation, showGrid, aidMode, canvasDimensions, strokeTool, showSolution]);
+  }, [challenge, strokes, currentLiveStroke, evaluation, showGrid, aidMode, canvasDimensions, strokeTool, visionMode]);
 
   // ==========================================
   // Manejadores de Eventos del Puntero (Stylus, Touch, Mouse) con Corrección de Escala
@@ -599,6 +609,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       // 1. Evaluar trazos
       const result = evaluate3DSubmission(strokes, challenge.targetCurves);
       setEvaluation(result);
+      setVisionMode('all');
 
       // Si el Modo Récord está activo, registrar ejercicio automáticamente
       if (isRecording && onRecordExercise) {
@@ -652,6 +663,41 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     setIsSessionComplete(false);
     loadNewChallenge(1);
   };
+
+  // Atajos de teclado para flujo ágil en Lab 3D (Enter: comprobar/siguiente, V: ciclar visión tras evaluar, Ctrl+Z: deshacer)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSubmitOrNext();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      } else if (e.key.toLowerCase() === 'v' && evaluation) {
+        e.preventDefault();
+        setVisionMode((prev) => {
+          if (prev === 'all') return 'solution';
+          if (prev === 'solution') return 'drawing';
+          if (prev === 'drawing') return 'off';
+          return 'all';
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [evaluation, strokes, redoStack, challenge, isRecording, userNote, currentRound]);
 
   // Promedio de puntuación
   const averageScore =
@@ -796,20 +842,44 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             </>
           )}
 
-          {/* BOTÓN EXCLUSIVO EN MODO CORRECCIÓN: Ver / Ocultar Solución */}
+          {/* BOTÓN EXCLUSIVO EN MODO CORRECCIÓN: Visión Cíclica (Ambos -> Solución [oculta dibujo] -> Dibujo -> Off) */}
           {evaluation && (
             <>
               <button
                 type="button"
-                onClick={() => setShowSolution((prev) => !prev)}
+                onClick={() => {
+                  setVisionMode((prev) => {
+                    if (prev === 'all') return 'solution';
+                    if (prev === 'solution') return 'drawing';
+                    if (prev === 'drawing') return 'off';
+                    return 'all';
+                  });
+                }}
                 className={`px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
-                  showSolution ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                  visionMode !== 'off' ? 'bg-black text-white' : 'bg-white text-neutral-600 hover:bg-neutral-100'
                 }`}
-                title={showSolution ? 'Ocultar solución (mostrar solo mi dibujo)' : 'Ver solución técnica de referencia'}
+                title={
+                  visionMode === 'all'
+                    ? 'Visión: Ambos (mi dibujo + solución superpuesta). Clic para ver solo solución (V)'
+                    : visionMode === 'solution'
+                    ? 'Visión: Solución (mi dibujo oculto). Clic para ver solo mi dibujo (V)'
+                    : visionMode === 'drawing'
+                    ? 'Visión: Mi Dibujo (solución oculta). Clic para apagar todo (V)'
+                    : 'Visión: Off (lienzo limpio con guías 3D). Clic para ver ambos (V)'
+                }
               >
-                {showSolution ? <EyeOff className="w-4 h-4 stroke-[2.2]" /> : <Eye className="w-4 h-4 stroke-[2.2]" />}
+                {visionMode === 'all' && <Eye className="w-4 h-4 stroke-[2.2]" />}
+                {visionMode === 'solution' && <Sparkles className="w-4 h-4 stroke-[2.2]" />}
+                {visionMode === 'drawing' && <PenTool className="w-4 h-4 stroke-[2.2]" />}
+                {visionMode === 'off' && <EyeOff className="w-4 h-4 stroke-[2.2]" />}
                 <span className="text-[10px] uppercase tracking-wider font-mono">
-                  {showSolution ? 'Ocultar Solución' : 'Ver Solución'}
+                  {visionMode === 'all'
+                    ? 'Visión: Ambos'
+                    : visionMode === 'solution'
+                    ? 'Visión: Solución'
+                    : visionMode === 'drawing'
+                    ? 'Visión: Dibujo'
+                    : 'Visión: Off'}
                 </span>
               </button>
 
