@@ -674,7 +674,7 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
       <div
         className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
         style={{
-          width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
+          width: 'min(calc(100% - 130px), 600px, calc((100dvh - 180px) * (600 / 540)))',
         }}
       >
         {/* Tira compacta a la izquierda */}
@@ -897,9 +897,9 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
 
       {/* 3. ÁREA CENTRAL: LIENZO 100% INTEGRADO CON EL FONDO */}
       <div
-        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        className="relative aspect-[600/540] max-w-[min(calc(100%-24px),600px)] max-h-[calc(100%-125px)] flex items-center justify-center pointer-events-none"
         style={{
-          width: 'min(100%, 620px, calc((100vh - 120px) * (600 / 540)))',
+          width: 'min(calc(100% - 24px), 600px, calc((100dvh - 180px) * (600 / 540)))',
           height: 'auto',
           aspectRatio: '600 / 540',
         }}
@@ -930,17 +930,17 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
 
         {/* Modal de Fin de Partida */}
         {gameState === 'gameover' && (
-          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-30 text-center font-mono animate-fade-in select-none pointer-events-auto">
-            <Trophy className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
-            <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-3 sm:p-5 border-2 border-black z-30 text-center font-mono animate-fade-in select-none pointer-events-auto overflow-y-auto max-h-full">
+            <Trophy className="w-8 h-8 sm:w-12 sm:h-12 text-black mb-1.5 animate-bounce stroke-[2.5]" />
+            <h3 className="text-lg sm:text-2xl font-bold font-display uppercase tracking-tight">
               ¡Partida Finalizada!
             </h3>
-            <p className="text-xs text-neutral-600 mt-1 max-w-sm">
+            <p className="text-[11px] sm:text-xs text-neutral-600 mt-0.5 sm:mt-1 max-w-sm">
               Has completado tu sesión de entrenamiento de memoria muscular y sincronía motriz.
             </p>
 
             {/* TABLA DE RESULTADOS */}
-            <div className="my-4 p-3.5 border-2 border-black bg-neutral-50 w-72 space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
+            <div className="my-2.5 sm:my-4 p-2.5 sm:p-3.5 border-2 border-black bg-neutral-50 w-64 sm:w-72 space-y-1.5 sm:space-y-2 text-[11px] sm:text-xs shadow-[3px_3px_0px_#000000]">
               <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
                 <span className="text-neutral-500 font-bold uppercase text-[10px]">Calcos Realizados:</span>
                 <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
@@ -969,7 +969,7 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
               <button
                 type="button"
                 onClick={() => restartGame(selectedPreset)}
-                className="btn-ink px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000]"
+                className="btn-ink px-3 sm:px-4 py-1.5 sm:py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000]"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Jugar de Nuevo</span>
@@ -977,7 +977,7 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
               <button
                 type="button"
                 onClick={onExit}
-                className="btn-ink-outline px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                className="btn-ink-outline px-3 sm:px-4 py-1.5 sm:py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
               >
                 <Undo2 className="w-3.5 h-3.5" />
                 <span>Volver a Minijuegos</span>
@@ -988,7 +988,7 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
       </div>
 
       {/* 4. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (NEOBRUTALISTA PAPLITZ) */}
-      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
+      <div className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
         <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-24px)] overflow-x-auto">
           {/* Selector de Presets */}
           <div className="flex items-center gap-1 border-r border-neutral-300 pr-1.5 sm:pr-2">

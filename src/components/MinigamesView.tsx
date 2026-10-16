@@ -1140,10 +1140,11 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
 
       {/* CONTENEDOR ANCLADO AL JUEGO (Mantiene aspecto exacto 600x540 y centra los HUDs junto al lienzo) */}
       <div
-        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        className="relative aspect-[600/540] max-w-[min(calc(100%-24px),600px)] max-h-[calc(100%-125px)] flex items-center justify-center pointer-events-none"
         style={{
-          width: 'min(100%, 620px, calc((100vh - 90px) * (600 / 540)))',
+          width: 'min(calc(100% - 24px), 600px, calc((100dvh - 180px) * (600 / 540)))',
           height: 'auto',
+          aspectRatio: '600 / 540',
         }}
       >
         <canvas

@@ -885,71 +885,73 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
         <span>Panel</span>
       </button>
 
-      {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL ALINEADO CON EL LIENZO */}
-      <div
-        className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
-        style={{
-          width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
-        }}
-      >
-        {/* Tira compacta a la izquierda */}
-        <div className="pointer-events-auto self-start font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
-          <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
-            {gameMode === 'survival' ? `ACTO ${currentStage}` : 'BLITZ 60s'}
-          </span>
-          <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5">
-            <Clock className="w-3 h-3 stroke-[2.5]" />
-            <span className="text-[11px] font-bold tabular-nums">
-              {gameMode === 'survival' ? `${stageSecondsLeft}s` : `${blitzTimer}s`}
+      {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL ALINEADO CON EL LIENZO (SOLO EN PARTIDA) */}
+      {gameState !== 'idle' && (
+        <div
+          className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
+          style={{
+            width: 'min(calc(100% - 130px), 600px, calc((100dvh - 180px) * (600 / 540)))',
+          }}
+        >
+          {/* Tira compacta a la izquierda */}
+          <div className="pointer-events-auto self-start font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+            <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
+              {gameMode === 'survival' ? `ACTO ${currentStage}` : 'BLITZ 60s'}
             </span>
+            <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5">
+              <Clock className="w-3 h-3 stroke-[2.5]" />
+              <span className="text-[11px] font-bold tabular-nums">
+                {gameMode === 'survival' ? `${stageSecondsLeft}s` : `${blitzTimer}s`}
+              </span>
+            </div>
+            {/* 6 cuadritos visuales de saturación */}
+            <div className="flex items-center gap-0.5 px-1 py-0.5 bg-neutral-100 border border-black" title={`Líneas en pantalla: ${activeLines.length}/${MAX_LINES_OVERFLOW}`}>
+              {[0, 1, 2, 3, 4, 5].map((idx) => (
+                <span
+                  key={idx}
+                  className={`w-2 h-2 border border-black transition-colors ${
+                    idx < activeLines.length
+                      ? idx >= 4
+                        ? 'bg-red-600'
+                        : 'bg-black'
+                      : 'bg-white'
+                  }`}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5">
+              <Flame className="w-3 h-3 fill-black text-black" />
+              <span className="text-[11px] font-bold tabular-nums">{clearedScores.length} ({comboStreak}x)</span>
+            </div>
+            {averageGrade > 0 && (
+              <span className="text-[10px] font-mono font-bold text-neutral-600 hidden sm:inline">
+                Media: {averageGrade}%
+              </span>
+            )}
           </div>
-          {/* 6 cuadritos visuales de saturación */}
-          <div className="flex items-center gap-0.5 px-1 py-0.5 bg-neutral-100 border border-black" title={`Líneas en pantalla: ${activeLines.length}/${MAX_LINES_OVERFLOW}`}>
-            {[0, 1, 2, 3, 4, 5].map((idx) => (
+
+          {/* A la derecha del dibujo: Cuadradito compacto con la nota (a la misma altura) */}
+          {lastEval && gameState === 'playing' ? (
+            <div className="pointer-events-auto self-start bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+              <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+                Nota
+              </span>
+              <span className="text-xl sm:text-2xl font-black leading-none my-0.5">
+                {lastEval.score}%
+              </span>
               <span
-                key={idx}
-                className={`w-2 h-2 border border-black transition-colors ${
-                  idx < activeLines.length
-                    ? idx >= 4
-                      ? 'bg-red-600'
-                      : 'bg-black'
-                    : 'bg-white'
+                className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
+                  lastEval.passed ? 'bg-black text-white' : 'bg-red-600 text-white'
                 }`}
-              />
-            ))}
-          </div>
-          <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5">
-            <Flame className="w-3 h-3 fill-black text-black" />
-            <span className="text-[11px] font-bold tabular-nums">{clearedScores.length} ({comboStreak}x)</span>
-          </div>
-          {averageGrade > 0 && (
-            <span className="text-[10px] font-mono font-bold text-neutral-600 hidden sm:inline">
-              Media: {averageGrade}%
-            </span>
+              >
+                {lastEval.passed ? 'Eliminada' : 'Fallo'}
+              </span>
+            </div>
+          ) : (
+            <div />
           )}
         </div>
-
-        {/* A la derecha del dibujo: Cuadradito compacto con la nota (a la misma altura) */}
-        {lastEval && gameState === 'playing' ? (
-          <div className="pointer-events-auto self-start bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
-            <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
-              Nota
-            </span>
-            <span className="text-xl sm:text-2xl font-black leading-none my-0.5">
-              {lastEval.score}%
-            </span>
-            <span
-              className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
-                lastEval.passed ? 'bg-black text-white' : 'bg-red-600 text-white'
-              }`}
-            >
-              {lastEval.passed ? 'Eliminada' : 'Fallo'}
-            </span>
-          </div>
-        ) : (
-          <div />
-        )}
-      </div>
+      )}
 
       {/* BACKDROP FLOTANTE CUANDO EL PANEL LOCAL ESTÁ ABIERTO */}
       {!onToggleSidebar && isSidebarOpen && (
@@ -1274,9 +1276,9 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
 
       {/* 3. ÁREA CENTRAL: LIENZO 100% INTEGRADO CON EL FONDO */}
       <div
-        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        className="relative aspect-[600/540] max-w-[min(calc(100%-24px),600px)] max-h-[calc(100%-125px)] flex items-center justify-center pointer-events-none"
         style={{
-          width: 'min(100%, 620px, calc((100vh - 120px) * (600 / 540)))',
+          width: 'min(calc(100% - 24px), 600px, calc((100dvh - 180px) * (600 / 540)))',
           height: 'auto',
           aspectRatio: '600 / 540',
         }}
@@ -1305,12 +1307,12 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
 
         {/* Pantalla de inicio previa sobre el lienzo */}
         {gameState === 'idle' && (
-          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-20 text-center font-mono pointer-events-auto select-none">
-            <Zap className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
-            <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-3 sm:p-5 border-2 border-black z-20 text-center font-mono pointer-events-auto select-none overflow-y-auto max-h-full">
+            <Zap className="w-8 h-8 sm:w-10 sm:h-10 text-black mb-1 animate-bounce stroke-[2.5]" />
+            <h3 className="text-lg sm:text-2xl font-bold font-display uppercase tracking-tight">
               Avalancha de Trazos
             </h3>
-            <p className="text-xs text-neutral-600 mt-1 max-w-md">
+            <p className="text-[11px] sm:text-xs text-neutral-600 mt-0.5 sm:mt-1 max-w-sm sm:max-w-md leading-relaxed">
               {isRandomMode ? (
                 <>Modo Aleatorio activado: traza cada línea diferente de <strong>① a ②</strong> con nota <strong>≥70%</strong> para eliminarla.</>
               ) : (
@@ -1324,7 +1326,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
               )}
             </p>
 
-            <div className="my-4 p-3 border-2 border-black bg-neutral-50 text-xs w-64 space-y-1 shadow-[3px_3px_0px_#000000]">
+            <div className="my-2 sm:my-3 p-2 sm:p-3 border-2 border-black bg-neutral-50 text-[11px] sm:text-xs w-56 sm:w-64 space-y-1 shadow-[2px_2px_0px_#000000] sm:shadow-[3px_3px_0px_#000000]">
               <div className="flex justify-between">
                 <span className="text-neutral-500">Récord Supervivencia:</span>
                 <span className="font-bold">{highScores.survival} líneas</span>
@@ -1342,7 +1344,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
             <button
               type="button"
               onClick={() => startGame(gameMode)}
-              className="btn-ink px-6 py-2.5 text-xs uppercase font-bold flex items-center gap-2 cursor-pointer shadow-[3px_3px_0px_#000000] hover:bg-neutral-900"
+              className="btn-ink px-4 sm:px-6 py-2 sm:py-2.5 text-[11px] sm:text-xs uppercase font-bold flex items-center gap-2 cursor-pointer shadow-[3px_3px_0px_#000000] hover:bg-neutral-900 active:scale-95 transition-transform"
             >
               <Sparkles className="w-4 h-4 fill-white stroke-none" />
               <span>Empezar Partida ({gameMode === 'survival' ? 'Supervivencia por Actos' : 'Blitz 60s'})</span>
@@ -1352,22 +1354,22 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
 
         {/* Modal de Descanso entre Actos / Stages */}
         {gameState === 'stage_break' && (
-          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-4 sm:p-6 border-2 border-black z-20 text-center font-mono animate-fade-in select-none pointer-events-auto">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black text-white text-[11px] font-bold uppercase tracking-wider mb-2 border border-black shadow-[2px_2px_0px_#000000]">
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-3 sm:p-5 border-2 border-black z-20 text-center font-mono animate-fade-in select-none pointer-events-auto overflow-y-auto max-h-full">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 bg-black text-white text-[10px] sm:text-[11px] font-bold uppercase tracking-wider mb-1.5 sm:mb-2 border border-black shadow-[2px_2px_0px_#000000]">
               <Check className="w-3.5 h-3.5 stroke-[3]" />
               <span>¡ACTO {currentStage} SUPERADO!</span>
               <Sparkles className="w-3.5 h-3.5" />
             </div>
 
-            <h3 className="text-2xl font-black font-display uppercase tracking-tight text-black">
+            <h3 className="text-lg sm:text-2xl font-black font-display uppercase tracking-tight text-black">
               DESCANSO ENTRE ACTOS
             </h3>
-            <p className="text-xs text-neutral-600 mt-0.5 max-w-sm">
+            <p className="text-[11px] sm:text-xs text-neutral-600 mt-0.5 max-w-sm">
               ¡Lienzo despejado! Has resistido los {STAGE_DURATION}s del Acto {currentStage} sin saturar la pantalla.
             </p>
 
             {/* Resumen de estadísticas del Acto */}
-            <div className="my-3 p-3.5 border-2 border-black bg-neutral-50 w-full max-w-xs space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
+            <div className="my-2 sm:my-3 p-2.5 sm:p-3.5 border-2 border-black bg-neutral-50 w-full max-w-xs space-y-1.5 sm:space-y-2 text-[11px] sm:text-xs shadow-[3px_3px_0px_#000000]">
               <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
                 <span className="text-neutral-500 font-bold uppercase text-[10px]">Trazos en Acto {currentStage}:</span>
                 <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
@@ -1391,12 +1393,12 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
             </div>
 
             {/* Previa técnica del siguiente Acto */}
-            <div className="mb-3.5 p-2 bg-neutral-100 border border-black text-left w-full max-w-xs text-[11px] space-y-1">
+            <div className="mb-2.5 sm:mb-3.5 p-2 bg-neutral-100 border border-black text-left w-full max-w-xs text-[10px] sm:text-[11px] space-y-1">
               <div className="font-bold text-black flex items-center gap-1">
                 <Zap className="w-3.5 h-3.5 text-black stroke-[2.5]" />
                 <span>Próximo Reto: Acto {currentStage + 1}</span>
               </div>
-              <p className="text-neutral-600 text-[10px] leading-snug">
+              <p className="text-neutral-600 text-[9px] sm:text-[10px] leading-snug">
                 La avalancha acelera su cadencia a <strong>{(getStageSpawnInterval(currentStage + 1, 2) / 1000).toFixed(1)}s</strong> por trazo
                 {currentStage + 1 >= 2 ? ' con posibles ráfagas continuas' : ''}. Mantén la fluidez y velocidad sin dudar.
               </p>
@@ -1407,7 +1409,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
               <button
                 type="button"
                 onClick={handleNextStage}
-                className="flex-1 btn-ink py-2.5 px-3 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000] hover:bg-neutral-900"
+                className="flex-1 btn-ink py-2 sm:py-2.5 px-3 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000] hover:bg-neutral-900"
               >
                 <Play className="w-3.5 h-3.5 fill-white stroke-none" />
                 <span>Comenzar Acto {currentStage + 1}</span>
@@ -1415,7 +1417,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
               <button
                 type="button"
                 onClick={() => finishGame('manual')}
-                className="btn-ink-outline py-2.5 px-3 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] hover:bg-neutral-100"
+                className="btn-ink-outline py-2 sm:py-2.5 px-3 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] hover:bg-neutral-100"
               >
                 <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Finalizar y Guardar</span>
@@ -1426,16 +1428,16 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
 
         {/* Modal de Fin de Partida */}
         {gameState === 'gameover' && (
-          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-20 text-center font-mono animate-fade-in pointer-events-auto select-none">
-            <Trophy className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
-            <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-3 sm:p-5 border-2 border-black z-20 text-center font-mono animate-fade-in pointer-events-auto select-none overflow-y-auto max-h-full">
+            <Trophy className="w-8 h-8 sm:w-12 sm:h-12 text-black mb-1.5 animate-bounce stroke-[2.5]" />
+            <h3 className="text-lg sm:text-2xl font-bold font-display uppercase tracking-tight">
               {gameOverReason === 'manual'
                 ? '¡Partida Guardada!'
                 : gameOverReason === 'overflow'
                 ? '¡Desbordamiento de Pantalla!'
                 : '¡Tiempo Finalizado!'}
             </h3>
-            <p className="text-xs text-neutral-600 mt-1 max-w-sm">
+            <p className="text-[11px] sm:text-xs text-neutral-600 mt-0.5 sm:mt-1 max-w-sm">
               {gameOverReason === 'manual'
                 ? 'Has finalizado la partida voluntariamente y tu progreso ha quedado guardado.'
                 : gameOverReason === 'overflow'
@@ -1444,7 +1446,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
             </p>
 
             {/* TABLA DE RESULTADOS */}
-            <div className="my-4 p-3.5 border-2 border-black bg-neutral-50 w-72 space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
+            <div className="my-2.5 sm:my-4 p-2.5 sm:p-3.5 border-2 border-black bg-neutral-50 w-64 sm:w-72 space-y-1.5 sm:space-y-2 text-[11px] sm:text-xs shadow-[3px_3px_0px_#000000]">
               {gameMode === 'survival' && (
                 <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
                   <span className="text-neutral-500 font-bold uppercase text-[10px]">Actos Superados:</span>
@@ -1487,7 +1489,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
               <button
                 type="button"
                 onClick={() => startGame(gameMode)}
-                className="btn-ink px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000]"
+                className="btn-ink px-3 sm:px-4 py-1.5 sm:py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000]"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Jugar de Nuevo</span>
@@ -1495,7 +1497,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
               <button
                 type="button"
                 onClick={() => setGameState('idle')}
-                className="btn-ink-outline px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                className="btn-ink-outline px-3 sm:px-4 py-1.5 sm:py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
               >
                 <span>Configuración</span>
               </button>
@@ -1505,7 +1507,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
       </div>
 
       {/* 4. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (NEOBRUTALISTA PAPLITZ) */}
-      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
+      <div className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
         <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-24px)] overflow-x-auto">
           {/* Modalidad toggle */}
           <div className="flex items-center gap-1 border-r border-neutral-300 pr-1.5 sm:pr-2">

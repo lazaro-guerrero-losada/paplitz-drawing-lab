@@ -993,7 +993,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
       <div
         className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
         style={{
-          width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
+          width: 'min(calc(100% - 130px), 600px, calc((100dvh - 180px) * (600 / 540)))',
         }}
       >
         {/* A la izquierda del cubo (por donde está ahora): NIVEL, SEMILLA Y MODO TÁCTIL EN UNA SOLA TIRA */}
@@ -1079,10 +1079,11 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
 
       {/* CONTENEDOR ANCLADO AL DIBUJO (Mantiene aspecto exacto 600x540 sin elementos flotantes en medio) */}
       <div
-        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        className="relative aspect-[600/540] max-w-[min(calc(100%-24px),600px)] max-h-[calc(100%-125px)] flex items-center justify-center pointer-events-none"
         style={{
-          width: 'min(100%, 620px, calc((100vh - 120px) * (600 / 540)))',
+          width: 'min(calc(100% - 24px), 600px, calc((100dvh - 180px) * (600 / 540)))',
           height: 'auto',
+          aspectRatio: '600 / 540',
         }}
       >
         <canvas
@@ -1101,7 +1102,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
       </div>
 
       {/* 3. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR */}
-      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
+      <div className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
         <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-24px)] overflow-x-auto">
           {!feedback ? (
             <>
