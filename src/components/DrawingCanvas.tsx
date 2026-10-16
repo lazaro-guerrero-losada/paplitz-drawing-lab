@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { CubeChallenge, Point2D } from '../lib/geometry';
 import { UserStroke, ValidationFeedback, countDetectedAristas } from '../lib/validation';
-import { Undo2, Trash2, Check, ArrowRight, AlertTriangle, CheckCircle, Clock, Zap, Copy, Download, X, Pen, Hand, ArrowDown, ArrowUp, Eye, EyeOff, FileText, PanelLeft, MessageSquare } from 'lucide-react';
+import { Undo2, Trash2, Check, ArrowRight, AlertTriangle, Clock, Copy, Download, X, Pen, Hand, Eye, EyeOff, FileText, PanelLeft, MessageSquare } from 'lucide-react';
 import { buildDebugReport, copyReportToClipboard, downloadReportJson } from '../lib/debugReport';
 import { QuickCommentModal } from './QuickCommentModal';
 
@@ -175,7 +175,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
     activeLesson,
     showUserDrawing: externalShowUserDrawing,
     showParametricSolution: externalShowParametricSolution,
-    isLandscapeMobile: propIsLandscapeMobile,
+    isLandscapeMobile: _propIsLandscapeMobile,
     onToggleSidebar,
     nodeCode,
     isDailyChallenge = false,
@@ -187,27 +187,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
     onOpenRecordModal,
     onAddCurrentToRecording,
   } = props;
-
-  const [internalIsLandscape, setInternalIsLandscape] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth > window.innerHeight && (window.innerHeight <= 520 || (window.innerWidth <= 960 && window.innerHeight <= 560));
-  });
-
-  useEffect(() => {
-    const handleResize = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      setInternalIsLandscape(w > h && (h <= 520 || (w <= 960 && h <= 560)));
-    };
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
-    };
-  }, []);
-
-  const effectiveIsLandscape = propIsLandscapeMobile !== undefined ? propIsLandscapeMobile : internalIsLandscape;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -263,16 +242,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
   // Modo táctil en dispositivos móviles: 'draw' (dibujar con dedo o lápiz) | 'scroll' (desplazar la pantalla con 1 dedo)
   const [touchMode, setTouchMode] = useState<'draw' | 'scroll'>('draw');
 
-  // Estado del scroll de la ventana para botón flotante de acceso rápido en móviles
-  const [isScrolledDown, setIsScrolledDown] = useState(false);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolledDown(window.scrollY > 140);
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Al validarse o comprobar el cubo, activar modo scroll automáticamente para ver notas y Cubito con 1 dedo
   useEffect(() => {
@@ -342,26 +312,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
     const width = canvas.width;
     const height = canvas.height;
 
-    // Fondo blanco papel puro
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, width, height);
-
-    // Cuadrícula sutil de dibujo técnico
-    ctx.strokeStyle = '#F3F3F3';
-    ctx.lineWidth = 1;
-    const gridSize = 24;
-    for (let x = 0; x < width; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-    for (let y = 0; y < height; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
+    // Limpiar lienzo manteniendo transparencia sobre la cuadrícula milimétrica continua
+    ctx.clearRect(0, 0, width, height);
 
     // Mallado cuadrado de perspectiva en el suelo (líneas finas para orientar el plano horizontal)
     if (challenge.hasGroundGrid) {
@@ -993,373 +945,169 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
   }));
 
   return (
-    <div className="w-full flex flex-col items-center justify-center select-none">
-      {effectiveIsLandscape ? (
-        /* ============================================================ */
-        /* MODO MÓVIL HORIZONTAL (LANDSCAPE COMPACTO): CUBO 3D          */
-        /* ============================================================ */
-        <div className="w-full h-full flex flex-row items-center justify-center gap-2 sm:gap-3 max-w-full select-none overflow-hidden font-mono">
-          {/* LIENZO 600x540 ESCALADO A MÁXIMA ALTURA */}
-          <div
-            data-canvas-zone="true"
-            className="relative border-3 border-black bg-white shadow-[3px_3px_0px_#000000] aspect-[600/540] overflow-hidden shrink-0"
-            style={{
-              height: 'min(calc(100vh - 46px), calc(100dvh - 46px), 360px)',
-              width: 'auto',
-              maxWidth: 'calc(100vw - 210px)',
-            }}
-          >
-            {/* Barra superior de progreso del temporizador */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-neutral-200 pointer-events-none z-10">
-              <div
-                className={`h-full transition-all duration-100 ${
-                  timeLeft <= 5 && isTimerRunning ? 'bg-black animate-pulse' : 'bg-neutral-800'
-                }`}
-                style={{ width: `${(timeLeft / TOTAL_COUNTDOWN_SECONDS) * 100}%` }}
-              />
-            </div>
+    <div className="relative w-full h-full overflow-hidden flex items-center justify-center select-none bg-white pattern-grid-paper">
+      {/* Barra superior de progreso del temporizador */}
+      <div className="absolute top-0 left-0 right-0 h-1.5 bg-neutral-200 pointer-events-none z-30">
+        <div
+          className={`h-full transition-all duration-100 ${
+            timeLeft <= 5 && isTimerRunning ? 'bg-black animate-pulse' : 'bg-neutral-800'
+          }`}
+          style={{ width: `${(timeLeft / TOTAL_COUNTDOWN_SECONDS) * 100}%` }}
+        />
+      </div>
 
-            <canvas
-              ref={canvasRef}
-              width={600}
-              height={540}
-              className="block w-full h-full touch-none cursor-crosshair select-none"
-              style={{ touchAction: 'none' }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            />
+      {/* LIENZO 600x540 ESCALADO MATEMÁTICAMENTE SIN DEFORMACIÓN */}
+      <canvas
+        ref={canvasRef}
+        width={600}
+        height={540}
+        className={`block max-w-full max-h-full aspect-[600/540] z-10 ${
+          touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
+        }`}
+        style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      />
 
-            <div className="absolute top-1.5 left-1.5 text-[9px] font-mono uppercase bg-white border border-black px-1.5 py-0.5 pointer-events-none shadow-[1px_1px_0px_#000000] z-10">
-              #{challenge.seed}
-            </div>
-
-            {/* Temporizador */}
-            <div
-              className={`absolute top-1.5 right-1.5 border border-black px-1.5 py-0.5 font-mono text-[10px] pointer-events-none shadow-[1px_1px_0px_#000000] z-10 flex items-center gap-1 ${
-                timeLeft <= 5 && isTimerRunning ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
-              }`}
+      {/* 1. HUD SUPERIOR IZQUIERDO: CONTEXTO, PANEL, SEED Y MODO TÁCTIL */}
+      <div className="absolute top-3 left-3 sm:left-5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
+        {/* Cabecera: Panel + Nivel */}
+        <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
+          {onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className="bg-white hover:bg-neutral-100 text-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
+              title="Abrir / cerrar panel de práctica"
             >
-              <Clock className="w-3 h-3 stroke-[2.5]" />
-              <span className="font-bold tabular-nums">{timeLeft.toFixed(1)}s</span>
-              {feedback && feedback.passed && (feedback.speedBonus ?? 0) > 0 && (
-                <span className="text-[9px] font-bold bg-neutral-200 text-black border border-black px-0.5">
-                  +{feedback.speedBonus}%
-                </span>
-              )}
-            </div>
-
-            {/* Banner sombras si aplica */}
-            {challenge.isShadowLevel && (
-              <div className="absolute bottom-1.5 left-1.5 right-1.5 bg-black text-white text-[9px] font-mono px-2 py-0.5 border border-white pointer-events-none z-10 truncate">
-                ☀️ {challenge.hasGroundGrid ? "Sombra con suelo guía" : "Sombra libre"}
-              </div>
-            )}
+              <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Panel</span>
+            </button>
+          )}
+          <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
+            <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
+              {isDailyChallenge && dailyProgress
+                ? `RETO ${dailyProgress.current}/${dailyProgress.total}`
+                : (nodeCode || activeLesson?.code || '1.1')}
+            </span>
+            <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[110px] sm:max-w-[160px]">
+              {activeLesson?.title || (challenge.isShadowLevel ? 'Sombras' : 'Prisma 3D')}
+            </span>
           </div>
+        </div>
 
-          {/* BARRA LATERAL ERGONÓMICA EN MÓVIL HORIZONTAL (DERECHA) */}
+        {/* Info secundaria: Semilla y Nivel de Sombras si aplica */}
+        <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
+          <span className="text-[9px] sm:text-[10px] font-bold bg-neutral-100 px-1.5 py-0.5 border border-black">
+            #{challenge.seed}
+          </span>
+          {challenge.isShadowLevel && (
+            <span className="text-[9px] sm:text-[10px] font-bold text-neutral-700 truncate max-w-[160px]">
+              {challenge.hasGroundGrid ? '☀️ Suelo Guía' : '☀️ Sombra Libre'}
+            </span>
+          )}
+          {/* Toggle de Modo Táctil (Trazo vs Mover) */}
+          <div className="flex items-center border border-black ml-auto">
+            <button
+              type="button"
+              onClick={() => setTouchMode('draw')}
+              className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
+                touchMode === 'draw' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
+              }`}
+              title="Modo Trazo: dibuja aristas"
+            >
+              <Pen className="w-2.5 h-2.5 inline mr-0.5" />
+              Trazo
+            </button>
+            <button
+              type="button"
+              onClick={() => setTouchMode('scroll')}
+              className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
+                touchMode === 'scroll' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
+              }`}
+              title="Modo Mover: desplazar con 1 dedo"
+            >
+              <Hand className="w-2.5 h-2.5 inline mr-0.5" />
+              Mover
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. HUD SUPERIOR DERECHO: TEMPORIZADOR O CUADRADITO CON LA NOTA (SIN MENSAJE) */}
+      {!feedback ? (
+        <div className="absolute top-3 right-3 sm:right-6 z-20 pointer-events-auto font-mono text-xs select-none">
           <div
-            className="w-44 sm:w-48 shrink-0 flex flex-col justify-between border-2 border-black bg-white shadow-[3px_3px_0px_#000000] p-1.5 select-none font-mono"
-            style={{
-              height: 'min(calc(100vh - 46px), calc(100dvh - 46px), 360px)',
-            }}
+            className={`border-2 border-black p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 ${
+              timeLeft <= 5 && isTimerRunning ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
+            }`}
           >
-            {/* SECCIÓN SUPERIOR */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between gap-1 pb-1 border-b border-black">
-                {onToggleSidebar && (
-                  <button
-                    type="button"
-                    onClick={onToggleSidebar}
-                    className="bg-white hover:bg-neutral-100 text-black px-1.5 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] font-bold flex items-center gap-1 cursor-pointer active:scale-95"
-                    title="Abrir panel"
-                  >
-                    <PanelLeft className="w-3 h-3 stroke-[2.5]" />
-                    <span>Panel</span>
-                  </button>
-                )}
-                <span className="text-[9px] font-bold bg-neutral-100 px-1 py-0.5 border border-black truncate">
-                  {isDailyChallenge && dailyProgress
-                    ? `Reto ${dailyProgress.current}/${dailyProgress.total}`
-                    : (nodeCode || activeLesson?.code || '1.1')}
-                </span>
-              </div>
-
-              {/* Contador de aristas */}
-              <div className="flex items-center justify-between text-[10px] font-bold text-neutral-700 bg-neutral-50 px-1.5 py-0.5 border border-neutral-300">
-                <span>Aristas:</span>
-                <span className="tabular-nums">
-                  {countDetectedAristas(strokes)} / {challenge.targetEdges.length}
-                </span>
-              </div>
-
-              {/* Herramientas: Deshacer, Borrar, Comentar, Reporte */}
-              <div className="grid grid-cols-4 gap-1">
-                <button
-                  onClick={undoLastStroke}
-                  disabled={strokes.length === 0 || showSolution}
-                  className="btn-ink-outline p-1 text-xs font-mono disabled:opacity-30 cursor-pointer flex items-center justify-center shadow-[1px_1px_0px_#000000]"
-                  title="Deshacer (Ctrl+Z)"
-                >
-                  <Undo2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={clearStrokes}
-                  disabled={strokes.length === 0 || showSolution}
-                  className="btn-ink-outline p-1 text-xs font-mono disabled:opacity-30 cursor-pointer hover:bg-red-50 hover:text-red-700 flex items-center justify-center shadow-[1px_1px_0px_#000000]"
-                  title="Borrar todo"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={isRecording ? onOpenRecordModal : onToggleRecording}
-                  className={`btn-ink-outline p-1 text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-[1px_1px_0px_#000000] ${
-                    isRecording ? 'bg-black text-white' : 'bg-white text-black'
-                  }`}
-                  title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar.` : "Activar grabación (Modo Récord)"}
-                >
-                  <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400'}`} />
-                  <span className="text-[9px] ml-0.5">{isRecording ? `REC(${recordedCount})` : 'REC'}</span>
-                </button>
-                <button
-                  onClick={() => setShowQuickCommentModal(true)}
-                  className={`btn-ink-outline p-1 text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-[1px_1px_0px_#000000] ${
-                    userNote.trim() ? 'bg-black text-white' : ''
-                  }`}
-                  title={userNote.trim() ? `Nota: "${userNote}"` : "Añadir comentario a este cubo (Modo Récord)"}
-                >
-                  <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
-                </button>
-                <button
-                  onClick={handleOpenReportModal}
-                  className="btn-ink-outline p-1 text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-[1px_1px_0px_#000000]"
-                  title="Reporte de anomalía"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
-                </button>
-              </div>
-
-              {/* Capas dibujo y solución cuando está resuelto */}
-              {feedback && (
-                <div className="grid grid-cols-2 gap-1 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowUserDrawing((prev) => !prev)}
-                    className={`p-1 text-[10px] font-mono font-bold border border-black flex items-center justify-center gap-0.5 ${
-                      showUserDrawing ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
-                    }`}
-                    title={showUserDrawing ? "Ocultar trazo" : "Mostrar trazo"}
-                  >
-                    {showUserDrawing ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                    <span>Trazo</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowParametricSolution((prev) => !prev)}
-                    className={`p-1 text-[10px] font-mono font-bold border border-black flex items-center justify-center gap-0.5 ${
-                      showParametricSolution ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
-                    }`}
-                    title={showParametricSolution ? "Ocultar solución" : "Mostrar solución"}
-                  >
-                    {showParametricSolution ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                    <span>Solución</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* SECCIÓN INFERIOR */}
-            <div className="pt-1 border-t border-neutral-300">
-              {!feedback ? (
-                <button
-                  onClick={handleValidateClick}
-                  disabled={countDetectedAristas(strokes) === 0}
-                  className="w-full btn-ink py-2 text-xs font-mono uppercase font-bold disabled:opacity-25 disabled:pointer-events-none cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center justify-center gap-1"
-                  title="Comprobar perspectiva (Enter)"
-                >
-                  <span>Comprobar</span>
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                </button>
-              ) : (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-bold bg-neutral-100 p-1 border border-black">
-                    <span className="text-[10px] text-neutral-600">Nota:</span>
-                    <span className="font-black text-sm">{feedback.totalScore ?? feedback.score}%</span>
-                  </div>
-                  <button
-                    onClick={onNextCube}
-                    className="w-full btn-ink py-2 text-xs font-mono uppercase font-bold flex items-center justify-center gap-1 cursor-pointer shadow-[2px_2px_0px_#000000]"
-                    title="Siguiente ejercicio"
-                  >
-                    <span>Siguiente</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
+            <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span className="font-bold tabular-nums text-sm">{timeLeft.toFixed(1)}s</span>
+            {!isTimerRunning && strokes.length === 0 && (
+              <span className="text-[9px] uppercase font-bold tracking-tighter opacity-70 hidden sm:inline">
+                · Arranca al trazar
+              </span>
+            )}
           </div>
         </div>
       ) : (
-        /* ============================================================ */
-        /* MODO ESTÁNDAR (PORTRAIT MÓVIL, TABLET, ESCRITORIO)           */
-        /* ============================================================ */
-        <div
-          className="flex flex-col items-center select-none w-full mx-auto"
-          style={{
-            width: 'min(100%, 680px, max(280px, calc((100vh - 180px) * 600 / 540)))',
-          }}
-        >
-          {/* Contenedor responsivo del lienzo: aspecto 600/540 bloqueado 1:1 sin deformación ni márgenes invisibles */}
-          <div
-            data-canvas-zone="true"
-            className="relative border-4 border-black bg-white shadow-[4px_4px_0px_#000000] w-full aspect-[600/540] overflow-hidden"
-          >
-        {/* Barra superior de progreso del temporizador */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-neutral-200 pointer-events-none z-10">
-          <div
-            className={`h-full transition-all duration-100 ${
-              timeLeft <= 5 && isTimerRunning ? 'bg-black animate-pulse' : 'bg-neutral-800'
-            }`}
-            style={{ width: `${(timeLeft / TOTAL_COUNTDOWN_SECONDS) * 100}%` }}
-          />
-        </div>
-
-        <canvas
-          ref={canvasRef}
-          width={600}
-          height={540}
-          className={`block w-full h-full ${
-            touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
-          }`}
-          style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-        />
-
-        <div className="absolute top-2.5 left-2 text-[10px] font-mono uppercase bg-white border border-black px-1.5 py-0.5 pointer-events-none shadow-[1px_1px_0px_#000000] z-10">
-          DESAFÍO #{challenge.seed}
-        </div>
-
-        {/* Temporizador con bonus por velocidad */}
-        <div
-          className={`absolute top-2.5 right-2 border-2 border-black px-2 py-0.5 font-mono text-xs transition-colors duration-200 pointer-events-none shadow-[2px_2px_0px_#000000] z-10 flex items-center gap-1.5 ${
-            timeLeft <= 5 && isTimerRunning
-              ? 'bg-black text-white animate-pulse'
-              : 'bg-white text-black'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span className="font-bold tabular-nums">
-            {timeLeft.toFixed(1)}s
+        <div className="absolute top-3 right-3 sm:right-6 z-20 flex flex-col items-center justify-center bg-white border-2 border-black p-2.5 sm:p-3 shadow-[3px_3px_0px_#000000] font-mono pointer-events-auto min-w-[76px] sm:min-w-[84px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
+          <span className="text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+            Nota
           </span>
-          {!isTimerRunning && strokes.length === 0 && !feedback && (
-            <span className="text-[9px] uppercase font-bold tracking-tighter opacity-70 hidden sm:inline">
-              · Arranca al trazar
-            </span>
-          )}
-          {feedback && feedback.passed && (feedback.speedBonus ?? 0) > 0 && (
-            <span className="text-[10px] font-bold bg-neutral-200 text-black border border-black px-1">
-              +{feedback.speedBonus}% vel.
-            </span>
-          )}
-        </div>
-
-        {/* Banner didáctico específico para el nivel de sombras */}
-        {challenge.isShadowLevel && (
-          <div className="absolute bottom-2 left-2 right-2 bg-black text-white text-[11px] font-mono px-2.5 py-1 flex items-center justify-between border border-white shadow-[2px_2px_0px_#000000] pointer-events-none z-10">
-            <span className="truncate">
-              {challenge.hasGroundGrid
-                ? "☀️ 4.1 · SOMBRA CON SUELO GUÍA: Proyecta los rayos apoyándote en el mallado del suelo"
-                : "☀️ 4.2 · SOMBRA LIBRE: Proyecta la sombra a mano alzada en perspectiva pura"}
-            </span>
-            <span className="font-bold shrink-0 hidden sm:inline ml-2 text-neutral-300">
-              {challenge.hasGroundGrid ? "NIVEL 4.1" : "NIVEL 4.2"}
-            </span>
-          </div>
-        )}
-
-        {/* Selector de modo táctil móvil: Lápiz (dibujar) vs Mano (desplazar con 1 dedo) */}
-        <div className={`absolute z-20 flex items-center border-2 border-black bg-white shadow-[2px_2px_0px_#000000] ${
-          challenge.isShadowLevel ? 'top-10 left-2' : 'bottom-2.5 right-2'
-        }`}>
-          <button
-            type="button"
-            onClick={() => setTouchMode('draw')}
-            className={`px-2 py-1 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer ${
-              touchMode === 'draw'
-                ? 'bg-black text-white'
-                : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
+          <span className="text-2xl sm:text-3xl font-black leading-none my-1">
+            {feedback.totalScore ?? feedback.score}%
+          </span>
+          <span
+            className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-black ${
+              feedback.passed ? 'bg-black text-white' : 'bg-white text-neutral-700'
             }`}
-            title="Modo Trazo: dibuja aristas con el dedo o lápiz táctil"
           >
-            <Pen className="w-3 h-3 stroke-[2.5]" />
-            <span className="text-[10px] sm:text-xs">Trazo</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTouchMode('scroll')}
-            className={`px-2 py-1 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer ${
-              touchMode === 'scroll'
-                ? 'bg-black text-white'
-                : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
-            }`}
-            title="Modo Mover: desliza libremente la pantalla hacia abajo con 1 dedo"
-          >
-            <Hand className="w-3 h-3 stroke-[2.5]" />
-            <span className="text-[10px] sm:text-xs">Mover (1 dedo)</span>
-          </button>
+            {feedback.passed ? 'Aprobado' : 'Reintentar'}
+          </span>
         </div>
+      )}
 
-        {/* Indicador visual cuando el modo Mover con 1 dedo está activo */}
-        {touchMode === 'scroll' && !feedback && (
-          <div className="absolute inset-x-2 top-11 pointer-events-none z-10 flex justify-center">
-            <div className="bg-black/90 text-white border border-white px-2.5 py-1 shadow-[2px_2px_0px_#000000] text-[11px] font-mono font-bold flex items-center gap-1.5 animate-in fade-in duration-200">
-              <Hand className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Desliza con 1 dedo para mover la pantalla</span>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* 3. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR */}
+      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
+        <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-24px)] overflow-x-auto">
+          {!feedback ? (
+            <>
+              {/* Contador de aristas */}
+              <span className="text-[10px] sm:text-[11px] font-bold text-neutral-700 bg-neutral-100 px-2 py-1 border border-black shadow-[1px_1px_0px_#000000] tabular-nums whitespace-nowrap">
+                {countDetectedAristas(strokes)}/{challenge.targetEdges.length} {challenge.isShadowLevel ? 'sombras' : 'aristas'}
+              </span>
 
-      {/* BARRA DE HERRAMIENTAS Y ACCIONES (TODO DENTRO DEL MARCO DEL LIENZO) */}
-      <div className="w-full mt-2 border-2 border-black bg-white p-2 shadow-[3px_3px_0px_#000000] min-w-0">
-        {!feedback ? (
-          <div className="flex items-center justify-between gap-1.5 sm:gap-2 w-full">
-            {/* Lado Izquierdo: Herramientas de dibujo */}
-            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+              {/* Deshacer */}
               <button
+                type="button"
                 onClick={undoLastStroke}
-                disabled={strokes.length === 0 || showSolution}
-                className="btn-ink-outline px-2 py-1 text-xs font-mono disabled:opacity-30 cursor-pointer flex items-center gap-1 shrink-0 shadow-[1px_1px_0px_#000000]"
-                title="Deshacer último trazo (Ctrl+Z)"
+                disabled={strokes.length === 0}
+                className="btn-ink-outline p-1.5 text-xs font-bold disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-[1px_1px_0px_#000000]"
+                title="Deshacer trazo (Ctrl+Z)"
               >
-                <Undo2 className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Deshacer</span>
+                <Undo2 className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
+
+              {/* Borrar */}
               <button
+                type="button"
                 onClick={clearStrokes}
-                disabled={strokes.length === 0 || showSolution}
-                className="btn-ink-outline px-2 py-1 text-xs font-mono disabled:opacity-30 cursor-pointer flex items-center gap-1 shrink-0 shadow-[1px_1px_0px_#000000]"
+                disabled={strokes.length === 0}
+                className="btn-ink-outline p-1.5 text-xs font-bold disabled:opacity-30 disabled:pointer-events-none cursor-pointer hover:bg-red-50 hover:text-red-700 shadow-[1px_1px_0px_#000000]"
                 title="Borrar todos los trazos"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Borrar</span>
+                <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
-              <span className="text-[11px] font-mono text-neutral-600 pl-0.5 font-bold shrink-0">
-                {countDetectedAristas(strokes)}/{challenge.targetEdges.length}
-                <span className="hidden lg:inline font-normal"> {challenge.isShadowLevel ? 'sombras' : 'aristas'}</span>
-              </span>
-            </div>
 
-            {/* Lado Derecho: REC, Reporte y Comprobar */}
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Modo Récord */}
               <button
                 type="button"
                 onClick={isRecording ? onOpenRecordModal : onToggleRecording}
-                className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors ${
+                className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors whitespace-nowrap ${
                   isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
                 }`}
                 title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
@@ -1368,193 +1116,110 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
                 <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
               </button>
 
+              {/* Reportar anomalía */}
               <button
+                type="button"
                 onClick={handleOpenReportModal}
-                className="btn-ink-outline p-1.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-transform active:scale-95 shadow-[1px_1px_0px_#000000] shrink-0"
-                title="Escribir nota y descargar reporte (JSON / Copiar)"
+                className="p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] bg-white hover:bg-neutral-100 flex items-center justify-center transition-colors"
+                title="Reportar anomalía en este cubo"
               >
-                <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+                <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
 
+              {/* Botón principal: COMPROBAR */}
               <button
+                type="button"
                 onClick={handleValidateClick}
                 disabled={countDetectedAristas(strokes) === 0}
-                className="btn-ink px-2.5 sm:px-3.5 py-1.5 text-xs font-mono uppercase font-bold disabled:opacity-25 disabled:pointer-events-none disabled:cursor-not-allowed cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center gap-1 shrink-0"
-                title={
-                  countDetectedAristas(strokes) === 0
-                    ? "Dibuja al menos una arista antes de comprobar"
-                    : challenge.isShadowLevel
-                    ? "Comprobar proyección de sombra (Enter)"
-                    : "Comprobar perspectiva (Enter)"
-                }
+                className="btn-ink px-3 sm:px-4 py-1.5 text-xs font-bold uppercase disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap"
+                title={countDetectedAristas(strokes) === 0 ? "Dibuja al menos una arista antes de comprobar" : "Comprobar perspectiva (Enter)"}
               >
                 <span>Comprobar</span>
-                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                <Check className="w-4 h-4 stroke-[3]" />
               </button>
-            </div>
-          </div>
-        ) : (
-          /* DOS FILAS ESTRUCTURADAS AL RESOLVER: NUNCA SE SALE DEL CUADRO DE DIBUJO */
-          <div className="flex flex-col gap-1.5 w-full">
-            {/* Fila 1: Contador de aristas y Botones para Mostrar/Ocultar Dibujo y Solución */}
-            <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-neutral-200 w-full">
-              <span className="text-[11px] font-mono font-bold text-neutral-700 bg-neutral-100 px-1.5 sm:px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] shrink-0">
-                {countDetectedAristas(strokes)}/{challenge.targetEdges.length}
-                <span className="hidden sm:inline"> {challenge.isShadowLevel ? 'aristas sombra' : 'aristas'}</span>
+            </>
+          ) : (
+            <>
+              {/* Contador de aristas */}
+              <span className="text-[10px] sm:text-[11px] font-bold text-neutral-700 bg-neutral-100 px-2 py-1 border border-black shadow-[1px_1px_0px_#000000] tabular-nums whitespace-nowrap">
+                {countDetectedAristas(strokes)}/{challenge.targetEdges.length} aristas
               </span>
 
-              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                {/* Botón Ver/Ocultar Mi Dibujo */}
-                <button
-                  type="button"
-                  onClick={() => setShowUserDrawing((prev) => !prev)}
-                  className={`px-2 py-0.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] border border-black ${
-                    showUserDrawing
-                      ? 'bg-black text-white hover:bg-neutral-800'
-                      : 'bg-neutral-100 text-neutral-500 border-neutral-400 hover:bg-neutral-200'
-                  }`}
-                  title={showUserDrawing ? 'Ocultar mi dibujo (D)' : 'Mostrar mi dibujo (D)'}
-                >
-                  {showUserDrawing ? (
-                    <Eye className="w-3.5 h-3.5 stroke-[2.5]" />
-                  ) : (
-                    <EyeOff className="w-3.5 h-3.5 stroke-[2]" />
-                  )}
-                  <span className={showUserDrawing ? '' : 'line-through opacity-75'}>
-                    <span className="hidden sm:inline">Mi dibujo</span>
-                    <span className="sm:hidden">Dibujo</span>
-                  </span>
-                </button>
-
-                {/* Botón Ver/Ocultar Solución Paramétrica */}
-                <button
-                  type="button"
-                  onClick={() => setShowParametricSolution((prev) => !prev)}
-                  className={`px-2 py-0.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] border border-black ${
-                    showParametricSolution
-                      ? 'bg-black text-white hover:bg-neutral-800'
-                      : 'bg-neutral-100 text-neutral-500 border-neutral-400 hover:bg-neutral-200'
-                  }`}
-                  title={showParametricSolution ? 'Ocultar solución paramétrica (S)' : 'Mostrar solución paramétrica (S)'}
-                >
-                  {showParametricSolution ? (
-                    <Eye className="w-3.5 h-3.5 stroke-[2.5]" />
-                  ) : (
-                    <EyeOff className="w-3.5 h-3.5 stroke-[2]" />
-                  )}
-                  <span className={showParametricSolution ? '' : 'line-through opacity-75'}>
-                    <span className="hidden sm:inline">Solución</span>
-                    <span className="sm:hidden">Solución</span>
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* Fila 2: Diagnóstico/Reporte a la izquierda y Botón Siguiente a la derecha */}
-            <div className="flex items-center justify-between gap-1.5 pt-0.5 w-full">
-              <div className="flex items-center gap-1.5 shrink-0">
-                {/* Botón Modo Récord tras evaluar */}
-                <button
-                  type="button"
-                  onClick={isRecording ? onOpenRecordModal : onToggleRecording}
-                  className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors ${
-                    isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-                  }`}
-                  title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
-                >
-                  <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
-                  <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
-                </button>
-
-                {/* Botón Rápido de Comentario (Modo Récord) */}
-                <button
-                  onClick={() => setShowQuickCommentModal(true)}
-                  className={`btn-ink-outline p-1.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-transform active:scale-95 shadow-[1px_1px_0px_#000000] shrink-0 ${
-                    userNote.trim() ? 'bg-black text-white' : ''
-                  }`}
-                  title={userNote.trim() ? `Comentario guardado: "${userNote}"` : "Añadir comentario a este cubo (Modo Récord)"}
-                >
-                  <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
-                </button>
-
-                {/* Botón de Reporte */}
-                <button
-                  onClick={handleOpenReportModal}
-                  className="btn-ink-outline p-1.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-transform active:scale-95 shadow-[1px_1px_0px_#000000] shrink-0"
-                  title="Escribir nota y descargar reporte (JSON / Copiar)"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
-                </button>
-
-                {/* Badge de puntuación */}
-                <div className="flex items-center gap-1 border-2 border-black bg-neutral-100 px-2 py-1 font-mono text-xs font-bold shadow-[1px_1px_0px_#000000] shrink-0">
-                  {feedback.passed ? (
-                    <CheckCircle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
-                  ) : (
-                    <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
-                  )}
-                  <span>{feedback.totalScore ?? feedback.score}%</span>
-                  {feedback.passed && (feedback.speedBonus ?? 0) > 0 && (
-                    <span
-                      className="text-[10px] bg-black text-white px-1 ml-0.5 flex items-center gap-0.5"
-                      title={`Base: ${feedback.score}% + Bonus velocidad: +${feedback.speedBonus}%`}
-                    >
-                      <Zap className="w-2.5 h-2.5 fill-white text-white shrink-0" />
-                      <span>+{feedback.speedBonus}%</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Botón Siguiente alineado a la derecha sin desbordar el cuadro */}
+              {/* Ver/Ocultar Mi dibujo */}
               <button
+                type="button"
+                onClick={() => setShowUserDrawing((prev) => !prev)}
+                className={`p-1.5 text-xs font-bold border border-black cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
+                  showUserDrawing ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
+                }`}
+                title={showUserDrawing ? 'Ocultar mi dibujo (D)' : 'Mostrar mi dibujo (D)'}
+              >
+                {showUserDrawing ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              </button>
+
+              {/* Ver/Ocultar Solución */}
+              <button
+                type="button"
+                onClick={() => setShowParametricSolution((prev) => !prev)}
+                className={`px-2 py-1 text-xs font-bold border border-black flex items-center gap-1 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
+                  showParametricSolution ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                }`}
+                title={showParametricSolution ? 'Ocultar solución paramétrica (S)' : 'Mostrar solución paramétrica (S)'}
+              >
+                {showParametricSolution ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                <span className="hidden md:inline text-[10px]">Solución</span>
+              </button>
+
+              {/* Modo Récord */}
+              <button
+                type="button"
+                onClick={isRecording ? onOpenRecordModal : onToggleRecording}
+                className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors whitespace-nowrap ${
+                  isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+                }`}
+                title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
+              >
+                <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
+                <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
+              </button>
+
+              {/* Comentario Récord */}
+              <button
+                type="button"
+                onClick={() => setShowQuickCommentModal(true)}
+                className={`p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center justify-center transition-colors ${
+                  userNote.trim() ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+                }`}
+                title={userNote.trim() ? `Comentario: "${userNote}"` : "Añadir comentario a este cubo (Modo Récord)"}
+              >
+                <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+
+              {/* Reportar anomalía */}
+              <button
+                type="button"
+                onClick={handleOpenReportModal}
+                className="p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] bg-white hover:bg-neutral-100 flex items-center justify-center transition-colors"
+                title="Escribir nota y descargar reporte"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+
+              {/* Botón principal: SIGUIENTE */}
+              <button
+                type="button"
                 onClick={onNextCube}
-                className="btn-ink px-3 sm:px-4 py-1.5 text-xs font-mono uppercase font-bold flex items-center gap-1 cursor-pointer shadow-[2px_2px_0px_#000000] shrink-0"
+                className="btn-ink px-3 sm:px-4 py-1.5 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] shrink-0 whitespace-nowrap"
                 title="Siguiente ejercicio (Enter)"
               >
                 <span>Siguiente</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
               </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )}
-
-      {/* Feedback técnico si se ha comprobado */}
-      {feedback && (
-        <div className="w-full mt-1.5 px-3 py-1.5 border-2 border-black bg-neutral-50 flex flex-col gap-0.5 text-xs shadow-[2px_2px_0px_#000000] min-w-0 max-w-full overflow-hidden">
-          <div className="flex items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center gap-2 truncate min-w-0 flex-1">
-              <span
-                className={`text-[10px] font-mono px-1.5 py-0.2 font-bold uppercase shrink-0 ${
-                  feedback.passed
-                    ? 'bg-black text-white'
-                    : 'bg-white text-black border border-black'
-                }`}
-              >
-                {feedback.passed ? 'Aprobado ✓' : 'No Superado'}
-              </span>
-              <span className="font-bold font-display truncate">{feedback.mainIssueMessage}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[10px] font-mono shrink-0">
-              {feedback.passed && (feedback.speedBonus ?? 0) > 0 ? (
-                <span className="bg-neutral-200 border border-black px-1.5 py-0.5 font-bold flex items-center gap-1">
-                  <Zap className="w-3 h-3 fill-black text-black shrink-0" />
-                  <span className="hidden sm:inline">Base {feedback.score}% + Vel. +{feedback.speedBonus}% ({feedback.timeRemainingSeconds?.toFixed(1)}s)</span>
-                  <span className="sm:hidden">+{feedback.speedBonus}% vel</span>
-                </span>
-              ) : (
-                <span className="text-neutral-500">Mínimo: 75%</span>
-              )}
-            </div>
-          </div>
-          <span className="text-neutral-600 text-[11px] font-sans truncate">
-            {feedback.tipMessage}
-          </span>
+            </>
+          )}
         </div>
-      )}
+      </div>
+
 
       {/* Modal Rápido de Comentario para Modo Récord */}
       <QuickCommentModal
@@ -1716,35 +1381,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
               </button>
             </div>
           </div>
-        </div>
-      )}
-      {/* Botón flotante móvil de desplazamiento rápido con 1 dedo (solo en vertical) */}
-      {!effectiveIsLandscape && (
-        <div className="fixed bottom-4 right-4 z-40 sm:hidden">
-          <button
-            type="button"
-            onClick={() => {
-              if (isScrolledDown) {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              } else {
-                window.scrollBy({ top: 380, behavior: 'smooth' });
-              }
-            }}
-            className="btn-ink px-2.5 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 shadow-[2px_2px_0px_#000000] cursor-pointer active:scale-95"
-            title={isScrolledDown ? "Volver arriba al lienzo" : "Bajar a los controles"}
-          >
-            {isScrolledDown ? (
-              <>
-                <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span className="text-[11px]">Lienzo</span>
-              </>
-            ) : (
-              <>
-                <ArrowDown className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span className="text-[11px]">Controles</span>
-              </>
-            )}
-          </button>
         </div>
       )}
     </div>

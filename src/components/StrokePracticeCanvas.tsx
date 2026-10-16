@@ -108,7 +108,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
       onOpenMasteryInfo,
       onOpenPhaseInfo,
       onPhaseChange,
-      isLandscapeMobile: propIsLandscapeMobile,
+      isLandscapeMobile: _propIsLandscapeMobile,
       onToggleSidebar,
       nodeCode,
       nodeTitle,
@@ -127,26 +127,6 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
       externalSeed !== undefined ? externalSeed : Math.floor(Math.random() * 90000 + 10000)
     );
 
-    const [internalIsLandscape, setInternalIsLandscape] = useState<boolean>(() => {
-      if (typeof window === 'undefined') return false;
-      return window.innerWidth > window.innerHeight && (window.innerHeight <= 520 || (window.innerWidth <= 960 && window.innerHeight <= 560));
-    });
-
-    useEffect(() => {
-      const handleResize = () => {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        setInternalIsLandscape(w > h && (h <= 520 || (w <= 960 && h <= 560)));
-      };
-      window.addEventListener('resize', handleResize);
-      window.addEventListener('orientationchange', handleResize);
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        window.removeEventListener('orientationchange', handleResize);
-      };
-    }, []);
-
-    const effectiveIsLandscape = propIsLandscapeMobile !== undefined ? propIsLandscapeMobile : internalIsLandscape;
 
     const [challenge, setChallenge] = useState<ProceduralStrokeChallenge>(() => {
       const ch = generateStrokeChallenge(exerciseDef, challengeSeed, 750, 500);
@@ -439,26 +419,8 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // 1. Fondo Papel Blanco Paplitz
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, w, h);
-
-      // 2. Trama milimétrica sutil técnica
-      ctx.strokeStyle = '#F0F0F0';
-      ctx.lineWidth = 1;
-      const gridStep = 20;
-      for (let x = 0; x < w; x += gridStep) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
-        ctx.stroke();
-      }
-      for (let y = 0; y < h; y += gridStep) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
-      }
+      // 1. Limpiar lienzo manteniendo transparencia sobre la cuadrícula milimétrica continua
+      ctx.clearRect(0, 0, w, h);
 
       // 3. Guías y Geometrías del Reto
       // A. Marco delimitador de trama
@@ -1147,534 +1109,195 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
     );
 
     return (
-      <div className="w-full flex flex-col items-center justify-center">
-        {effectiveIsLandscape ? (
-          /* ============================================================ */
-          /* MODO MÓVIL HORIZONTAL (LANDSCAPE COMPACTO): LIENZO + TOOLBAR */
-          /* ============================================================ */
-          <div className="w-full h-full flex flex-row items-center justify-center gap-2 sm:gap-3 max-w-full select-none overflow-hidden font-mono">
-            {/* LIENZO 750x500 ESCALADO A MÁXIMA ALTURA SIN DISTORSIÓN */}
-            <div
-              className="relative aspect-[750/500] border-2 border-black bg-white shadow-[3px_3px_0px_#000000] select-none touch-none overflow-hidden shrink-0"
-              style={{
-                height: 'min(calc(100vh - 46px), calc(100dvh - 46px), 360px)',
-                width: 'auto',
-                maxWidth: 'calc(100vw - 220px)',
-              }}
-            >
-              <canvas
-                ref={canvasRef}
-                width={750}
-                height={500}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-                className="block w-full h-full cursor-crosshair touch-none select-none"
-              />
+      <div className="relative w-full h-full overflow-hidden flex items-center justify-center select-none bg-white pattern-grid-paper">
+        {/* LIENZO DE PRÁCTICA (Resolución interna 750x500 con ratio exacto para evitar deformaciones) */}
+        <canvas
+          ref={canvasRef}
+          width={750}
+          height={500}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="block max-w-full max-h-full aspect-[750/500] cursor-crosshair touch-none select-none z-10"
+        />
 
-              {/* HUD SUPERIOR IZQUIERDO: RETO DIARIO O MAESTRÍA Y FASE CINEMÁTICA */}
-              <div className="absolute top-1.5 left-1.5 z-20 flex flex-col gap-1 p-1 bg-white/95 border border-black shadow-[1px_1px_0px_#000000] font-mono pointer-events-auto select-none text-[10px]">
-                {isDailyChallenge && dailyProgress ? (
-                  <div className="flex items-center gap-1 text-[10px]">
-                    <span className="bg-black text-white px-1 py-0.2 text-[8px] font-bold uppercase shadow-[1px_1px_0px_#000]">
-                      Reto
-                    </span>
-                    <span className="font-bold text-[10px] text-black">
-                      Línea {dailyProgress.current}/{dailyProgress.total}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    {/* Maestría: M [✓][✓][ ] 0/3 [i] */}
-                    <div className={`flex items-center gap-1 text-[10px] transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
-                      <span className="font-bold text-neutral-600">M:</span>
-                      <div className="flex items-center gap-0.5">
-                        {[0, 1, 2].map((i) => {
-                          const isFilled = i < (masteryStreak ?? 0);
-                          const isJustFilled = justEarnedMastery && i === (masteryStreak ?? 0) - 1;
-                          return (
-                            <span
-                              key={i}
-                              className={`w-3 h-3 border border-black flex items-center justify-center transition-all ${
-                                isJustFilled
-                                  ? 'bg-black text-white animate-mastery-pop scale-110 z-10'
-                                  : isFilled
-                                  ? 'bg-black text-white'
-                                  : 'bg-neutral-100 text-transparent'
-                              }`}
-                            >
-                              {isFilled && <Check className="w-2 h-2 stroke-[3] text-white" />}
-                            </span>
-                          );
-                        })}
-                      </div>
-                      <span className={`font-bold tabular-nums ${justEarnedMastery ? 'text-black font-black' : ''}`}>
-                        {masteryStreak ?? 0}/3
-                      </span>
-                      {onOpenMasteryInfo && (
-                        <button
-                          type="button"
-                          onClick={onOpenMasteryInfo}
-                          className="w-3 h-3 border border-black flex items-center justify-center text-[8px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
-                          title={`Información de Maestría (Racha de 3 aciertos ≥${targetMasteryScore}%)`}
-                        >
-                          i
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Fase de Motricidad: F [1][2][3] [i] */}
-                    <div className="flex items-center gap-1 pt-0.5 border-t border-neutral-300 text-[10px]">
-                      <span className="font-bold text-neutral-600">F:</span>
-                      <div className="flex items-center gap-0.5">
-                        {([1, 2, 3] as const).map((ph) => (
-                          <button
-                            key={ph}
-                            type="button"
-                            onClick={() => onPhaseChange && onPhaseChange(ph)}
-                            className={`w-3.5 h-3.5 border border-black flex items-center justify-center text-[8px] font-bold cursor-pointer transition-colors ${
-                              currentPhase === ph
-                                ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
-                                : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                            }`}
-                            title={`Fase ${ph}: ${ph === 1 ? 'Precisión (extremos, ≥80%)' : ph === 2 ? 'Fluidez (velocidad constante, ≥85%)' : 'Velocidad (inercia ágil, ≥90%)'}`}
-                          >
-                            {ph}
-                          </button>
-                        ))}
-                      </div>
-                      {onOpenPhaseInfo && (
-                        <button
-                          type="button"
-                          onClick={onOpenPhaseInfo}
-                          className="w-3 h-3 border border-black flex items-center justify-center text-[8px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
-                          title="Información de Fases de Motricidad"
-                        >
-                          i
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* HUD SUPERIOR DERECHO: NOTA SI ESTÁ EVALUADO */}
-              {evaluation && (
-                <div className="absolute top-1.5 right-1.5 z-20 flex flex-col items-center bg-white border border-black p-1 shadow-[2px_2px_0px_#000000] font-mono pointer-events-auto">
-                  <span className="text-[8px] font-bold uppercase text-neutral-500">Nota</span>
-                  <span className="text-xl font-black leading-none my-0.5">{Math.round(evaluation.overallScore)}%</span>
-                  <span
-                    className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
-                      isMasterySuccess
-                        ? 'bg-black text-white'
-                        : evaluation.passed
-                        ? 'bg-neutral-200 text-black'
-                        : 'bg-white text-neutral-700'
-                    }`}
-                  >
-                    {isMasterySuccess ? 'Excelente' : evaluation.passed ? 'Aprobado' : 'Reintentar'}
-                  </span>
-                </div>
-              )}
-
-              {/* MINI-POPUP DE PASO DE FASE */}
-              {phaseTransitionNotice && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center p-2 select-none pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-                  <div className="bg-black text-white border-2 border-white p-2.5 shadow-[4px_4px_0px_#000000] max-w-xs w-full text-center font-mono space-y-1 animate-phase-pop pointer-events-auto">
-                    <div className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-white text-black text-[9px] font-black uppercase tracking-wider shadow-[1px_1px_0px_#000000]">
-                      <Sparkles className="w-3 h-3 stroke-[2.5]" />
-                      <span>¡Siguiente Fase!</span>
-                    </div>
-                    <h3 className="text-sm font-black font-display text-white tracking-tight uppercase">
-                      {phaseTransitionNotice.isVersionAdvance
-                        ? `VERSIÓN ${phaseTransitionNotice.toVersion}: FASE 1`
-                        : `FASE ${phaseTransitionNotice.toPhase}: ${phaseTransitionNotice.toPhase === 2 ? 'FLUIDEZ' : 'VELOCIDAD'}`}
-                    </h3>
-                    <div className="text-[9px] text-neutral-300 font-bold">
-                      {phaseTransitionNotice.isVersionAdvance
-                        ? `¡Versión ${phaseTransitionNotice.fromVersion}/${phaseTransitionNotice.totalVersions} dominada!`
-                        : `¡3/3 aciertos completados!`}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* BARRA LATERAL ERGONÓMICA EN MÓVIL HORIZONTAL (A LA DERECHA DEL LIENZO) */}
-            <div
-              className="w-48 sm:w-52 shrink-0 flex flex-col justify-between border-2 border-black bg-white shadow-[3px_3px_0px_#000000] p-1.5 select-none font-mono"
-              style={{
-                height: 'min(calc(100vh - 46px), calc(100dvh - 46px), 360px)',
-              }}
-            >
-              {/* SECCIÓN SUPERIOR: PANEL Y METADATOS */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between gap-1 pb-1 border-b border-black">
-                  {onToggleSidebar && (
-                    <button
-                      type="button"
-                      onClick={onToggleSidebar}
-                      className="bg-white hover:bg-neutral-100 text-black px-1.5 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
-                      title="Abrir panel"
-                    >
-                      <PanelLeft className="w-3 h-3 stroke-[2.5]" />
-                      <span>Panel</span>
-                    </button>
-                  )}
-                  <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
-                    <span className="text-[9px] font-bold text-neutral-500 uppercase">{nodeCode || '1.1'}</span>
-                    {nodeTitle && <span className="text-[9px] font-bold text-black truncate max-w-[85px]">{nodeTitle}</span>}
-                  </div>
-                </div>
-
-                {/* Contador de trazos */}
-                <div className="flex items-center justify-between text-[10px] font-bold text-neutral-700 bg-neutral-50 px-1.5 py-0.5 border border-neutral-300">
-                  <span>Trazos:</span>
-                  <span className="tabular-nums">
-                    {strokes.length} / {Math.max(1, challenge.minRequiredStrokes || (challenge.targetLines ? challenge.targetLines.length : 1))}
-                  </span>
-                </div>
-
-                {/* Herramientas de trazo: Undo, Clear, Trazo, Solución */}
-                <div className="grid grid-cols-4 gap-1">
-                  <button
-                    type="button"
-                    onClick={handleUndo}
-                    disabled={strokes.length === 0}
-                    className="btn-ink-outline p-1 text-xs font-bold disabled:opacity-30 cursor-pointer flex items-center justify-center shadow-[1px_1px_0px_#000000]"
-                    title="Deshacer (Ctrl+Z)"
-                  >
-                    <Undo2 className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClear}
-                    disabled={strokes.length === 0}
-                    className="btn-ink-outline p-1 text-xs font-bold disabled:opacity-30 cursor-pointer hover:bg-red-50 hover:text-red-700 flex items-center justify-center shadow-[1px_1px_0px_#000000]"
-                    title="Borrar todo"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </button>
-                  {onToggleUserStrokes && (
-                    <button
-                      type="button"
-                      onClick={onToggleUserStrokes}
-                      className={`p-1 text-xs font-bold border border-black cursor-pointer flex items-center justify-center shadow-[1px_1px_0px_#000000] ${
-                        showUserStrokes ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
-                      }`}
-                      title={showUserStrokes ? "Ocultar trazo" : "Mostrar trazo"}
-                    >
-                      {showUserStrokes ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                    </button>
-                  )}
-                  {onToggleSolution && (
-                    <button
-                      type="button"
-                      onClick={onToggleSolution}
-                      className={`p-1 text-xs font-bold border border-black cursor-pointer flex items-center justify-center shadow-[1px_1px_0px_#000000] ${
-                        showSolution ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
-                      }`}
-                      title={showSolution ? "Ocultar guía" : "Mostrar guía"}
-                    >
-                      {showSolution ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                    </button>
-                  )}
-                </div>
-
-                {/* Alternar auto-avance y reporte */}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={handleToggleAutoAdvance}
-                    className={`flex-1 py-1 px-1.5 text-[10px] font-bold border border-black flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
-                      autoAdvance ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
-                    }`}
-                    title="Auto-avance (1s)"
-                  >
-                    <Zap className={`w-3 h-3 ${autoAdvance ? 'fill-white' : ''}`} />
-                    <span>Auto: {autoAdvance ? 'ON (1s)' : 'OFF'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={isRecording ? onOpenRecordModal : onToggleRecording}
-                    className={`p-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center justify-center transition-colors ${
-                      isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-                    }`}
-                    title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar.` : "Activar grabación (Modo Récord)"}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400'}`} />
-                    <span className="text-[9px] ml-0.5">{isRecording ? `REC(${recordedCount})` : 'REC'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAutoAdvanceCountdown(null);
-                      setShowQuickCommentModal(true);
-                    }}
-                    className={`p-1 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center justify-center transition-colors ${
-                      userNote.trim() ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100'
-                    }`}
-                    title={userNote.trim() ? `Nota: "${userNote}"` : "Añadir comentario a este ejercicio (Modo Récord)"}
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowReportModal(true)}
-                    className="p-1 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] bg-white hover:bg-neutral-100 flex items-center justify-center"
-                    title="Reportar anomalía"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </button>
-                </div>
-              </div>
-
-              {/* SECCIÓN INFERIOR: ACCIÓN PRINCIPAL */}
-              <div className="pt-1 border-t border-neutral-300">
-                {!evaluation ? (
-                  <button
-                    type="button"
-                    onClick={handleEvaluate}
-                    disabled={strokes.length === 0}
-                    className="w-full btn-ink py-2 text-xs font-bold uppercase disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center justify-center gap-1.5"
-                    title="Corregir trazo (Enter)"
-                  >
-                    <span>Corregir</span>
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  </button>
-                ) : (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={handleRetry}
-                        className="flex-1 btn-ink-outline py-1 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000]"
-                        title="Reintentar este ejercicio"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        <span>Reintentar</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowStatsModal(true)}
-                        className="p-1 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] bg-white hover:bg-neutral-100 flex items-center justify-center"
-                        title="Ver estadísticas"
-                      >
-                        <Activity className="w-3.5 h-3.5 stroke-[2.5]" />
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleNext}
-                      className="w-full btn-ink py-2 text-xs uppercase font-bold flex items-center justify-center gap-1 cursor-pointer shadow-[2px_2px_0px_#000000] relative overflow-hidden"
-                      title="Siguiente ejercicio"
-                    >
-                      {autoAdvance && autoAdvanceCountdown !== null && autoAdvanceCountdown > 0 && (
-                        <div
-                          className="absolute bottom-0 left-0 top-0 bg-white/25 pointer-events-none transition-all duration-100 ease-linear"
-                          style={{
-                            width: `${((1.0 - autoAdvanceCountdown) / 1.0) * 100}%`,
-                          }}
-                        />
-                      )}
-                      <span>
-                        Siguiente
-                        {autoAdvance && autoAdvanceCountdown !== null && autoAdvanceCountdown > 0
-                          ? ` (${autoAdvanceCountdown.toFixed(1)}s)`
-                          : ''}
-                      </span>
-                      <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* ============================================================ */
-          /* MODO ESTÁNDAR (PORTRAIT MÓVIL, TABLET, ESCRITORIO)           */
-          /* ============================================================ */
-          <div
-            className="w-full flex flex-col items-center mx-auto"
-            style={{
-              maxWidth: 'min(100%, 750px, calc((100vh - 180px) * (750 / 500)))',
-            }}
-          >
-            {/* Contenedor del lienzo con aspect-ratio 750/500 estrictamente bloqueado para evitar distorsiones o achatamiento */}
-            <div
-              className="relative w-full aspect-[750/500] border-2 border-black bg-white shadow-[4px_4px_0px_#000000] select-none touch-none overflow-hidden"
-            >
-          <canvas
-            ref={canvasRef}
-            width={750}
-            height={500}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className="block w-full h-full cursor-crosshair touch-none select-none"
-          />
-
-          {/* HUD SUPERIOR IZQUIERDO: RETO DIARIO O MAESTRÍA Y FASE CINEMÁTICA */}
-          <div className="absolute top-2.5 left-2.5 z-20 flex flex-col gap-1.5 p-1.5 bg-white/95 border-2 border-black shadow-[2px_2px_0px_#000000] font-mono pointer-events-auto select-none">
-            {isDailyChallenge && dailyProgress ? (
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="bg-black text-white px-1.5 py-0.5 text-[9px] font-bold uppercase shadow-[1px_1px_0px_#000]">
-                  Reto Diario
-                </span>
-                <span className="font-bold text-[11px] text-black">
-                  Línea {dailyProgress.current}/{dailyProgress.total}
-                </span>
-              </div>
-            ) : (
-              <>
-                {/* Maestría: M [✓][✓][ ] 0/3 [i] */}
-                <div className={`flex items-center gap-1.5 text-xs transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
-                  <span className="text-[10px] font-bold text-neutral-600">M:</span>
-                  <div className="flex items-center gap-0.5">
-                    {[0, 1, 2].map((i) => {
-                      const isFilled = i < (masteryStreak ?? 0);
-                      const isJustFilled = justEarnedMastery && i === (masteryStreak ?? 0) - 1;
-                      return (
-                        <span
-                          key={i}
-                          className={`w-3.5 h-3.5 border border-black flex items-center justify-center transition-all ${
-                            isJustFilled
-                              ? 'bg-black text-white animate-mastery-pop scale-125 z-10 shadow-[0_0_0_2px_#000000]'
-                              : isFilled
-                              ? 'bg-black text-white'
-                              : 'bg-neutral-100 text-transparent'
-                          }`}
-                        >
-                          {isFilled && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
-                        </span>
-                      );
-                    })}
-                  </div>
-                  <span className={`text-[10px] font-bold tabular-nums transition-colors ${justEarnedMastery ? 'text-black font-black' : ''}`}>
-                    {masteryStreak ?? 0}/3
-                  </span>
-                  {justEarnedMastery && (
-                    <span className="bg-black text-white text-[8px] font-black px-1 border border-black animate-bounce shadow-[1px_1px_0px_#000]">
-                      +1
-                    </span>
-                  )}
-                  {onOpenMasteryInfo && (
-                    <button
-                      type="button"
-                      onClick={onOpenMasteryInfo}
-                      className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
-                      title={`Información de Maestría (Racha de 3 aciertos ≥${targetMasteryScore}%)`}
-                    >
-                      i
-                    </button>
-                  )}
-                </div>
-
-                {/* Fase de Motricidad: F [1][2][3] [i] */}
-                <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-300 text-xs">
-                  <span className="text-[10px] font-bold text-neutral-600">F:</span>
-                  <div className="flex items-center gap-1">
-                    {([1, 2, 3] as const).map((ph) => (
-                      <button
-                        key={ph}
-                        type="button"
-                        onClick={() => onPhaseChange && onPhaseChange(ph)}
-                        className={`w-4 h-4 border border-black flex items-center justify-center text-[9px] font-bold cursor-pointer transition-colors ${
-                          currentPhase === ph
-                            ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
-                            : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                        }`}
-                        title={`Fase ${ph}: ${ph === 1 ? 'Precisión (extremos, ≥80%)' : ph === 2 ? 'Fluidez (velocidad constante, ≥85%)' : 'Velocidad (inercia ágil, ≥90%)'}`}
-                      >
-                        {ph}
-                      </button>
-                    ))}
-                  </div>
-                  {onOpenPhaseInfo && (
-                    <button
-                      type="button"
-                      onClick={onOpenPhaseInfo}
-                      className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
-                      title="Información de Fases de Motricidad"
-                    >
-                      i
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* HUD SUPERIOR DERECHO: NOTA OBTENIDA EN GRANDE */}
-          {evaluation && (
-            <div className="absolute top-2.5 right-2.5 z-20 flex flex-col items-center bg-white border-2 border-black p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] font-mono pointer-events-auto">
-              <span className="text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
-                Nota
-              </span>
-              <span className="text-2xl sm:text-3xl font-black leading-none my-0.5">
-                {Math.round(evaluation.overallScore)}%
-              </span>
-              <span
-                className={`text-[9px] font-bold uppercase px-1.5 py-0.5 mt-0.5 border border-black ${
-                  isMasterySuccess
-                    ? 'bg-black text-white'
-                    : evaluation.passed
-                    ? 'bg-neutral-200 text-black'
-                    : 'bg-white text-neutral-700'
-                }`}
+        {/* 1. HUD SUPERIOR IZQUIERDO: CONTEXTO, PANEL, FASES Y MAESTRÍA */}
+        <div className="absolute top-3 left-3 sm:left-5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
+          {/* Fila superior: Botón Panel + Título/Código del Nodo */}
+          <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
+            {onToggleSidebar && (
+              <button
+                type="button"
+                onClick={onToggleSidebar}
+                className="bg-white hover:bg-neutral-100 text-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
+                title="Abrir / cerrar panel de práctica"
               >
-                {isMasterySuccess
-                  ? 'Excelente'
-                  : evaluation.passed
-                  ? 'Aprobado'
-                  : 'Reintentar'}
+                <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Panel</span>
+              </button>
+            )}
+            <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
+              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
+                {isDailyChallenge && dailyProgress ? `RETO ${dailyProgress.current}/${dailyProgress.total}` : (nodeCode || '1.1')}
               </span>
+              {nodeTitle && (
+                <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[110px] sm:max-w-[160px]">
+                  {nodeTitle}
+                </span>
+              )}
             </div>
-          )}
+          </div>
 
-          {/* MINI-POPUP DE PASO DE FASE O AVANCE DE VERSIÓN: DURA 1 SEGUNDO Y SE QUITA SOLO */}
-          {phaseTransitionNotice && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center p-3 select-none pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-              <div className="bg-black text-white border-2 sm:border-3 border-white p-3.5 sm:p-4 shadow-[6px_6px_0px_#000000] max-w-xs sm:max-w-sm w-full text-center font-mono space-y-2 animate-phase-pop pointer-events-auto">
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white text-black text-[10px] font-black uppercase tracking-wider shadow-[1px_1px_0px_#000000]">
-                  <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>¡Siguiente Fase!</span>
+          {/* Fila inferior: Indicadores de Maestría y Fases de Motricidad */}
+          {!isDailyChallenge && (
+            <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] flex flex-col gap-1.5">
+              {/* Maestría: M: [✓][✓][ ] 2/3 [i] */}
+              <div className={`flex items-center gap-1.5 text-xs transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
+                <span className="text-[10px] font-bold text-neutral-600">M:</span>
+                <div className="flex items-center gap-0.5">
+                  {[0, 1, 2].map((i) => {
+                    const isFilled = i < (masteryStreak ?? 0);
+                    const isJustFilled = justEarnedMastery && i === (masteryStreak ?? 0) - 1;
+                    return (
+                      <span
+                        key={i}
+                        className={`w-3.5 h-3.5 border border-black flex items-center justify-center transition-all ${
+                          isJustFilled
+                            ? 'bg-black text-white animate-mastery-pop scale-125 z-10 shadow-[0_0_0_2px_#000000]'
+                            : isFilled
+                            ? 'bg-black text-white'
+                            : 'bg-neutral-100 text-transparent'
+                        }`}
+                      >
+                        {isFilled && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
+                      </span>
+                    );
+                  })}
                 </div>
+                <span className={`text-[10px] font-bold tabular-nums transition-colors ${justEarnedMastery ? 'text-black font-black' : ''}`}>
+                  {masteryStreak ?? 0}/3
+                </span>
+                {justEarnedMastery && (
+                  <span className="bg-black text-white text-[8px] font-black px-1 border border-black animate-bounce shadow-[1px_1px_0px_#000]">
+                    +1
+                  </span>
+                )}
+                {onOpenMasteryInfo && (
+                  <button
+                    type="button"
+                    onClick={onOpenMasteryInfo}
+                    className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
+                    title={`Información de Maestría (Racha de 3 aciertos ≥${targetMasteryScore}%)`}
+                  >
+                    i
+                  </button>
+                )}
+              </div>
 
-                <div className="space-y-0.5">
-                  <h3 className="text-base sm:text-lg font-black font-display text-white tracking-tight uppercase">
-                    {phaseTransitionNotice.isVersionAdvance
-                      ? `VERSIÓN ${phaseTransitionNotice.toVersion}: FASE 1`
-                      : `FASE ${phaseTransitionNotice.toPhase}: ${phaseTransitionNotice.toPhase === 2 ? 'FLUIDEZ' : 'VELOCIDAD'}`}
-                  </h3>
-                  <div className="text-[10px] sm:text-[11px] text-neutral-300 font-bold">
-                    {phaseTransitionNotice.isVersionAdvance
-                      ? `¡Versión ${phaseTransitionNotice.fromVersion}/${phaseTransitionNotice.totalVersions} dominada! Iniciando versión ${phaseTransitionNotice.toVersion}...`
-                      : `¡3/3 aciertos completados! Avanzando automáticamente...`}
-                  </div>
+              {/* Fases: F: [1][2][3] [i] */}
+              <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-300 text-xs">
+                <span className="text-[10px] font-bold text-neutral-600">F:</span>
+                <div className="flex items-center gap-1">
+                  {([1, 2, 3] as const).map((ph) => (
+                    <button
+                      key={ph}
+                      type="button"
+                      onClick={() => onPhaseChange && onPhaseChange(ph)}
+                      className={`w-4 h-4 border border-black flex items-center justify-center text-[9px] font-bold cursor-pointer transition-colors ${
+                        currentPhase === ph
+                          ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                          : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                      }`}
+                      title={`Fase ${ph}: ${ph === 1 ? 'Precisión (extremos, ≥80%)' : ph === 2 ? 'Fluidez (velocidad constante, ≥85%)' : 'Velocidad (inercia ágil, ≥90%)'}`}
+                    >
+                      {ph}
+                    </button>
+                  ))}
                 </div>
-
-                {/* Barra de progreso de 1 segundo */}
-                <div className="w-full h-1 bg-neutral-800 border border-neutral-700 overflow-hidden mt-1">
-                  <div className="h-full bg-white transition-all duration-1000 w-full animate-pulse" />
-                </div>
+                {onOpenPhaseInfo && (
+                  <button
+                    type="button"
+                    onClick={onOpenPhaseInfo}
+                    className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
+                    title="Información de Fases de Motricidad"
+                  >
+                    i
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* BARRA DE CONTROL INFERIOR Y EVALUACIÓN (RESPONSIVA: 2 FILAS EN MÓVIL VERTICAL, 1 FILA EN DESKTOP) */}
-        <div className="w-full mt-2 font-mono">
-          {!evaluation ? (
-            /* Estado SIN EVALUAR: contador de trazos, undo, clear, auto-avance, capas y botón CORREGIR destacado */
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 p-2 border-2 border-black bg-white shadow-[2px_2px_0px_#000000]">
-              <div className="flex items-center justify-between sm:justify-start gap-1 sm:gap-1.5 flex-wrap">
-                <span className="text-[10px] sm:text-[11px] font-bold text-neutral-700 bg-neutral-100 px-1.5 sm:px-2 py-1 border border-black shadow-[1px_1px_0px_#000000] tabular-nums">
+        {/* 2. HUD SUPERIOR DERECHO: CUADRADITO CON LA NOTA (SIN MENSAJE, ESTILO EXACTO PEDIDO POR EL USUARIO) */}
+        {evaluation && (
+          <div className="absolute top-3 right-3 sm:right-6 z-20 flex flex-col items-center justify-center bg-white border-2 border-black p-2.5 sm:p-3 shadow-[3px_3px_0px_#000000] font-mono pointer-events-auto min-w-[76px] sm:min-w-[84px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+            <span className="text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+              Nota
+            </span>
+            <span className="text-2xl sm:text-3xl font-black leading-none my-1">
+              {Math.round(evaluation.overallScore)}%
+            </span>
+            <span
+              className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-black ${
+                isMasterySuccess
+                  ? 'bg-black text-white'
+                  : evaluation.passed
+                  ? 'bg-neutral-200 text-black'
+                  : 'bg-white text-neutral-700'
+              }`}
+            >
+              {isMasterySuccess
+                ? 'Excelente'
+                : evaluation.passed
+                ? 'Aprobado'
+                : 'Reintentar'}
+            </span>
+          </div>
+        )}
+
+        {/* 3. MINI-POPUP DE PASO DE FASE O AVANCE DE VERSIÓN (FLOTANTE CENTRADO) */}
+        {phaseTransitionNotice && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center p-3 select-none pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-black text-white border-2 sm:border-3 border-white p-3.5 sm:p-4 shadow-[6px_6px_0px_#000000] max-w-xs sm:max-w-sm w-full text-center font-mono space-y-2 animate-phase-pop pointer-events-auto">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white text-black text-[10px] font-black uppercase tracking-wider shadow-[1px_1px_0px_#000000]">
+                <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>¡Siguiente Fase!</span>
+              </div>
+
+              <div className="space-y-0.5">
+                <h3 className="text-base sm:text-lg font-black font-display text-white tracking-tight uppercase">
+                  {phaseTransitionNotice.isVersionAdvance
+                    ? `VERSIÓN ${phaseTransitionNotice.toVersion}: FASE 1`
+                    : `FASE ${phaseTransitionNotice.toPhase}: ${phaseTransitionNotice.toPhase === 2 ? 'FLUIDEZ' : 'VELOCIDAD'}`}
+                </h3>
+                <div className="text-[10px] sm:text-[11px] text-neutral-300 font-bold">
+                  {phaseTransitionNotice.isVersionAdvance
+                    ? `¡Versión ${phaseTransitionNotice.fromVersion}/${phaseTransitionNotice.totalVersions} dominada! Iniciando versión ${phaseTransitionNotice.toVersion}...`
+                    : `¡3/3 aciertos completados! Avanzando automáticamente...`}
+                </div>
+              </div>
+
+              {/* Barra de progreso de 1 segundo */}
+              <div className="w-full h-1 bg-neutral-800 border border-neutral-700 overflow-hidden mt-1">
+                <div className="h-full bg-white transition-all duration-1000 w-full animate-pulse" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 4. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (NEOBRUTALISTA PAPLITZ) */}
+        <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
+          <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-24px)] overflow-x-auto">
+            {!evaluation ? (
+              <>
+                {/* Contador de trazos */}
+                <span className="text-[10px] sm:text-[11px] font-bold text-neutral-700 bg-neutral-100 px-2 py-1 border border-black shadow-[1px_1px_0px_#000000] tabular-nums whitespace-nowrap">
                   Trazos: {strokes.length} / {Math.max(1, challenge.minRequiredStrokes || (challenge.targetLines ? challenge.targetLines.length : 1))}
                 </span>
+
+                {/* Deshacer */}
                 <button
                   type="button"
                   onClick={handleUndo}
@@ -1684,6 +1307,8 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                 >
                   <Undo2 className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
+
+                {/* Borrar */}
                 <button
                   type="button"
                   onClick={handleClear}
@@ -1694,17 +1319,17 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                   <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
 
-                {/* Alternar auto-avance (1 segundo) */}
+                {/* Auto-avance (1 segundo) */}
                 <button
                   type="button"
                   onClick={handleToggleAutoAdvance}
-                  className={`px-2 py-1 text-xs font-bold border border-black flex items-center gap-1 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
+                  className={`px-2 py-1 text-xs font-bold border border-black flex items-center gap-1 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] whitespace-nowrap ${
                     autoAdvance ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
                   }`}
                   title={autoAdvance ? "Auto-avance activado (espera 1s tras corregir). Haz clic para desactivar." : "Auto-avance desactivado. Haz clic para activar."}
                 >
                   <Zap className={`w-3.5 h-3.5 ${autoAdvance ? 'fill-white' : ''}`} />
-                  <span className="text-[10px]">Auto: {autoAdvance ? 'ON (1s)' : 'OFF'}</span>
+                  <span className="text-[10px] hidden sm:inline">Auto: {autoAdvance ? 'ON (1s)' : 'OFF'}</span>
                 </button>
 
                 {/* Alternar capas: Trazo y Solución */}
@@ -1734,11 +1359,11 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                   </button>
                 )}
 
-                {/* Botón Modo Récord antes de evaluar */}
+                {/* Modo Récord */}
                 <button
                   type="button"
                   onClick={isRecording ? onOpenRecordModal : onToggleRecording}
-                  className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors ${
+                  className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors whitespace-nowrap ${
                     isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
                   }`}
                   title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
@@ -1747,7 +1372,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                   <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
                 </button>
 
-                {/* Botón Reporte accesible antes de evaluar (solo icono de triángulo) */}
+                {/* Reportar anomalía */}
                 <button
                   type="button"
                   onClick={() => setShowReportModal(true)}
@@ -1756,129 +1381,125 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                 >
                   <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
-              </div>
 
-              <button
-                type="button"
-                onClick={handleEvaluate}
-                disabled={strokes.length === 0}
-                className="w-full sm:w-auto btn-ink px-4 py-2 sm:py-1.5 text-xs font-bold uppercase disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center justify-center gap-1.5 shrink-0"
-                title={strokes.length === 0 ? "Dibuja en el lienzo antes de corregir" : "Corregir trazo y ver nota (Enter)"}
-              >
-                <span>Corregir</span>
-                <Check className="w-4 h-4 stroke-[3]" />
-              </button>
-            </div>
-          ) : (
-            /* Estado EVALUADO: NOTA visible, Siguiente, Reintentar, Stats del Trazo y Reporte */
-            <div className="flex flex-col gap-1.5 w-full">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 p-2 border-2 border-black bg-white shadow-[2px_2px_0px_#000000]">
-                {/* Lado izquierdo: Reintentar, Auto-toggle, capas, Stats y Reporte */}
-                <div className="flex items-center justify-between sm:justify-start gap-1 sm:gap-1.5 flex-wrap">
+                {/* Botón principal: CORREGIR */}
+                <button
+                  type="button"
+                  onClick={handleEvaluate}
+                  disabled={strokes.length === 0}
+                  className="btn-ink px-3 sm:px-4 py-1.5 text-xs font-bold uppercase disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap"
+                  title={strokes.length === 0 ? "Dibuja en el lienzo antes de corregir" : "Corregir trazo y ver nota (Enter)"}
+                >
+                  <span>Corregir</span>
+                  <Check className="w-4 h-4 stroke-[3]" />
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Reintentar */}
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="btn-ink-outline px-2 sm:px-2.5 py-1 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000] whitespace-nowrap"
+                  title="Reintentar este ejercicio"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span className="text-[11px]">Reintentar</span>
+                </button>
+
+                {/* Auto-avance */}
+                <button
+                  type="button"
+                  onClick={handleToggleAutoAdvance}
+                  className={`px-2 py-1 text-xs font-bold border border-black flex items-center gap-1 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] whitespace-nowrap ${
+                    autoAdvance ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                  }`}
+                  title={autoAdvance ? "Auto-avance activado (espera 1s tras corregir). Haz clic para pausar." : "Auto-avance desactivado. Haz clic para activar."}
+                >
+                  <Zap className={`w-3.5 h-3.5 ${autoAdvance ? 'fill-white' : ''}`} />
+                  <span className="text-[10px] hidden sm:inline">Auto: {autoAdvance ? 'ON (1s)' : 'OFF'}</span>
+                </button>
+
+                {/* Alternar capas en evaluado */}
+                {onToggleUserStrokes && (
                   <button
                     type="button"
-                    onClick={handleRetry}
-                    className="btn-ink-outline px-2 sm:px-2.5 py-1 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000]"
-                    title="Reintentar este ejercicio"
+                    onClick={onToggleUserStrokes}
+                    className={`p-1.5 text-xs font-bold border border-black cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
+                      showUserStrokes ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
+                    }`}
+                    title={showUserStrokes ? "Ocultar trazo" : "Mostrar trazo"}
                   >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span className="text-[11px]">Reintentar</span>
+                    {showUserStrokes ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                   </button>
-
-                  {/* Alternar auto-avance */}
+                )}
+                {onToggleSolution && (
                   <button
                     type="button"
-                    onClick={handleToggleAutoAdvance}
+                    onClick={onToggleSolution}
                     className={`px-2 py-1 text-xs font-bold border border-black flex items-center gap-1 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
-                      autoAdvance ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                      showSolution ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
                     }`}
-                    title={autoAdvance ? "Auto-avance activado (espera 1s tras corregir). Haz clic para pausar." : "Auto-avance desactivado. Haz clic para activar."}
+                    title={showSolution ? "Ocultar guía / solución" : "Mostrar guía / solución"}
                   >
-                    <Zap className={`w-3.5 h-3.5 ${autoAdvance ? 'fill-white' : ''}`} />
-                    <span className="text-[10px]">Auto: {autoAdvance ? 'ON (1s)' : 'OFF'}</span>
+                    {showSolution ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                    <span className="hidden md:inline text-[10px]">Solución</span>
                   </button>
+                )}
 
-                  {/* Alternar capas en evaluado */}
-                  {onToggleUserStrokes && (
-                    <button
-                      type="button"
-                      onClick={onToggleUserStrokes}
-                      className={`p-1.5 text-xs font-bold border border-black cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
-                        showUserStrokes ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
-                      }`}
-                      title={showUserStrokes ? "Ocultar trazo" : "Mostrar trazo"}
-                    >
-                      {showUserStrokes ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                    </button>
-                  )}
-                  {onToggleSolution && (
-                    <button
-                      type="button"
-                      onClick={onToggleSolution}
-                      className={`px-2 py-1 text-xs font-bold border border-black flex items-center gap-1 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
-                        showSolution ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                      }`}
-                      title={showSolution ? "Ocultar guía / solución" : "Mostrar guía / solución"}
-                    >
-                      {showSolution ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      <span className="hidden md:inline text-[10px]">Solución</span>
-                    </button>
-                  )}
+                {/* Stats */}
+                <button
+                  type="button"
+                  onClick={() => setShowStatsModal(true)}
+                  className="p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] bg-white hover:bg-neutral-100 flex items-center justify-center transition-colors"
+                  title="Ver estadísticas detalladas del trazo"
+                >
+                  <Activity className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
 
-                  {/* BOTÓN STATS DEL TRAZO (SOLO ICONO, PAUSA AUTO-AVANCE MOMENTÁNEAMENTE) */}
-                  <button
-                    type="button"
-                    onClick={() => setShowStatsModal(true)}
-                    className="p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] bg-white hover:bg-neutral-100 flex items-center justify-center transition-colors"
-                    title="Ver estadísticas detalladas del trazo y biomecánica (pausa el auto-avance)"
-                  >
-                    <Activity className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </button>
+                {/* Modo Récord */}
+                <button
+                  type="button"
+                  onClick={isRecording ? onOpenRecordModal : onToggleRecording}
+                  className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors whitespace-nowrap ${
+                    isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+                  }`}
+                  title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
+                >
+                  <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
+                  <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
+                </button>
 
-                  {/* BOTÓN MODO RÉCORD TRAS EVALUAR */}
-                  <button
-                    type="button"
-                    onClick={isRecording ? onOpenRecordModal : onToggleRecording}
-                    className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors ${
-                      isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-                    }`}
-                    title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
-                    <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
-                  </button>
+                {/* Comentario Récord */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoAdvanceCountdown(null);
+                    setShowQuickCommentModal(true);
+                  }}
+                  className={`p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center justify-center transition-colors ${
+                    userNote.trim() ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+                  }`}
+                  title={userNote.trim() ? `Comentario: "${userNote}"` : "Añadir comentario a este ejercicio (Modo Récord)"}
+                >
+                  <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
 
-                  {/* BOTÓN RÁPIDO DE COMENTARIO (MODO RÉCORD) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAutoAdvanceCountdown(null);
-                      setShowQuickCommentModal(true);
-                    }}
-                    className={`p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center justify-center transition-colors ${
-                      userNote.trim() ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-                    }`}
-                    title={userNote.trim() ? `Comentario guardado: "${userNote}"` : "Añadir comentario a este ejercicio (Modo Récord)"}
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </button>
+                {/* Reporte */}
+                <button
+                  type="button"
+                  onClick={() => setShowReportModal(true)}
+                  className="p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] bg-white hover:bg-neutral-100 flex items-center justify-center transition-colors"
+                  title="Reportar anomalía"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
 
-                  {/* BOTÓN DE REPORTE (SOLO ICONO TRIANGULAR) */}
-                  <button
-                    type="button"
-                    onClick={() => setShowReportModal(true)}
-                    className="p-1.5 text-xs font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] bg-white hover:bg-neutral-100 flex items-center justify-center transition-colors"
-                    title="Escribir nota y descargar reporte de depuración (pausa el auto-avance)"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </button>
-                </div>
-
-                {/* Lado derecho: Botón Siguiente con cuenta atrás */}
+                {/* Botón principal: SIGUIENTE */}
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="w-full sm:w-auto btn-ink px-4 py-2 sm:py-1.5 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] relative overflow-hidden shrink-0"
+                  className="btn-ink px-3 sm:px-4 py-1.5 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] relative overflow-hidden shrink-0 whitespace-nowrap"
                   title="Siguiente ejercicio o versión (Enter / Espacio)"
                 >
                   {autoAdvance && autoAdvanceCountdown !== null && autoAdvanceCountdown > 0 && (
@@ -1897,12 +1518,11 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                   </span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </button>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    )}
+
 
         {/* MODAL DE ESTADÍSTICAS DETALLADAS DEL TRAZO */}
         {showStatsModal && evaluation && (

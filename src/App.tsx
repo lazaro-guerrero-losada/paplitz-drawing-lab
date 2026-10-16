@@ -47,7 +47,6 @@ import {
   ChevronLeft,
   ChevronDown,
   Target,
-  PanelLeft,
   Maximize2,
   ArrowRight,
   FileText,
@@ -1596,59 +1595,18 @@ export function App() {
           </div>
         )}
 
-        {/* PESTAÑA 1: HOME / PRÁCTICA RÁPIDA (REDiseño LIMPIO, INTUITIVO Y SIN DISTRACCIONES) */}
+        {/* PESTAÑA 1: HOME / PRÁCTICA RÁPIDA (LIENZO A PANTALLA COMPLETA CON PANELES Y BOTONES FLOTANTES) */}
         {activeTab === 'practice' && (
-          <div className={`flex-1 w-full flex flex-col items-center overflow-hidden relative bg-neutral-100 ${
-            isLandscapeMobile
-              ? 'p-1.5 justify-center min-h-[calc(100vh-42px)] max-h-[calc(100vh-42px)]'
-              : 'p-1.5 sm:p-4 pt-1 sm:pt-4 justify-start sm:justify-center min-h-[calc(100vh-64px)]'
-          }`}>
-            {/* BARRA SUPERIOR EXCLUSIVA MÓVIL VERTICAL (< sm): ANCLAJE ELEGANTE DEL PANEL Y CONTEXTO */}
-            {!isLandscapeMobile && (
-              <div className="w-full max-w-[750px] flex items-center justify-between gap-2 px-0.5 pb-1 sm:hidden z-20 select-none">
-                <button
-                  type="button"
-                  onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-                  className="bg-white hover:bg-neutral-100 text-black px-2.5 py-1 border-2 border-black shadow-[2px_2px_0px_#000000] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
-                  title={isSidebarCollapsed ? "Abrir panel de práctica" : "Ocultar panel"}
-                >
-                  <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Panel</span>
-                </button>
-
-                <div className="flex items-center gap-1 min-w-0 bg-white border border-black px-2 py-0.5 shadow-[1px_1px_0px_#000000]">
-                  <span className="text-[10px] font-mono font-bold text-neutral-500 uppercase">
-                    {dailySetSession ? `${dailySetSession.currentIndex + 1}/${dailySetSession.totalCount}` : (practiceMode === 'camino' ? (activeNode ? activeNode.code : '1.1') : 'RETO')}
-                  </span>
-                  <span className="text-[11px] font-mono font-bold text-black truncate max-w-[130px]">
-                    {dailySetSession ? `Reto (${activeNode?.code || ''})` : (practiceMode === 'camino' ? (activeNode?.title || '') : 'Diario')}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* BOTÓN TOGGLE FLOTANTE EN TABLET Y ESCRITORIO (>= sm, OCULTO EN MÓVIL HORIZONTAL) */}
-            {!isLandscapeMobile && (
-              <button
-                type="button"
-                onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-                className="hidden sm:flex absolute top-3 left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[2px_2px_0px_#000000] text-xs font-mono font-bold items-center gap-1.5 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-                title={isSidebarCollapsed ? "Abrir panel de práctica" : "Ocultar panel"}
-              >
-                <PanelLeft className="w-4 h-4 stroke-[2.5]" />
-                <span>Panel</span>
-              </button>
-            )}
-
+          <div className="relative w-full h-[calc(100vh-56px)] sm:h-[calc(100vh-64px)] min-h-[500px] bg-white pattern-grid-paper flex flex-col overflow-hidden select-none">
             {/* BACKDROP FLOTANTE CUANDO EL PANEL ESTÁ ABIERTO */}
             {!isSidebarCollapsed && (
               <div
-                className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px] md:bg-black/20"
+                className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
                 onClick={() => setIsSidebarCollapsed(true)}
               />
             )}
 
-            {/* DRAWER FLOTANTE DESPLEGABLE (MÓVIL: FULLSCREEN, DESKTOP: SLIDE-OVER W-80 SIN DESPLAZAR EL LIENZO) */}
+            {/* DRAWER FLOTANTE DESPLEGABLE (MÓVIL / DESKTOP SLIDE-OVER SIN DESPLAZAR EL LIENZO) */}
             <aside
               className={`fixed md:absolute top-0 bottom-0 left-0 z-50 bg-white border-r-2 border-black shadow-[6px_0px_0px_#000000] flex flex-col select-none transition-transform duration-200 ease-in-out ${
                 isSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0 pointer-events-auto'
@@ -1865,14 +1823,9 @@ export function App() {
               </div>
             </aside>
 
-            {/* ÁREA CENTRAL: LIENZO PEGADO ARRIBA EN MÓVIL VERTICAL (SIN HUECAZO) Y CENTRADO EN HORIZONTAL/DESKTOP */}
-            <div className={`flex-1 w-full flex flex-col items-center overflow-hidden min-h-0 ${
-              isLandscapeMobile ? 'justify-center h-full' : 'justify-start sm:justify-center pt-1 sm:pt-0'
-            }`}>
-              <div className={`w-full flex flex-col items-center ${
-                isLandscapeMobile ? 'justify-center h-full' : 'justify-start sm:justify-center'
-              }`}>
-                {activeNode?.isCalisthenics ? (
+            {/* ÁREA CENTRAL: EL LIENZO OCUPA EL 100% DEL ESPACIO */}
+            <div className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center">
+              {activeNode?.isCalisthenics ? (
                   <StrokePracticeCanvas
                     ref={strokeCanvasRef}
                     exerciseDef={currentExerciseDef}
@@ -1932,7 +1885,6 @@ export function App() {
                     onAddCurrentToRecording={handleStartRecordingAndAddCurrent}
                   />
                 )}
-              </div>
             </div>
           </div>
         )}
