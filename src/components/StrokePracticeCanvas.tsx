@@ -1110,127 +1110,129 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
 
     return (
       <div className="relative w-full h-full overflow-hidden flex items-center justify-center select-none bg-white pattern-grid-paper">
-        {/* 1. BOTÓN TOGGLE PANEL DEDICADO A LA IZQUIERDA DE LA PANTALLA */}
-        {onToggleSidebar && (
-          <button
-            type="button"
-            onClick={onToggleSidebar}
-            className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[3px_3px_0px_#000000] text-xs font-bold font-mono flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
-            title="Abrir / cerrar panel de práctica"
-          >
-            <PanelLeft className="w-4 h-4 stroke-[2.5]" />
-            <span>Panel</span>
-          </button>
-        )}
+        {/* 1. BOTÓN TOGGLE PANEL Y BADGE DE RETO/NODO JUNTOS A LA IZQUIERDA DE LA PANTALLA */}
+        <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-30 flex items-center gap-1.5 sm:gap-2 font-mono select-none pointer-events-auto">
+          {onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className="bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[3px_3px_0px_#000000] text-xs font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform shrink-0"
+              title="Abrir / cerrar panel de práctica"
+            >
+              <PanelLeft className="w-4 h-4 stroke-[2.5]" />
+              <span>Panel</span>
+            </button>
+          )}
 
-        {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL (top-2.5 / top-3) ALINEADO CON EL DIBUJO */}
-        <div
-          className="absolute top-2.5 sm:top-3 z-20 flex items-center justify-between pointer-events-none px-2 sm:px-0"
-          style={{
-            width: 'min(calc(100% - 130px), 750px, calc((100vh - 120px) * (750 / 500)))',
-          }}
-        >
-          {/* A la izquierda del dibujo (por donde está ahora): FASE Y MAESTRÍA EN UNA SOLA BANDA COMPACTA Y ASENTADA */}
-          <div className="pointer-events-auto font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
-            {/* Badge del Nodo / Reto */}
-            <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5 shrink-0">
-              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
+          {/* Badge del Nodo / Reto junto al botón de panel */}
+          {(nodeCode || nodeTitle || isDailyChallenge) && (
+            <div className="flex items-center gap-1 bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] shrink-0">
+              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-black px-1.5 py-0.5 uppercase">
                 {isDailyChallenge && dailyProgress ? `RETO ${dailyProgress.current}/${dailyProgress.total}` : (nodeCode || '1.1')}
               </span>
               {nodeTitle && (
-                <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[90px] sm:max-w-[150px]">
+                <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[90px] sm:max-w-[150px] px-0.5">
                   {nodeTitle}
                 </span>
               )}
             </div>
+          )}
+        </div>
 
-            {!isDailyChallenge && (
-              <>
-                <div className="w-px h-3.5 bg-neutral-300 shrink-0" />
-
-                {/* Maestría: M: [✓][✓][ ] 2/3 [i] */}
-                <div className={`flex items-center gap-1 text-xs shrink-0 transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
-                  <span className="text-[10px] font-bold text-neutral-600">M:</span>
-                  <div className="flex items-center gap-0.5">
-                    {[0, 1, 2].map((i) => {
-                      const isFilled = i < (masteryStreak ?? 0);
-                      const isJustFilled = justEarnedMastery && i === (masteryStreak ?? 0) - 1;
-                      return (
-                        <span
-                          key={i}
-                          className={`w-3.5 h-3.5 border border-black flex items-center justify-center transition-all ${
-                            isJustFilled
-                              ? 'bg-black text-white animate-mastery-pop scale-125 z-10 shadow-[0_0_0_2px_#000000]'
-                              : isFilled
-                              ? 'bg-black text-white'
-                              : 'bg-neutral-100 text-transparent'
-                          }`}
-                        >
-                          {isFilled && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
-                        </span>
-                      );
-                    })}
-                  </div>
-                  <span className={`text-[10px] font-bold tabular-nums ${justEarnedMastery ? 'text-black font-black' : ''}`}>
-                    {masteryStreak ?? 0}/3
-                  </span>
-                  {justEarnedMastery && (
-                    <span className="bg-black text-white text-[8px] font-black px-1 border border-black animate-bounce shadow-[1px_1px_0px_#000]">
-                      +1
-                    </span>
-                  )}
-                  {onOpenMasteryInfo && (
-                    <button
-                      type="button"
-                      onClick={onOpenMasteryInfo}
-                      className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
-                      title={`Información de Maestría (Racha de 3 aciertos ≥${targetMasteryScore}%)`}
-                    >
-                      i
-                    </button>
-                  )}
-                </div>
-
-                <div className="w-px h-3.5 bg-neutral-300 shrink-0" />
-
-                {/* Fases: F: [1][2][3] [i] */}
-                <div className="flex items-center gap-1 text-xs shrink-0">
-                  <span className="text-[10px] font-bold text-neutral-600">F:</span>
-                  <div className="flex items-center gap-1">
-                    {([1, 2, 3] as const).map((ph) => (
-                      <button
-                        key={ph}
-                        type="button"
-                        onClick={() => onPhaseChange && onPhaseChange(ph)}
-                        className={`w-4 h-4 border border-black flex items-center justify-center text-[9px] font-bold cursor-pointer transition-colors ${
-                          currentPhase === ph
-                            ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
-                            : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+        {/* 2. HUD SUPERIOR: ALINEADO ARRIBA CON items-start PARA QUE NUNCA SE DESPLACE AL EVALUAR */}
+        <div
+          className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
+          style={{
+            width: 'min(calc(100% - 130px), 750px, calc((100vh - 120px) * (750 / 500)))',
+          }}
+        >
+          {/* A la izquierda del dibujo: SOLO FASE Y MAESTRÍA (ASENTADO ARRIBA CON self-start) */}
+          {!isDailyChallenge ? (
+            <div className="pointer-events-auto self-start font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+              {/* Maestría: M: [✓][✓][ ] 2/3 [i] */}
+              <div className={`flex items-center gap-1 text-xs shrink-0 transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
+                <span className="text-[10px] font-bold text-neutral-600">M:</span>
+                <div className="flex items-center gap-0.5">
+                  {[0, 1, 2].map((i) => {
+                    const isFilled = i < (masteryStreak ?? 0);
+                    const isJustFilled = justEarnedMastery && i === (masteryStreak ?? 0) - 1;
+                    return (
+                      <span
+                        key={i}
+                        className={`w-3.5 h-3.5 border border-black flex items-center justify-center transition-all ${
+                          isJustFilled
+                            ? 'bg-black text-white animate-mastery-pop scale-125 z-10 shadow-[0_0_0_2px_#000000]'
+                            : isFilled
+                            ? 'bg-black text-white'
+                            : 'bg-neutral-100 text-transparent'
                         }`}
-                        title={`Fase ${ph}: ${ph === 1 ? 'Precisión (extremos, ≥80%)' : ph === 2 ? 'Fluidez (velocidad constante, ≥85%)' : 'Velocidad (inercia ágil, ≥90%)'}`}
                       >
-                        {ph}
-                      </button>
-                    ))}
-                  </div>
-                  {onOpenPhaseInfo && (
-                    <button
-                      type="button"
-                      onClick={onOpenPhaseInfo}
-                      className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
-                      title="Información de Fases de Motricidad"
-                    >
-                      i
-                    </button>
-                  )}
+                        {isFilled && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
+                      </span>
+                    );
+                  })}
                 </div>
-              </>
-            )}
-          </div>
+                <span className={`text-[10px] font-bold tabular-nums ${justEarnedMastery ? 'text-black font-black' : ''}`}>
+                  {masteryStreak ?? 0}/3
+                </span>
+                {justEarnedMastery && (
+                  <span className="bg-black text-white text-[8px] font-black px-1 border border-black animate-bounce shadow-[1px_1px_0px_#000]">
+                    +1
+                  </span>
+                )}
+                {onOpenMasteryInfo && (
+                  <button
+                    type="button"
+                    onClick={onOpenMasteryInfo}
+                    className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
+                    title={`Información de Maestría (Racha de 3 aciertos ≥${targetMasteryScore}%)`}
+                  >
+                    i
+                  </button>
+                )}
+              </div>
 
-          {/* A la derecha del dibujo: Cuadradito compacto con la nota (a la misma altura) */}
+              <div className="w-px h-3.5 bg-neutral-300 shrink-0" />
+
+              {/* Fases: F: [1][2][3] [i] */}
+              <div className="flex items-center gap-1 text-xs shrink-0">
+                <span className="text-[10px] font-bold text-neutral-600">F:</span>
+                <div className="flex items-center gap-1">
+                  {([1, 2, 3] as const).map((ph) => (
+                    <button
+                      key={ph}
+                      type="button"
+                      onClick={() => onPhaseChange && onPhaseChange(ph)}
+                      className={`w-4 h-4 border border-black flex items-center justify-center text-[9px] font-bold cursor-pointer transition-colors ${
+                        currentPhase === ph
+                          ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                          : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                      }`}
+                      title={`Fase ${ph}: ${ph === 1 ? 'Precisión (extremos, ≥80%)' : ph === 2 ? 'Fluidez (velocidad constante, ≥85%)' : 'Velocidad (inercia ágil, ≥90%)'}`}
+                    >
+                      {ph}
+                    </button>
+                  ))}
+                </div>
+                {onOpenPhaseInfo && (
+                  <button
+                    type="button"
+                    onClick={onOpenPhaseInfo}
+                    className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
+                    title="Información de Fases de Motricidad"
+                  >
+                    i
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div />
+          )}
+
+          {/* A la derecha del dibujo: Cuadradito compacto con la nota (anclado arriba con self-start) */}
           {evaluation ? (
-            <div className="pointer-events-auto bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+            <div className="pointer-events-auto self-start bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
               <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
                 Nota
               </span>

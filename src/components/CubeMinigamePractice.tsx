@@ -784,13 +784,13 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
 
       {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL (top-2.5 / top-3) ALINEADO CON EL JUEGO */}
       <div
-        className="absolute top-2.5 sm:top-3 z-20 flex items-center justify-between pointer-events-none px-2 sm:px-0"
+        className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
         style={{
           width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
         }}
       >
         {/* A la izquierda del juego (por donde está ahora): MODO, NIVEL, SEMILLA Y MODO TÁCTIL EN UNA SOLA TIRA */}
-        <div className="pointer-events-auto font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+        <div className="pointer-events-auto self-start font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
           <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
             {gameMode === 'fever'
               ? 'FIEBRE'
@@ -835,7 +835,7 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
         </div>
 
         {/* A la derecha del juego: ESTADÍSTICAS ARCADE EN VIVO */}
-        <div className="flex items-center gap-1.5 font-mono text-xs font-bold pointer-events-auto select-none">
+        <div className="flex items-center gap-1.5 font-mono text-xs font-bold pointer-events-auto self-start select-none">
           <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
             {gameMode === 'fever' && (
               <>

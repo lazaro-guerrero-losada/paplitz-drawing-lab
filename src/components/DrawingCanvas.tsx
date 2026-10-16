@@ -991,13 +991,13 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
 
       {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL (top-2.5 / top-3) ALINEADO CON EL CUBO */}
       <div
-        className="absolute top-2.5 sm:top-3 z-20 flex items-center justify-between pointer-events-none px-2 sm:px-0"
+        className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
         style={{
           width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
         }}
       >
         {/* A la izquierda del cubo (por donde está ahora): NIVEL, SEMILLA Y MODO TÁCTIL EN UNA SOLA TIRA */}
-        <div className="pointer-events-auto font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+        <div className="pointer-events-auto self-start font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
           <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
             <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
               {isDailyChallenge && dailyProgress
@@ -1048,7 +1048,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
 
         {/* A la derecha del cubo: TEMPORIZADOR O CUADRADITO CON LA NOTA */}
         {!feedback ? (
-          <div className="pointer-events-auto font-mono text-xs select-none">
+          <div className="pointer-events-auto self-start font-mono text-xs select-none">
             <div
               className={`border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 ${
                 timeLeft <= 5 && isTimerRunning ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
@@ -1059,7 +1059,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
             </div>
           </div>
         ) : (
-          <div className="pointer-events-auto bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
+          <div className="pointer-events-auto self-start bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
             <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
               Nota
             </span>

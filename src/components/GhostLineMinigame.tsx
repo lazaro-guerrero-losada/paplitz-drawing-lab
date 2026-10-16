@@ -672,13 +672,13 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
 
       {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL ALINEADO CON EL LIENZO */}
       <div
-        className="absolute top-2.5 sm:top-3 z-20 flex items-center justify-between pointer-events-none px-2 sm:px-0"
+        className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
         style={{
           width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
         }}
       >
         {/* Tira compacta a la izquierda */}
-        <div className="pointer-events-auto font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+        <div className="pointer-events-auto self-start font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
           <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
             FANTASMA
           </span>
@@ -699,7 +699,7 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
 
         {/* A la derecha del dibujo: Cuadradito compacto con la nota (a la misma altura) */}
         {lastEval ? (
-          <div className="pointer-events-auto bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+          <div className="pointer-events-auto self-start bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
             <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
               Nota
             </span>
