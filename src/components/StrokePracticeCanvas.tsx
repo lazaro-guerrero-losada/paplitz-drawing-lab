@@ -1110,57 +1110,46 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
 
     return (
       <div className="relative w-full h-full overflow-hidden flex items-center justify-center select-none bg-white pattern-grid-paper">
-        {/* CONTENEDOR ANCLADO AL DIBUJO (Mantiene aspecto exacto 750x500 y centra los HUDs junto al lienzo) */}
+        {/* 1. BOTÓN TOGGLE PANEL DEDICADO A LA IZQUIERDA DE LA PANTALLA */}
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[3px_3px_0px_#000000] text-xs font-bold font-mono flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+            title="Abrir / cerrar panel de práctica"
+          >
+            <PanelLeft className="w-4 h-4 stroke-[2.5]" />
+            <span>Panel</span>
+          </button>
+        )}
+
+        {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL (top-2.5 / top-3) ALINEADO CON EL DIBUJO */}
         <div
-          className="relative aspect-[750/500] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+          className="absolute top-2.5 sm:top-3 z-20 flex items-center justify-between pointer-events-none px-2 sm:px-0"
           style={{
-            width: 'min(100%, 750px, calc((100vh - 90px) * (750 / 500)))',
-            height: 'auto',
+            width: 'min(calc(100% - 130px), 750px, calc((100vh - 120px) * (750 / 500)))',
           }}
         >
-          <canvas
-            ref={canvasRef}
-            width={750}
-            height={500}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className="block w-full h-full cursor-crosshair touch-none select-none z-10 pointer-events-auto"
-          />
-
-          {/* 1. HUD SUPERIOR IZQUIERDO: ANCLADO AL DIBUJO (FASES, MAESTRÍA, RETO) */}
-          <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
-            {/* Fila superior: Botón Panel + Título/Código del Nodo */}
-            <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
-              {onToggleSidebar && (
-                <button
-                  type="button"
-                  onClick={onToggleSidebar}
-                  className="bg-white hover:bg-neutral-100 text-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
-                  title="Abrir / cerrar panel de práctica"
-                >
-                  <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Panel</span>
-                </button>
-              )}
-              <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
-                <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
-                  {isDailyChallenge && dailyProgress ? `RETO ${dailyProgress.current}/${dailyProgress.total}` : (nodeCode || '1.1')}
+          {/* A la izquierda del dibujo (por donde está ahora): FASE Y MAESTRÍA EN UNA SOLA BANDA COMPACTA Y ASENTADA */}
+          <div className="pointer-events-auto font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+            {/* Badge del Nodo / Reto */}
+            <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5 shrink-0">
+              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
+                {isDailyChallenge && dailyProgress ? `RETO ${dailyProgress.current}/${dailyProgress.total}` : (nodeCode || '1.1')}
+              </span>
+              {nodeTitle && (
+                <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[90px] sm:max-w-[150px]">
+                  {nodeTitle}
                 </span>
-                {nodeTitle && (
-                  <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[110px] sm:max-w-[160px]">
-                    {nodeTitle}
-                  </span>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Fila inferior: Indicadores de Maestría y Fases de Motricidad */}
             {!isDailyChallenge && (
-              <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] flex flex-col gap-1.5">
+              <>
+                <div className="w-px h-3.5 bg-neutral-300 shrink-0" />
+
                 {/* Maestría: M: [✓][✓][ ] 2/3 [i] */}
-                <div className={`flex items-center gap-1.5 text-xs transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
+                <div className={`flex items-center gap-1 text-xs shrink-0 transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
                   <span className="text-[10px] font-bold text-neutral-600">M:</span>
                   <div className="flex items-center gap-0.5">
                     {[0, 1, 2].map((i) => {
@@ -1182,7 +1171,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                       );
                     })}
                   </div>
-                  <span className={`text-[10px] font-bold tabular-nums transition-colors ${justEarnedMastery ? 'text-black font-black' : ''}`}>
+                  <span className={`text-[10px] font-bold tabular-nums ${justEarnedMastery ? 'text-black font-black' : ''}`}>
                     {masteryStreak ?? 0}/3
                   </span>
                   {justEarnedMastery && (
@@ -1202,8 +1191,10 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                   )}
                 </div>
 
+                <div className="w-px h-3.5 bg-neutral-300 shrink-0" />
+
                 {/* Fases: F: [1][2][3] [i] */}
-                <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-300 text-xs">
+                <div className="flex items-center gap-1 text-xs shrink-0">
                   <span className="text-[10px] font-bold text-neutral-600">F:</span>
                   <div className="flex items-center gap-1">
                     {([1, 2, 3] as const).map((ph) => (
@@ -1233,21 +1224,21 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                     </button>
                   )}
                 </div>
-              </div>
+              </>
             )}
           </div>
 
-          {/* 2. HUD SUPERIOR DERECHO: CUADRADITO CON LA NOTA (ANCLADO A LA ESQUINA DEL DIBUJO) */}
-          {evaluation && (
-            <div className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 flex flex-col items-center justify-center bg-white border-2 border-black p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] font-mono pointer-events-auto min-w-[72px] sm:min-w-[80px] aspect-square animate-in fade-in zoom-in-95 duration-150">
-              <span className="text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+          {/* A la derecha del dibujo: Cuadradito compacto con la nota (a la misma altura) */}
+          {evaluation ? (
+            <div className="pointer-events-auto bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+              <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
                 Nota
               </span>
-              <span className="text-2xl sm:text-3xl font-black leading-none my-1">
+              <span className="text-xl sm:text-2xl font-black leading-none my-0.5">
                 {Math.round(evaluation.overallScore)}%
               </span>
               <span
-                className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-black ${
+                className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
                   isMasterySuccess
                     ? 'bg-black text-white'
                     : evaluation.passed
@@ -1255,14 +1246,32 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                     : 'bg-white text-neutral-700'
                 }`}
               >
-                {isMasterySuccess
-                  ? 'Excelente'
-                  : evaluation.passed
-                  ? 'Aprobado'
-                  : 'Reintentar'}
+                {isMasterySuccess ? 'Excelente' : evaluation.passed ? 'Aprobado' : 'Reintentar'}
               </span>
             </div>
+          ) : (
+            <div />
           )}
+        </div>
+
+        {/* CONTENEDOR ANCLADO AL DIBUJO (Mantiene aspecto exacto 750x500 sin elementos flotantes en medio) */}
+        <div
+          className="relative aspect-[750/500] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+          style={{
+            width: 'min(100%, 750px, calc((100vh - 120px) * (750 / 500)))',
+            height: 'auto',
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            width={750}
+            height={500}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className="block w-full h-full cursor-crosshair touch-none select-none z-10 pointer-events-auto"
+          />
 
           {/* 3. MINI-POPUP DE PASO DE FASE O AVANCE DE VERSIÓN (FLOTANTE CENTRADO EN EL DIBUJO) */}
           {phaseTransitionNotice && (

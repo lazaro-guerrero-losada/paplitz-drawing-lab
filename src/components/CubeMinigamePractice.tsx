@@ -769,66 +769,50 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
         </div>
       )}
 
-      {/* CONTENEDOR ANCLADO AL JUEGO (Mantiene aspecto exacto 600x540 y centra los HUDs junto al lienzo) */}
+      {/* 1. BOTÓN TOGGLE PANEL DEDICADO A LA IZQUIERDA DE LA PANTALLA */}
+      {onToggleSidebar && (
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[3px_3px_0px_#000000] text-xs font-bold font-mono flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+          title="Abrir / cerrar panel de práctica"
+        >
+          <PanelLeft className="w-4 h-4 stroke-[2.5]" />
+          <span>Panel</span>
+        </button>
+      )}
+
+      {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL (top-2.5 / top-3) ALINEADO CON EL JUEGO */}
       <div
-        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        className="absolute top-2.5 sm:top-3 z-20 flex items-center justify-between pointer-events-none px-2 sm:px-0"
         style={{
-          width: 'min(100%, 620px, calc((100vh - 90px) * (600 / 540)))',
-          height: 'auto',
-          aspectRatio: '600 / 540',
+          width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
         }}
       >
-        <canvas
-          ref={canvasRef}
-          width={600}
-          height={540}
-          className={`block w-full h-full z-10 pointer-events-auto ${
-            touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
-          }`}
-          style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-        />
-
-        {/* 1. HUD SUPERIOR IZQUIERDO: ANCLADO AL CUBO (PANEL, MODO, NIVEL Y MODO TÁCTIL) */}
-        <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
-          <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
-            {onToggleSidebar && (
-              <button
-                type="button"
-                onClick={onToggleSidebar}
-                className="bg-white hover:bg-neutral-100 text-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
-                title="Abrir / cerrar panel de práctica"
-              >
-                <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Panel</span>
-              </button>
-            )}
-            <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
-              {gameMode === 'fever'
-                ? 'FIEBRE'
-                : gameMode === 'blitz'
-                ? 'BLITZ 60s'
-                : gameMode === 'survival'
-                ? 'SUPERVIVENCIA'
-                : 'SPRINT 5'}
-            </span>
-            <span className="text-xs font-mono font-bold truncate max-w-[100px] sm:max-w-[140px] bg-neutral-100 border border-black px-1.5 py-0.5">
-              Nivel {lesson.code}
-            </span>
-            <span className="text-[9px] font-mono font-bold text-neutral-500 uppercase">
-              #{challenge.seed}
-            </span>
-          </div>
+        {/* A la izquierda del juego (por donde está ahora): MODO, NIVEL, SEMILLA Y MODO TÁCTIL EN UNA SOLA TIRA */}
+        <div className="pointer-events-auto font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+          <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
+            {gameMode === 'fever'
+              ? 'FIEBRE'
+              : gameMode === 'blitz'
+              ? 'BLITZ 60s'
+              : gameMode === 'survival'
+              ? 'SUPERVIVENCIA'
+              : 'SPRINT 5'}
+          </span>
+          <span className="text-xs font-mono font-bold truncate max-w-[80px] sm:max-w-[120px] bg-neutral-100 border border-black px-1.5 py-0.5">
+            Nivel {lesson.code}
+          </span>
+          <span className="text-[9px] font-mono font-bold text-neutral-500 uppercase shrink-0">
+            #{challenge.seed}
+          </span>
 
           {/* Toggle de Modo Táctil (Trazo vs Mover) */}
-          <div className="bg-white border-2 border-black p-1 shadow-[3px_3px_0px_#000000] flex items-center gap-1 w-fit">
+          <div className="flex items-center border border-black ml-0.5">
             <button
               type="button"
               onClick={() => setTouchMode('draw')}
-              className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
+              className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold cursor-pointer transition-colors ${
                 touchMode === 'draw' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
               }`}
               title="Modo Trazo: dibuja aristas"
@@ -839,7 +823,7 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
             <button
               type="button"
               onClick={() => setTouchMode('scroll')}
-              className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
+              className={`px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold cursor-pointer transition-colors ${
                 touchMode === 'scroll' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
               }`}
               title="Modo Mover: desplazar con 1 dedo"
@@ -850,20 +834,20 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
           </div>
         </div>
 
-        {/* 2. HUD SUPERIOR DERECHO: ANCLADO AL CUBO (ESTADÍSTICAS ARCADE EN VIVO) */}
-        <div className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 flex items-center gap-1.5 font-mono text-xs font-bold pointer-events-auto select-none">
-          <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] flex items-center gap-2">
+        {/* A la derecha del juego: ESTADÍSTICAS ARCADE EN VIVO */}
+        <div className="flex items-center gap-1.5 font-mono text-xs font-bold pointer-events-auto select-none">
+          <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
             {gameMode === 'fever' && (
               <>
                 <div
-                  className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
+                  className={`px-1.5 sm:px-2 py-0.5 border border-black flex items-center gap-1 ${
                     feverTime <= 6 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
                   }`}
                 >
-                  <Hourglass className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span className="tabular-nums">{feverTime.toFixed(1)}s</span>
+                  <Hourglass className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />
+                  <span className="tabular-nums text-xs">{feverTime.toFixed(1)}s</span>
                 </div>
-                <div className="bg-neutral-100 border border-black px-2 py-0.5 flex items-center gap-1">
+                <div className="bg-neutral-100 border border-black px-1.5 sm:px-2 py-0.5 flex items-center gap-1">
                   <span>{cubesCompleted} cubos</span>
                   {specialCubesCount > 0 && (
                     <span className="text-[10px] flex items-center">
@@ -878,14 +862,14 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
             {gameMode === 'blitz' && (
               <>
                 <div
-                  className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
+                  className={`px-1.5 sm:px-2 py-0.5 border border-black flex items-center gap-1 ${
                     blitzTime <= 10 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
                   }`}
                 >
-                  <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span className="tabular-nums">{blitzTime.toFixed(1)}s</span>
+                  <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />
+                  <span className="tabular-nums text-xs">{blitzTime.toFixed(1)}s</span>
                 </div>
-                <div className="bg-neutral-100 border border-black px-2 py-0.5">
+                <div className="bg-neutral-100 border border-black px-1.5 sm:px-2 py-0.5">
                   <span>{cubesCompleted} cubos</span>
                 </div>
               </>
@@ -906,14 +890,14 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
                   ))}
                 </div>
                 <div
-                  className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
+                  className={`px-1.5 sm:px-2 py-0.5 border border-black flex items-center gap-1 ${
                     survivalTime <= 5 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
                   }`}
                 >
-                  <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span className="tabular-nums">{survivalTime.toFixed(1)}s</span>
+                  <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />
+                  <span className="tabular-nums text-xs">{survivalTime.toFixed(1)}s</span>
                 </div>
-                <div className="bg-neutral-100 border border-black px-2 py-0.5">
+                <div className="bg-neutral-100 border border-black px-1.5 sm:px-2 py-0.5">
                   <span>{streakCombo} combo</span>
                 </div>
               </>
@@ -921,11 +905,11 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
 
             {gameMode === 'sprint' && (
               <>
-                <div className="px-2 py-0.5 border border-black flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span className="tabular-nums">{sprintTime.toFixed(1)}s</span>
+                <div className="px-1.5 sm:px-2 py-0.5 border border-black flex items-center gap-1">
+                  <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />
+                  <span className="tabular-nums text-xs">{sprintTime.toFixed(1)}s</span>
                 </div>
-                <div className="bg-neutral-100 border border-black px-2 py-0.5">
+                <div className="bg-neutral-100 border border-black px-1.5 sm:px-2 py-0.5">
                   <span>{cubesCompleted}/5 cubos</span>
                 </div>
               </>
@@ -940,6 +924,30 @@ export const CubeMinigamePractice: React.FC<CubeMinigamePracticeProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* CONTENEDOR ANCLADO AL JUEGO (Mantiene aspecto exacto 600x540 sin elementos flotantes en medio) */}
+      <div
+        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        style={{
+          width: 'min(100%, 620px, calc((100vh - 120px) * (600 / 540)))',
+          height: 'auto',
+          aspectRatio: '600 / 540',
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={600}
+          height={540}
+          className={`block w-full h-full z-10 pointer-events-auto ${
+            touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
+          }`}
+          style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        />
       </div>
 
       {/* Flash visual de acierto o fallo en pantalla */}
