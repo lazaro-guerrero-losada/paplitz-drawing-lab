@@ -271,7 +271,7 @@ export const SessionRecordPanel: React.FC<SessionRecordPanelProps> = ({
             <p className="font-bold text-neutral-600 mb-1">Sin ejercicios en esta sesión</p>
             <p className="text-[10px] text-neutral-500 font-sans">
               {isRecording
-                ? 'Dibuja en Lab 3D o en Práctica para que tus ejercicios aparezcan aquí.'
+                ? 'Dibuja en El Camino, Práctica o Lab 3D para que tus ejercicios aparezcan aquí.'
                 : 'Activa la grabación (REC) para empezar a guardar tus ejercicios.'}
             </p>
           </div>

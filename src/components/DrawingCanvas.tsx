@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { CubeChallenge, Point2D } from '../lib/geometry';
 import { UserStroke, ValidationFeedback, countDetectedAristas } from '../lib/validation';
-import { Undo2, Trash2, Check, ArrowRight, AlertTriangle, CheckCircle, Clock, Zap, Copy, Download, X } from 'lucide-react';
+import { Undo2, Trash2, Check, ArrowRight, AlertTriangle, CheckCircle, Clock, Zap, Copy, Download, X, Pen, Hand, ArrowDown, ArrowUp, Eye, EyeOff, FileText, PanelLeft, MessageSquare } from 'lucide-react';
 import { buildDebugReport, copyReportToClipboard, downloadReportJson } from '../lib/debugReport';
+import { QuickCommentModal } from './QuickCommentModal';
 
 /**
  * Dibuja trama manga screentone bilineal en perspectiva sobre una cara cuadrilátera
@@ -122,7 +123,13 @@ function renderGroundGrid(
   ctx.restore();
 }
 
-interface DrawingCanvasProps {
+export interface DrawingCanvasRef {
+  undo: () => void;
+  clear: () => void;
+  validate: () => void;
+}
+
+export interface DrawingCanvasProps {
   challenge: CubeChallenge;
   feedback?: ValidationFeedback | null;
   onStrokesChange: (strokes: UserStroke[]) => void;
@@ -130,6 +137,8 @@ interface DrawingCanvasProps {
   onValidate?: (timeRemainingSeconds?: number) => void;
   onNextCube?: () => void;
   onDrawingStateChange?: (isDrawing: boolean) => void;
+  showUserDrawing?: boolean;
+  showParametricSolution?: boolean;
   activeLesson?: {
     id?: string;
     code?: string;
@@ -139,20 +148,67 @@ interface DrawingCanvasProps {
     difficulty?: string;
     isShadowLevel?: boolean;
   } | null;
+  isLandscapeMobile?: boolean;
+  onToggleSidebar?: () => void;
+  nodeCode?: string;
+  isDailyChallenge?: boolean;
+  dailyProgress?: { current: number; total: number };
+  onCommentChange?: (comment: string) => void;
+  isRecording?: boolean;
+  recordedCount?: number;
+  onToggleRecording?: () => void;
+  onOpenRecordModal?: () => void;
+  onAddCurrentToRecording?: (comment?: string) => void;
 }
 
 const TOTAL_COUNTDOWN_SECONDS = 30;
 
-export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
-  challenge,
-  feedback,
-  onStrokesChange,
-  showSolution,
-  onValidate,
-  onNextCube,
-  onDrawingStateChange,
-  activeLesson,
-}) => {
+export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((props, ref) => {
+  const {
+    challenge,
+    feedback,
+    onStrokesChange,
+    showSolution,
+    onValidate,
+    onNextCube,
+    onDrawingStateChange,
+    activeLesson,
+    showUserDrawing: externalShowUserDrawing,
+    showParametricSolution: externalShowParametricSolution,
+    isLandscapeMobile: propIsLandscapeMobile,
+    onToggleSidebar,
+    nodeCode,
+    isDailyChallenge = false,
+    dailyProgress,
+    onCommentChange,
+    isRecording = false,
+    recordedCount = 0,
+    onToggleRecording,
+    onOpenRecordModal,
+    onAddCurrentToRecording,
+  } = props;
+
+  const [internalIsLandscape, setInternalIsLandscape] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth > window.innerHeight && (window.innerHeight <= 520 || (window.innerWidth <= 960 && window.innerHeight <= 560));
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      setInternalIsLandscape(w > h && (h <= 520 || (w <= 960 && h <= 560)));
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  const effectiveIsLandscape = propIsLandscapeMobile !== undefined ? propIsLandscapeMobile : internalIsLandscape;
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [strokes, setStrokes] = useState<UserStroke[]>([]);
@@ -160,29 +216,36 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const activePointerIdRef = useRef<number | null>(null);
   const activePointerTypeRef = useRef<string | null>(null);
 
-  // Estados para el reporte y diagnóstico del cubo
+  // Visibilidad de trazos del usuario y solución paramétrica tras resolver el problema
+  const [internalShowUserDrawing, setInternalShowUserDrawing] = useState<boolean>(true);
+  const [internalShowParametricSolution, setInternalShowParametricSolution] = useState<boolean>(true);
+
+  const showUserDrawing = externalShowUserDrawing !== undefined ? externalShowUserDrawing : internalShowUserDrawing;
+  const showParametricSolution = externalShowParametricSolution !== undefined ? externalShowParametricSolution : internalShowParametricSolution;
+
+  const setShowUserDrawing = (val: boolean | ((prev: boolean) => boolean)) => {
+    setInternalShowUserDrawing(val);
+  };
+  const setShowParametricSolution = (val: boolean | ((prev: boolean) => boolean)) => {
+    setInternalShowParametricSolution(val);
+  };
+
+
+  // Estados para el reporte y diagnóstico del cubo con notas del usuario
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
+  const [showQuickCommentModal, setShowQuickCommentModal] = useState<boolean>(false);
+  const [userNote, setUserNote] = useState<string>('');
   const [copiedReport, setCopiedReport] = useState<boolean>(false);
-  const [currentReportData, setCurrentReportData] = useState<{
-    markdownText: string;
-    jsonString: string;
-  } | null>(null);
+  const [downloadedReport, setDownloadedReport] = useState<boolean>(false);
 
-  const handleGenerateReport = async () => {
-    const report = buildDebugReport(challenge, strokes, feedback, activeLesson);
-    setCurrentReportData(report);
+  // Reporte calculado dinámicamente con la nota del usuario incluida
+  const currentReport = useMemo(() => {
+    return buildDebugReport(challenge, strokes, feedback, activeLesson, userNote);
+  }, [challenge, strokes, feedback, activeLesson, userNote]);
 
-    // 1. Copiar automáticamente al portapapeles
-    const copied = await copyReportToClipboard(report.markdownText);
-    if (copied) {
-      setCopiedReport(true);
-      setTimeout(() => setCopiedReport(false), 2500);
-    }
-
-    // 2. Descargar automáticamente el archivo .json
-    downloadReportJson(report.jsonString, challenge.seed);
-
-    // 3. Abrir el modal con resumen y acciones
+  const handleOpenReportModal = () => {
+    setCopiedReport(false);
+    setDownloadedReport(false);
     setShowReportModal(true);
   };
 
@@ -197,6 +260,29 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const timeLeftRef = useRef<number>(TOTAL_COUNTDOWN_SECONDS);
   const timerIntervalRef = useRef<number | null>(null);
 
+  // Modo táctil en dispositivos móviles: 'draw' (dibujar con dedo o lápiz) | 'scroll' (desplazar la pantalla con 1 dedo)
+  const [touchMode, setTouchMode] = useState<'draw' | 'scroll'>('draw');
+
+  // Estado del scroll de la ventana para botón flotante de acceso rápido en móviles
+  const [isScrolledDown, setIsScrolledDown] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolledDown(window.scrollY > 140);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Al validarse o comprobar el cubo, activar modo scroll automáticamente para ver notas y Cubito con 1 dedo
+  useEffect(() => {
+    if (feedback) {
+      setTouchMode('scroll');
+    } else {
+      setTouchMode('draw');
+    }
+  }, [feedback]);
+
   // Limpiar trazos y resetear temporizador cuando cambia de desafío
   useEffect(() => {
     setStrokes([]);
@@ -205,6 +291,11 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     activePointerTypeRef.current = null;
     currentStrokeRef.current = [];
     setIsDrawing(false);
+    setShowUserDrawing(true);
+    setShowParametricSolution(true);
+    setUserNote('');
+    setCopiedReport(false);
+    setDownloadedReport(false);
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
@@ -290,7 +381,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       const v = challenge.vertices2D;
 
       // 1. Si la solución está activa, dibujar en el suelo la proyección de sombra y los rayos
-      if (showSolution) {
+      if (showSolution && showParametricSolution) {
         // Línea de horizonte técnica
         ctx.save();
         ctx.strokeStyle = '#D6D6D6';
@@ -665,7 +756,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       }
 
       // 2. Si se activa la solución (o tras comprobar), dibujar las líneas objetivo de referencia
-      if (showSolution) {
+      if (showSolution && showParametricSolution) {
         // Línea de horizonte técnica
         ctx.strokeStyle = '#D6D6D6';
         ctx.setLineDash([4, 4]);
@@ -706,37 +797,39 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     }
 
     // 3. DIBUJAR LOS TRAZOS DEL USUARIO
-    ctx.strokeStyle = '#000000';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    if (showUserDrawing) {
+      ctx.strokeStyle = '#000000';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-    strokes.forEach((stroke) => {
-      if (stroke.points.length < 2) return;
-      ctx.beginPath();
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      strokes.forEach((stroke) => {
+        if (stroke.points.length < 2) return;
+        ctx.beginPath();
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
 
-      for (let i = 1; i < stroke.points.length; i++) {
-        const p = stroke.points[i];
-        const pressure = p.pressure ?? 0.5;
-        ctx.lineWidth = 1.8 + pressure * 2.8;
-        ctx.lineTo(p.x, p.y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          const p = stroke.points[i];
+          const pressure = p.pressure ?? 0.5;
+          ctx.lineWidth = 1.8 + pressure * 2.8;
+          ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+      });
+
+      // Trazo que se está dibujando actualmente
+      if (isDrawing && currentStrokeRef.current.length > 1) {
+        const pts = currentStrokeRef.current;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          const pressure = pts[i].pressure ?? 0.5;
+          ctx.lineWidth = 1.8 + pressure * 2.8;
+          ctx.lineTo(pts[i].x, pts[i].y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
-    });
-
-    // Trazo que se está dibujando actualmente
-    if (isDrawing && currentStrokeRef.current.length > 1) {
-      const pts = currentStrokeRef.current;
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) {
-        const pressure = pts[i].pressure ?? 0.5;
-        ctx.lineWidth = 1.8 + pressure * 2.8;
-        ctx.lineTo(pts[i].x, pts[i].y);
-      }
-      ctx.stroke();
     }
-  }, [challenge, strokes, isDrawing, showSolution]);
+  }, [challenge, strokes, isDrawing, showSolution, showUserDrawing, showParametricSolution]);
 
   useEffect(() => {
     render();
@@ -753,7 +846,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         if (feedback && onNextCube) {
           e.preventDefault();
           onNextCube();
-        } else if (!feedback && strokes.length > 0 && onValidate) {
+        } else if (!feedback && countDetectedAristas(strokes) > 0 && onValidate) {
           e.preventDefault();
           if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -765,6 +858,12 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undoLastStroke();
+      } else if (feedback && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setShowUserDrawing((prev) => !prev);
+      } else if (feedback && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setShowParametricSolution((prev) => !prev);
       }
     };
 
@@ -788,6 +887,15 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Si la solución ya está evaluada/mostrada, no permitir trazar sobre la solución
+    if (showSolution || feedback) return;
+
+    // Si estamos en modo scroll y el puntero es táctil (dedo), permitir desplazamiento nativo con 1 dedo
+    // Si es un lápiz óptico (pen / Apple Pencil / S-Pen), siempre tiene prioridad de trazo
+    if (touchMode === 'scroll' && e.pointerType === 'touch') {
+      return;
+    }
+
     e.preventDefault();
     // Rechazo de palma (Palm Rejection) y bloqueo de puntero único:
     // Si ya hay un lápiz (pen) o dedo dibujando, ignorar toques secundarios de la palma
@@ -869,6 +977,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   };
 
   const handleValidateClick = () => {
+    if (countDetectedAristas(strokes) === 0) return;
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
@@ -877,18 +986,235 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     onValidate?.(timeLeftRef.current);
   };
 
+  useImperativeHandle(ref, () => ({
+    undo: undoLastStroke,
+    clear: clearStrokes,
+    validate: handleValidateClick,
+  }));
+
   return (
-    <div
-      className="flex flex-col items-center select-none w-full mx-auto"
-      style={{
-        width: 'min(100%, 600px, max(280px, calc((100vh - 330px) * 600 / 540)))',
-      }}
-    >
-      {/* Contenedor responsivo del lienzo: aspecto 600/540 bloqueado 1:1 sin deformación ni márgenes invisibles */}
-      <div
-        data-canvas-zone="true"
-        className="relative border-4 border-black bg-white shadow-[4px_4px_0px_#000000] w-full aspect-[600/540] overflow-hidden"
-      >
+    <div className="w-full flex flex-col items-center justify-center select-none">
+      {effectiveIsLandscape ? (
+        /* ============================================================ */
+        /* MODO MÓVIL HORIZONTAL (LANDSCAPE COMPACTO): CUBO 3D          */
+        /* ============================================================ */
+        <div className="w-full h-full flex flex-row items-center justify-center gap-2 sm:gap-3 max-w-full select-none overflow-hidden font-mono">
+          {/* LIENZO 600x540 ESCALADO A MÁXIMA ALTURA */}
+          <div
+            data-canvas-zone="true"
+            className="relative border-3 border-black bg-white shadow-[3px_3px_0px_#000000] aspect-[600/540] overflow-hidden shrink-0"
+            style={{
+              height: 'min(calc(100vh - 46px), calc(100dvh - 46px), 360px)',
+              width: 'auto',
+              maxWidth: 'calc(100vw - 210px)',
+            }}
+          >
+            {/* Barra superior de progreso del temporizador */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-neutral-200 pointer-events-none z-10">
+              <div
+                className={`h-full transition-all duration-100 ${
+                  timeLeft <= 5 && isTimerRunning ? 'bg-black animate-pulse' : 'bg-neutral-800'
+                }`}
+                style={{ width: `${(timeLeft / TOTAL_COUNTDOWN_SECONDS) * 100}%` }}
+              />
+            </div>
+
+            <canvas
+              ref={canvasRef}
+              width={600}
+              height={540}
+              className="block w-full h-full touch-none cursor-crosshair select-none"
+              style={{ touchAction: 'none' }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+            />
+
+            <div className="absolute top-1.5 left-1.5 text-[9px] font-mono uppercase bg-white border border-black px-1.5 py-0.5 pointer-events-none shadow-[1px_1px_0px_#000000] z-10">
+              #{challenge.seed}
+            </div>
+
+            {/* Temporizador */}
+            <div
+              className={`absolute top-1.5 right-1.5 border border-black px-1.5 py-0.5 font-mono text-[10px] pointer-events-none shadow-[1px_1px_0px_#000000] z-10 flex items-center gap-1 ${
+                timeLeft <= 5 && isTimerRunning ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
+              }`}
+            >
+              <Clock className="w-3 h-3 stroke-[2.5]" />
+              <span className="font-bold tabular-nums">{timeLeft.toFixed(1)}s</span>
+              {feedback && feedback.passed && (feedback.speedBonus ?? 0) > 0 && (
+                <span className="text-[9px] font-bold bg-neutral-200 text-black border border-black px-0.5">
+                  +{feedback.speedBonus}%
+                </span>
+              )}
+            </div>
+
+            {/* Banner sombras si aplica */}
+            {challenge.isShadowLevel && (
+              <div className="absolute bottom-1.5 left-1.5 right-1.5 bg-black text-white text-[9px] font-mono px-2 py-0.5 border border-white pointer-events-none z-10 truncate">
+                ☀️ {challenge.hasGroundGrid ? "Sombra con suelo guía" : "Sombra libre"}
+              </div>
+            )}
+          </div>
+
+          {/* BARRA LATERAL ERGONÓMICA EN MÓVIL HORIZONTAL (DERECHA) */}
+          <div
+            className="w-44 sm:w-48 shrink-0 flex flex-col justify-between border-2 border-black bg-white shadow-[3px_3px_0px_#000000] p-1.5 select-none font-mono"
+            style={{
+              height: 'min(calc(100vh - 46px), calc(100dvh - 46px), 360px)',
+            }}
+          >
+            {/* SECCIÓN SUPERIOR */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-1 pb-1 border-b border-black">
+                {onToggleSidebar && (
+                  <button
+                    type="button"
+                    onClick={onToggleSidebar}
+                    className="bg-white hover:bg-neutral-100 text-black px-1.5 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] font-bold flex items-center gap-1 cursor-pointer active:scale-95"
+                    title="Abrir panel"
+                  >
+                    <PanelLeft className="w-3 h-3 stroke-[2.5]" />
+                    <span>Panel</span>
+                  </button>
+                )}
+                <span className="text-[9px] font-bold bg-neutral-100 px-1 py-0.5 border border-black truncate">
+                  {isDailyChallenge && dailyProgress
+                    ? `Reto ${dailyProgress.current}/${dailyProgress.total}`
+                    : (nodeCode || activeLesson?.code || '1.1')}
+                </span>
+              </div>
+
+              {/* Contador de aristas */}
+              <div className="flex items-center justify-between text-[10px] font-bold text-neutral-700 bg-neutral-50 px-1.5 py-0.5 border border-neutral-300">
+                <span>Aristas:</span>
+                <span className="tabular-nums">
+                  {countDetectedAristas(strokes)} / {challenge.targetEdges.length}
+                </span>
+              </div>
+
+              {/* Herramientas: Deshacer, Borrar, Comentar, Reporte */}
+              <div className="grid grid-cols-4 gap-1">
+                <button
+                  onClick={undoLastStroke}
+                  disabled={strokes.length === 0 || showSolution}
+                  className="btn-ink-outline p-1 text-xs font-mono disabled:opacity-30 cursor-pointer flex items-center justify-center shadow-[1px_1px_0px_#000000]"
+                  title="Deshacer (Ctrl+Z)"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={clearStrokes}
+                  disabled={strokes.length === 0 || showSolution}
+                  className="btn-ink-outline p-1 text-xs font-mono disabled:opacity-30 cursor-pointer hover:bg-red-50 hover:text-red-700 flex items-center justify-center shadow-[1px_1px_0px_#000000]"
+                  title="Borrar todo"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={isRecording ? onOpenRecordModal : onToggleRecording}
+                  className={`btn-ink-outline p-1 text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-[1px_1px_0px_#000000] ${
+                    isRecording ? 'bg-black text-white' : 'bg-white text-black'
+                  }`}
+                  title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar.` : "Activar grabación (Modo Récord)"}
+                >
+                  <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400'}`} />
+                  <span className="text-[9px] ml-0.5">{isRecording ? `REC(${recordedCount})` : 'REC'}</span>
+                </button>
+                <button
+                  onClick={() => setShowQuickCommentModal(true)}
+                  className={`btn-ink-outline p-1 text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-[1px_1px_0px_#000000] ${
+                    userNote.trim() ? 'bg-black text-white' : ''
+                  }`}
+                  title={userNote.trim() ? `Nota: "${userNote}"` : "Añadir comentario a este cubo (Modo Récord)"}
+                >
+                  <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
+                <button
+                  onClick={handleOpenReportModal}
+                  className="btn-ink-outline p-1 text-xs font-mono font-bold flex items-center justify-center cursor-pointer shadow-[1px_1px_0px_#000000]"
+                  title="Reporte de anomalía"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+                </button>
+              </div>
+
+              {/* Capas dibujo y solución cuando está resuelto */}
+              {feedback && (
+                <div className="grid grid-cols-2 gap-1 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowUserDrawing((prev) => !prev)}
+                    className={`p-1 text-[10px] font-mono font-bold border border-black flex items-center justify-center gap-0.5 ${
+                      showUserDrawing ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
+                    }`}
+                    title={showUserDrawing ? "Ocultar trazo" : "Mostrar trazo"}
+                  >
+                    {showUserDrawing ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    <span>Trazo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowParametricSolution((prev) => !prev)}
+                    className={`p-1 text-[10px] font-mono font-bold border border-black flex items-center justify-center gap-0.5 ${
+                      showParametricSolution ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
+                    }`}
+                    title={showParametricSolution ? "Ocultar solución" : "Mostrar solución"}
+                  >
+                    {showParametricSolution ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    <span>Solución</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* SECCIÓN INFERIOR */}
+            <div className="pt-1 border-t border-neutral-300">
+              {!feedback ? (
+                <button
+                  onClick={handleValidateClick}
+                  disabled={countDetectedAristas(strokes) === 0}
+                  className="w-full btn-ink py-2 text-xs font-mono uppercase font-bold disabled:opacity-25 disabled:pointer-events-none cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center justify-center gap-1"
+                  title="Comprobar perspectiva (Enter)"
+                >
+                  <span>Comprobar</span>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                </button>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-bold bg-neutral-100 p-1 border border-black">
+                    <span className="text-[10px] text-neutral-600">Nota:</span>
+                    <span className="font-black text-sm">{feedback.totalScore ?? feedback.score}%</span>
+                  </div>
+                  <button
+                    onClick={onNextCube}
+                    className="w-full btn-ink py-2 text-xs font-mono uppercase font-bold flex items-center justify-center gap-1 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                    title="Siguiente ejercicio"
+                  >
+                    <span>Siguiente</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ============================================================ */
+        /* MODO ESTÁNDAR (PORTRAIT MÓVIL, TABLET, ESCRITORIO)           */
+        /* ============================================================ */
+        <div
+          className="flex flex-col items-center select-none w-full mx-auto"
+          style={{
+            width: 'min(100%, 680px, max(280px, calc((100vh - 180px) * 600 / 540)))',
+          }}
+        >
+          {/* Contenedor responsivo del lienzo: aspecto 600/540 bloqueado 1:1 sin deformación ni márgenes invisibles */}
+          <div
+            data-canvas-zone="true"
+            className="relative border-4 border-black bg-white shadow-[4px_4px_0px_#000000] w-full aspect-[600/540] overflow-hidden"
+          >
         {/* Barra superior de progreso del temporizador */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-neutral-200 pointer-events-none z-10">
           <div
@@ -903,7 +1229,10 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
           ref={canvasRef}
           width={600}
           height={540}
-          className="touch-none cursor-crosshair block w-full h-full"
+          className={`block w-full h-full ${
+            touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
+          }`}
+          style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -951,75 +1280,233 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
             </span>
           </div>
         )}
-      </div>
 
-      {/* BARRA DE HERRAMIENTAS Y ACCIONES INMEDIATA (TODO AL ALCANCE EN 1 SOLA LÍNEA) */}
-      <div className="w-full mt-2 flex items-center justify-between gap-1.5 sm:gap-2 border-2 border-black bg-white p-2 shadow-[3px_3px_0px_#000000] flex-nowrap min-w-0">
-        {/* Lado Izquierdo: Herramientas de dibujo (o resumen si está comprobado) */}
-        {!feedback ? (
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            <button
-              onClick={undoLastStroke}
-              disabled={strokes.length === 0 || showSolution}
-              className="btn-ink-outline px-2 py-1 text-xs font-mono disabled:opacity-30 cursor-pointer flex items-center gap-1 shrink-0 shadow-[1px_1px_0px_#000000]"
-              title="Deshacer último trazo (Ctrl+Z)"
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Deshacer</span>
-            </button>
-            <button
-              onClick={clearStrokes}
-              disabled={strokes.length === 0 || showSolution}
-              className="btn-ink-outline px-2 py-1 text-xs font-mono disabled:opacity-30 cursor-pointer flex items-center gap-1 shrink-0 shadow-[1px_1px_0px_#000000]"
-              title="Borrar todos los trazos"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Borrar</span>
-            </button>
-            <span className="text-[11px] font-mono text-neutral-600 pl-0.5 font-bold shrink-0">
-              {countDetectedAristas(strokes)}/{challenge.targetEdges.length}
-              <span className="hidden lg:inline font-normal"> {challenge.isShadowLevel ? 'sombras' : 'aristas'}</span>
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-[11px] font-mono font-bold text-neutral-700 bg-neutral-100 px-1.5 sm:px-2 py-1 border border-black shadow-[1px_1px_0px_#000000]">
-              {countDetectedAristas(strokes)}/{challenge.targetEdges.length}
-              <span className="hidden xs:inline"> {challenge.isShadowLevel ? 'aristas sombra' : 'aristas'}</span>
-            </span>
+        {/* Selector de modo táctil móvil: Lápiz (dibujar) vs Mano (desplazar con 1 dedo) */}
+        <div className={`absolute z-20 flex items-center border-2 border-black bg-white shadow-[2px_2px_0px_#000000] ${
+          challenge.isShadowLevel ? 'top-10 left-2' : 'bottom-2.5 right-2'
+        }`}>
+          <button
+            type="button"
+            onClick={() => setTouchMode('draw')}
+            className={`px-2 py-1 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+              touchMode === 'draw'
+                ? 'bg-black text-white'
+                : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
+            }`}
+            title="Modo Trazo: dibuja aristas con el dedo o lápiz táctil"
+          >
+            <Pen className="w-3 h-3 stroke-[2.5]" />
+            <span className="text-[10px] sm:text-xs">Trazo</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTouchMode('scroll')}
+            className={`px-2 py-1 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+              touchMode === 'scroll'
+                ? 'bg-black text-white'
+                : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
+            }`}
+            title="Modo Mover: desliza libremente la pantalla hacia abajo con 1 dedo"
+          >
+            <Hand className="w-3 h-3 stroke-[2.5]" />
+            <span className="text-[10px] sm:text-xs">Mover (1 dedo)</span>
+          </button>
+        </div>
+
+        {/* Indicador visual cuando el modo Mover con 1 dedo está activo */}
+        {touchMode === 'scroll' && !feedback && (
+          <div className="absolute inset-x-2 top-11 pointer-events-none z-10 flex justify-center">
+            <div className="bg-black/90 text-white border border-white px-2.5 py-1 shadow-[2px_2px_0px_#000000] text-[11px] font-mono font-bold flex items-center gap-1.5 animate-in fade-in duration-200">
+              <Hand className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Desliza con 1 dedo para mover la pantalla</span>
+            </div>
           </div>
         )}
+      </div>
 
-        {/* Lado Derecho: Acciones (Comprobar o Siguiente) + Botón Report */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Botón de Reporte (pequeño con icono de triángulo para exportar / depurar) */}
-          <button
-            onClick={handleGenerateReport}
-            className="btn-ink-outline p-1.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-transform active:scale-95 shadow-[1px_1px_0px_#000000] shrink-0"
-            title="Generar reporte para depuración y revisión de nota (copiar y descargar)"
-          >
-            <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
-          </button>
+      {/* BARRA DE HERRAMIENTAS Y ACCIONES (TODO DENTRO DEL MARCO DEL LIENZO) */}
+      <div className="w-full mt-2 border-2 border-black bg-white p-2 shadow-[3px_3px_0px_#000000] min-w-0">
+        {!feedback ? (
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2 w-full">
+            {/* Lado Izquierdo: Herramientas de dibujo */}
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+              <button
+                onClick={undoLastStroke}
+                disabled={strokes.length === 0 || showSolution}
+                className="btn-ink-outline px-2 py-1 text-xs font-mono disabled:opacity-30 cursor-pointer flex items-center gap-1 shrink-0 shadow-[1px_1px_0px_#000000]"
+                title="Deshacer último trazo (Ctrl+Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Deshacer</span>
+              </button>
+              <button
+                onClick={clearStrokes}
+                disabled={strokes.length === 0 || showSolution}
+                className="btn-ink-outline px-2 py-1 text-xs font-mono disabled:opacity-30 cursor-pointer flex items-center gap-1 shrink-0 shadow-[1px_1px_0px_#000000]"
+                title="Borrar todos los trazos"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Borrar</span>
+              </button>
+              <span className="text-[11px] font-mono text-neutral-600 pl-0.5 font-bold shrink-0">
+                {countDetectedAristas(strokes)}/{challenge.targetEdges.length}
+                <span className="hidden lg:inline font-normal"> {challenge.isShadowLevel ? 'sombras' : 'aristas'}</span>
+              </span>
+            </div>
 
-          {feedback ? (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="flex items-center gap-1 border-2 border-black bg-neutral-100 px-2 py-1 font-mono text-xs font-bold shadow-[1px_1px_0px_#000000] shrink-0">
-                {feedback.passed ? (
-                  <CheckCircle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
-                ) : (
-                  <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
-                )}
-                <span>{feedback.totalScore ?? feedback.score}%</span>
-                {feedback.passed && (feedback.speedBonus ?? 0) > 0 && (
-                  <span
-                    className="text-[10px] bg-black text-white px-1 ml-0.5 flex items-center gap-0.5"
-                    title={`Base: ${feedback.score}% + Bonus velocidad: +${feedback.speedBonus}%`}
-                  >
-                    <Zap className="w-2.5 h-2.5 fill-white text-white shrink-0" />
-                    <span>+{feedback.speedBonus}%</span>
+            {/* Lado Derecho: REC, Reporte y Comprobar */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={isRecording ? onOpenRecordModal : onToggleRecording}
+                className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors ${
+                  isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+                }`}
+                title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
+              >
+                <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
+                <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
+              </button>
+
+              <button
+                onClick={handleOpenReportModal}
+                className="btn-ink-outline p-1.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-transform active:scale-95 shadow-[1px_1px_0px_#000000] shrink-0"
+                title="Escribir nota y descargar reporte (JSON / Copiar)"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+              </button>
+
+              <button
+                onClick={handleValidateClick}
+                disabled={countDetectedAristas(strokes) === 0}
+                className="btn-ink px-2.5 sm:px-3.5 py-1.5 text-xs font-mono uppercase font-bold disabled:opacity-25 disabled:pointer-events-none disabled:cursor-not-allowed cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center gap-1 shrink-0"
+                title={
+                  countDetectedAristas(strokes) === 0
+                    ? "Dibuja al menos una arista antes de comprobar"
+                    : challenge.isShadowLevel
+                    ? "Comprobar proyección de sombra (Enter)"
+                    : "Comprobar perspectiva (Enter)"
+                }
+              >
+                <span>Comprobar</span>
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* DOS FILAS ESTRUCTURADAS AL RESOLVER: NUNCA SE SALE DEL CUADRO DE DIBUJO */
+          <div className="flex flex-col gap-1.5 w-full">
+            {/* Fila 1: Contador de aristas y Botones para Mostrar/Ocultar Dibujo y Solución */}
+            <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-neutral-200 w-full">
+              <span className="text-[11px] font-mono font-bold text-neutral-700 bg-neutral-100 px-1.5 sm:px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] shrink-0">
+                {countDetectedAristas(strokes)}/{challenge.targetEdges.length}
+                <span className="hidden sm:inline"> {challenge.isShadowLevel ? 'aristas sombra' : 'aristas'}</span>
+              </span>
+
+              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                {/* Botón Ver/Ocultar Mi Dibujo */}
+                <button
+                  type="button"
+                  onClick={() => setShowUserDrawing((prev) => !prev)}
+                  className={`px-2 py-0.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] border border-black ${
+                    showUserDrawing
+                      ? 'bg-black text-white hover:bg-neutral-800'
+                      : 'bg-neutral-100 text-neutral-500 border-neutral-400 hover:bg-neutral-200'
+                  }`}
+                  title={showUserDrawing ? 'Ocultar mi dibujo (D)' : 'Mostrar mi dibujo (D)'}
+                >
+                  {showUserDrawing ? (
+                    <Eye className="w-3.5 h-3.5 stroke-[2.5]" />
+                  ) : (
+                    <EyeOff className="w-3.5 h-3.5 stroke-[2]" />
+                  )}
+                  <span className={showUserDrawing ? '' : 'line-through opacity-75'}>
+                    <span className="hidden sm:inline">Mi dibujo</span>
+                    <span className="sm:hidden">Dibujo</span>
                   </span>
-                )}
+                </button>
+
+                {/* Botón Ver/Ocultar Solución Paramétrica */}
+                <button
+                  type="button"
+                  onClick={() => setShowParametricSolution((prev) => !prev)}
+                  className={`px-2 py-0.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] border border-black ${
+                    showParametricSolution
+                      ? 'bg-black text-white hover:bg-neutral-800'
+                      : 'bg-neutral-100 text-neutral-500 border-neutral-400 hover:bg-neutral-200'
+                  }`}
+                  title={showParametricSolution ? 'Ocultar solución paramétrica (S)' : 'Mostrar solución paramétrica (S)'}
+                >
+                  {showParametricSolution ? (
+                    <Eye className="w-3.5 h-3.5 stroke-[2.5]" />
+                  ) : (
+                    <EyeOff className="w-3.5 h-3.5 stroke-[2]" />
+                  )}
+                  <span className={showParametricSolution ? '' : 'line-through opacity-75'}>
+                    <span className="hidden sm:inline">Solución</span>
+                    <span className="sm:hidden">Solución</span>
+                  </span>
+                </button>
               </div>
+            </div>
+
+            {/* Fila 2: Diagnóstico/Reporte a la izquierda y Botón Siguiente a la derecha */}
+            <div className="flex items-center justify-between gap-1.5 pt-0.5 w-full">
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Botón Modo Récord tras evaluar */}
+                <button
+                  type="button"
+                  onClick={isRecording ? onOpenRecordModal : onToggleRecording}
+                  className={`px-2 py-1 text-xs font-mono font-bold border border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 transition-colors ${
+                    isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+                  }`}
+                  title={isRecording ? `Grabando: ${recordedCount} ejercicios. Clic para ver o exportar sesión` : "Activar grabación de sesión (Modo Récord)"}
+                >
+                  <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
+                  <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
+                </button>
+
+                {/* Botón Rápido de Comentario (Modo Récord) */}
+                <button
+                  onClick={() => setShowQuickCommentModal(true)}
+                  className={`btn-ink-outline p-1.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-transform active:scale-95 shadow-[1px_1px_0px_#000000] shrink-0 ${
+                    userNote.trim() ? 'bg-black text-white' : ''
+                  }`}
+                  title={userNote.trim() ? `Comentario guardado: "${userNote}"` : "Añadir comentario a este cubo (Modo Récord)"}
+                >
+                  <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
+
+                {/* Botón de Reporte */}
+                <button
+                  onClick={handleOpenReportModal}
+                  className="btn-ink-outline p-1.5 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-transform active:scale-95 shadow-[1px_1px_0px_#000000] shrink-0"
+                  title="Escribir nota y descargar reporte (JSON / Copiar)"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+                </button>
+
+                {/* Badge de puntuación */}
+                <div className="flex items-center gap-1 border-2 border-black bg-neutral-100 px-2 py-1 font-mono text-xs font-bold shadow-[1px_1px_0px_#000000] shrink-0">
+                  {feedback.passed ? (
+                    <CheckCircle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+                  ) : (
+                    <AlertTriangle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+                  )}
+                  <span>{feedback.totalScore ?? feedback.score}%</span>
+                  {feedback.passed && (feedback.speedBonus ?? 0) > 0 && (
+                    <span
+                      className="text-[10px] bg-black text-white px-1 ml-0.5 flex items-center gap-0.5"
+                      title={`Base: ${feedback.score}% + Bonus velocidad: +${feedback.speedBonus}%`}
+                    >
+                      <Zap className="w-2.5 h-2.5 fill-white text-white shrink-0" />
+                      <span>+{feedback.speedBonus}%</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Botón Siguiente alineado a la derecha sin desbordar el cuadro */}
               <button
                 onClick={onNextCube}
                 className="btn-ink px-3 sm:px-4 py-1.5 text-xs font-mono uppercase font-bold flex items-center gap-1 cursor-pointer shadow-[2px_2px_0px_#000000] shrink-0"
@@ -1029,19 +1516,11 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
-          ) : (
-            <button
-              onClick={handleValidateClick}
-              disabled={strokes.length === 0}
-              className="btn-ink px-2.5 sm:px-3.5 py-1.5 text-xs font-mono uppercase font-bold disabled:opacity-30 cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center gap-1 shrink-0"
-              title={challenge.isShadowLevel ? "Comprobar proyección de sombra (Enter)" : "Comprobar perspectiva (Enter)"}
-            >
-              <span>Comprobar</span>
-              <Check className="w-3.5 h-3.5 stroke-[3]" />
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+    </div>
+  )}
 
       {/* Feedback técnico si se ha comprobado */}
       {feedback && (
@@ -1077,26 +1556,48 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         </div>
       )}
 
-      {/* Modal de Reporte de Depuración y Diagnóstico */}
-      {showReportModal && currentReportData && (
+      {/* Modal Rápido de Comentario para Modo Récord */}
+      <QuickCommentModal
+        isOpen={showQuickCommentModal}
+        onClose={() => setShowQuickCommentModal(false)}
+        initialComment={userNote}
+        onSave={(comment) => {
+          setUserNote(comment);
+          onCommentChange?.(comment);
+        }}
+        nodeCode={nodeCode || (activeLesson ? activeLesson.code || 'Cubo' : 'Cubo')}
+        nodeTitle={activeLesson?.title || challenge.mode}
+        score={feedback?.totalScore ?? feedback?.score}
+        seed={challenge.seed}
+        isRecording={Boolean(isRecording)}
+        onStartRecordingAndSave={(comment) => {
+          setUserNote(comment);
+          onAddCurrentToRecording?.(comment);
+        }}
+      />
+
+      {/* Modal de Reporte de Depuración y Diagnóstico con Notas */}
+      {showReportModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in">
-          <div className="bg-white border-3 border-black p-4 sm:p-5 max-w-lg w-full shadow-[6px_6px_0px_#000000] flex flex-col gap-3 font-sans">
+          <div className="bg-white border-4 border-black p-4 sm:p-5 max-w-lg w-full shadow-[8px_8px_0px_#000000] flex flex-col gap-3 font-sans max-h-[92vh] overflow-y-auto">
+            {/* Cabecera */}
             <div className="flex items-center justify-between border-b-2 border-black pb-2">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-black stroke-[2.5]" />
                 <h3 className="font-display font-bold text-sm sm:text-base uppercase tracking-tight">
-                  Reporte de Evaluación del Cubo
+                  Reporte de Evaluación y Depuración
                 </h3>
               </div>
               <button
                 onClick={() => setShowReportModal(false)}
                 className="p-1 hover:bg-neutral-100 border border-black cursor-pointer"
-                title="Cerrar modal"
+                title="Cerrar modal (Esc)"
               >
-                <X className="w-4 h-4 text-black" />
+                <X className="w-4 h-4 text-black stroke-[2.5]" />
               </button>
             </div>
 
+            {/* Metadatos del reto */}
             <div className="flex items-center justify-between text-xs font-mono bg-neutral-50 p-2 border border-black">
               <div>
                 <span className="text-neutral-500">Semilla:</span> <strong>#{challenge.seed}</strong>
@@ -1110,53 +1611,104 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               </div>
             </div>
 
-            <div className="text-xs text-neutral-700 bg-neutral-100 p-2.5 border border-neutral-300 leading-relaxed">
-              <p className="font-bold text-black flex items-center gap-1.5 mb-1">
-                <CheckCircle className="w-4 h-4 text-black" />
-                <span>¡Reporte copiado y descargado en .JSON!</span>
-              </p>
-              <p>
-                El reporte completo con todos los datos geométricos, trazos y evaluación se ha copiado al portapapeles y se ha descargado a tu equipo. Puedes pegarlo directamente en el chat para revisar la calificación.
-              </p>
+            {/* Campo de Nota / Explicación del problema */}
+            <div className="flex flex-col gap-1.5 bg-neutral-50 p-3 border-2 border-black">
+              <label className="text-xs font-mono font-bold text-black flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Nota o explicación del problema:</span>
+                </span>
+                <span className="text-[10px] text-neutral-500 font-normal hidden sm:inline">
+                  (Se guardará dentro del archivo .JSON y en el texto copiado)
+                </span>
+              </label>
+              <textarea
+                value={userNote}
+                onChange={(e) => {
+                  setUserNote(e.target.value);
+                  onCommentChange?.(e.target.value);
+                }}
+                placeholder="Escribe aquí qué ocurrió (ej: 'El punto 3 converge hacia VPR pero dio 0%', 'Arista no detectada', 'Fallo en la sombra proyectada')..."
+                className="w-full h-20 p-2 text-xs font-mono bg-white border border-black resize-none focus:outline-none focus:ring-2 focus:ring-black selection:bg-black selection:text-white"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-1 items-center pt-0.5">
+                <span className="text-[10px] font-mono text-neutral-500 font-bold mr-1">Rápido:</span>
+                {['Nota injusta', 'Punto de fuga desalineado', 'Arista no detectada', 'Fallo en sombra'].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const nextVal = userNote ? `${userNote} · ${tag}` : tag;
+                      setUserNote(nextVal);
+                      onCommentChange?.(nextVal);
+                    }}
+                    className="text-[10px] font-mono bg-white hover:bg-black hover:text-white border border-black px-1.5 py-0.5 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000]"
+                  >
+                    +{tag}
+                  </button>
+                ))}
+                {userNote && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserNote('');
+                      onCommentChange?.('');
+                    }}
+                    className="text-[10px] font-mono text-neutral-500 hover:text-black ml-auto underline cursor-pointer"
+                  >
+                    Borrar nota
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Vista previa del contenido */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-mono font-bold text-neutral-600">
-                Vista previa del reporte (Markdown / JSON):
+                Vista previa del reporte (Markdown / JSON con tu nota):
               </label>
               <textarea
                 readOnly
-                value={currentReportData.markdownText}
-                className="w-full h-32 p-2 font-mono text-[10px] bg-neutral-50 border border-black resize-none selection:bg-black selection:text-white"
+                value={currentReport.markdownText}
+                className="w-full h-28 p-2 font-mono text-[10px] bg-neutral-50 border border-black resize-none selection:bg-black selection:text-white"
               />
             </div>
 
-            {/* Acciones */}
+            {/* Acciones de exportación */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-200">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={async () => {
-                    await copyReportToClipboard(currentReportData.markdownText);
-                    setCopiedReport(true);
-                    setTimeout(() => setCopiedReport(false), 2500);
+                  type="button"
+                  onClick={() => {
+                    downloadReportJson(currentReport.jsonString, challenge.seed, userNote);
+                    setDownloadedReport(true);
+                    setTimeout(() => setDownloadedReport(false), 2500);
                   }}
                   className="btn-ink px-3 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                  title="Descargar archivo .JSON incluyendo tu nota"
                 >
-                  {copiedReport ? <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedReport ? '¡Copiado de nuevo!' : 'Copiar Texto'}</span>
+                  {downloadedReport ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : <Download className="w-3.5 h-3.5" />}
+                  <span>{downloadedReport ? '¡Descargado con tu nota!' : 'Descargar JSON'}</span>
                 </button>
 
                 <button
-                  onClick={() => downloadReportJson(currentReportData.jsonString, challenge.seed)}
+                  type="button"
+                  onClick={async () => {
+                    await copyReportToClipboard(currentReport.markdownText);
+                    setCopiedReport(true);
+                    setTimeout(() => setCopiedReport(false), 2500);
+                  }}
                   className="btn-ink-outline px-3 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                  title="Copiar texto con tu nota al portapapeles"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Descargar JSON</span>
+                  {copiedReport ? <Check className="w-3.5 h-3.5 text-black stroke-[2.5]" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedReport ? '¡Copiado con tu nota!' : 'Copiar Texto'}</span>
                 </button>
               </div>
 
               <button
+                type="button"
                 onClick={() => setShowReportModal(false)}
                 className="px-3 py-1.5 text-xs font-mono text-neutral-600 hover:text-black border border-neutral-300 hover:border-black cursor-pointer ml-auto"
               >
@@ -1166,6 +1718,36 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
           </div>
         </div>
       )}
+      {/* Botón flotante móvil de desplazamiento rápido con 1 dedo (solo en vertical) */}
+      {!effectiveIsLandscape && (
+        <div className="fixed bottom-4 right-4 z-40 sm:hidden">
+          <button
+            type="button"
+            onClick={() => {
+              if (isScrolledDown) {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              } else {
+                window.scrollBy({ top: 380, behavior: 'smooth' });
+              }
+            }}
+            className="btn-ink px-2.5 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 shadow-[2px_2px_0px_#000000] cursor-pointer active:scale-95"
+            title={isScrolledDown ? "Volver arriba al lienzo" : "Bajar a los controles"}
+          >
+            {isScrolledDown ? (
+              <>
+                <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span className="text-[11px]">Lienzo</span>
+              </>
+            ) : (
+              <>
+                <ArrowDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span className="text-[11px]">Controles</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
-};
+});
+

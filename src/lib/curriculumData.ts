@@ -1,8 +1,9 @@
 import { PerspectiveMode, AxesMode } from './geometry';
+import { ALL_SINGLE_STROKE_EXERCISES, LabExerciseDef } from './strokeTypes';
 
 export interface LessonNode {
   id: string;
-  code: string; // '1.1', '1.2', '1.3', '1.4', '2.1', etc.
+  code: string; // '1.1', '1.2', '1.3', '1.4', '2.1', 'C1.01', 'E1.1', etc.
   title: string;
   subtitle: string;
   type: 'warmup' | 'standard' | 'rush' | 'exam';
@@ -15,6 +16,9 @@ export interface LessonNode {
   xpReward: number;
   isShadowLevel?: boolean;
   hasGroundGrid?: boolean;
+  isCalisthenics?: boolean;
+  exerciseDef?: LabExerciseDef;
+  variants?: LabExerciseDef[];
 }
 
 export interface Unit {
@@ -38,6 +42,339 @@ export interface ModuleTrack {
   icon: string;
   units: Unit[];
 }
+
+function createGroupedCalisthenicsNode(
+  id: string,
+  code: string,
+  title: string,
+  subtitle: string,
+  variants: LabExerciseDef[],
+  indexInModule: number,
+  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+  xpReward: number = 35
+): LessonNode {
+  const isFirst = indexInModule === 0;
+  const primaryEx = variants[0] || ALL_SINGLE_STROKE_EXERCISES[0];
+  return {
+    id,
+    code,
+    title,
+    subtitle: `${variants.length} versiones · ${subtitle}`,
+    type: 'standard',
+    difficulty,
+    perspectiveMode: 'gentle',
+    axesMode: 'none',
+    status: isFirst ? 'current' : 'locked',
+    xpReward,
+    isCalisthenics: true,
+    exerciseDef: primaryEx,
+    variants,
+  };
+}
+
+/**
+ * Construye las 5 Unidades Pedagógicas de Calistenia Agrupadas (18 Niveles con 237 Variantes Dinámicas)
+ */
+function buildCalisthenicsModuleUnits(): Unit[] {
+  const all = ALL_SINGLE_STROKE_EXERCISES;
+  let globalIndex = 0;
+
+  return [
+    {
+      id: 'unit-cal-1',
+      number: 1,
+      title: 'Trazos Fundamentales Ortogonales (Horizontales y Verticales)',
+      description: 'Dominio de los ejes absolutos X e Y: estabilidad de muñeca, aceleración uniforme y consistencia de longitud.',
+      bookChapter: 'Paplitz Calisthenics — Ejes Ortogonales D5 (→), D6 (←), D7 (↑), D8 (↓)',
+      guidebookContent: {
+        title: 'Estabilidad de Ejes Ortogonales',
+        axioms: [
+          'Bloquea la muñeca y utiliza el hombro y antebrazo como compás para garantizar rectitud.',
+          'Traza con velocidad controlada desde el punto de inicio ① hasta el punto de fin ②.',
+          'Mantén una presión constante de pluma durante todo el recorrido.',
+          'Ajusta la postura antes de cada trazo para alinearte con la dirección solicitada.',
+        ],
+        diagramNotes: 'Primero domina la dirección natural de izquierda a derecha antes de pasar a la inversa.',
+      },
+      nodes: [
+        createGroupedCalisthenicsNode(
+          'cal_u1_d5',
+          'C1.1',
+          'Horizontales Naturales (→)',
+          'Deslizamiento de izquierda a derecha con control de inercia y longitud',
+          all.filter((e) => e.id?.startsWith('d5_')),
+          globalIndex++,
+          'easy',
+          25
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u1_d6',
+          'C1.2',
+          'Horizontales Inversas (←)',
+          'Recogida de derecha a izquierda con frenado seco en diana',
+          all.filter((e) => e.id?.startsWith('d6_')),
+          globalIndex++,
+          'easy',
+          25
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u1_d7',
+          'C1.3',
+          'Verticales Ascendentes (↑)',
+          'Empuje vertical de abajo a arriba con alineación del antebrazo',
+          all.filter((e) => e.id?.startsWith('d7_')),
+          globalIndex++,
+          'medium',
+          30
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u1_d8',
+          'C1.4',
+          'Verticales Descendentes (↓)',
+          'Tirón vertical hacia el cuerpo con parada milimétrica',
+          all.filter((e) => e.id?.startsWith('d8_')),
+          globalIndex++,
+          'medium',
+          30
+        ),
+      ],
+    },
+    {
+      id: 'unit-cal-2',
+      number: 2,
+      title: 'Diagonales Principales y Fugas de Perspectiva',
+      description: 'Líneas dinámicas a 45° y fugas sutiles a 15°-20° para proyectar aristas en escorzo y planos oblicuos.',
+      bookChapter: 'Paplitz Calisthenics — Cuadrantes Diagonales D1 (↗), D3 (↘), D2 (↙), D4 (↖) y Fugas D9, D10',
+      guidebookContent: {
+        title: 'Cuadrantes Diagonales y Líneas de Fuga',
+        axioms: [
+          'El cuadrante natural de subida (35° a 75° ↗) requiere soltar el brazo con decisión.',
+          'Las fugas suaves (~15°-20°) entrenan la convergencia hacia puntos de fuga muy lejanos.',
+          'Ajusta la trayectoria en el aire antes de tocar el papel (técnica del fantasma o ghosting).',
+        ],
+        diagramNotes: 'En ángulos descendentes o inversos, rota mentalmente el hombro para mantener la fluidez.',
+      },
+      nodes: [
+        createGroupedCalisthenicsNode(
+          'cal_u2_d1',
+          'C2.1',
+          'Diagonal Ascendente Natural (↗)',
+          'Lanzamiento a 45°-60° de abajo-izquierda a arriba-derecha',
+          all.filter((e) => e.id?.startsWith('d1_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          globalIndex++,
+          'easy',
+          30
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u2_d2',
+          'C2.2',
+          'Diagonal Inversa al Pecho (↙)',
+          'Flexión de arriba-derecha a abajo-izquierda con muñeca libre',
+          all.filter((e) => e.id?.startsWith('d2_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          globalIndex++,
+          'medium',
+          30
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u2_d3',
+          'C2.3',
+          'Diagonal Descendente Externa (↘)',
+          'Empuje diagonal hacia afuera de arriba-izquierda a abajo-derecha',
+          all.filter((e) => e.id?.startsWith('d3_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          globalIndex++,
+          'medium',
+          30
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u2_d4',
+          'C2.4',
+          'Diagonal de Empuje Superior (↖)',
+          'Ascenso hacia la esquina superior izquierda de abajo-derecha',
+          all.filter((e) => e.id?.startsWith('d4_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          globalIndex++,
+          'medium',
+          35
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u2_d9',
+          'C2.5',
+          'Aristas en Fuga Suave Derecha (↗ ~18°)',
+          'Pendiente baja de perspectiva cónica hacia el punto de fuga derecho',
+          all.filter((e) => e.id?.startsWith('d9_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          globalIndex++,
+          'hard',
+          40
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u2_d10',
+          'C2.6',
+          'Aristas en Fuga Suave Izquierda (↖ ~18°)',
+          'Pendiente baja de perspectiva cónica hacia el punto de fuga izquierdo',
+          all.filter((e) => e.id?.startsWith('d10_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          globalIndex++,
+          'hard',
+          40
+        ),
+      ],
+    },
+    {
+      id: 'unit-cal-3',
+      number: 3,
+      title: 'Multi-Líneas y Rosetas Radiales (Convergencia Focal)',
+      description: 'Control de paralelismo simultáneo y proyección focal 360° desde y hacia centros de gravedad.',
+      bookChapter: 'Paplitz Calisthenics — Multi-Trazo y Rosetas D11 (☼ Fuera) y D12 (❂ Dentro)',
+      guidebookContent: {
+        title: 'Paralelismo y Confluencia Radial',
+        axioms: [
+          'Mantén constante el paso interlineal en las secuencias de 2 y 3 líneas paralelas.',
+          'En las rosetas divergentes (☼), proyecta cada radio a partir del núcleo con espaciado angular regular.',
+          'En las rosetas convergentes (❂), apunta al punto central como blanco sin frenar antes de tiempo.',
+        ],
+        diagramNotes: 'Usa el centro focal como punto de anclaje visual constante en todas las direcciones.',
+      },
+      nodes: [
+        createGroupedCalisthenicsNode(
+          'cal_u3_d11',
+          'C3.1',
+          'Roseta Radial Divergente 360° (☼)',
+          'Disparo de 8 y 12 radios regulares desde el centro hacia las dianas exteriores',
+          all.filter((e) => e.id?.startsWith('d11_')),
+          globalIndex++,
+          'medium',
+          40
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u3_d12',
+          'C3.2',
+          'Roseta Radial Convergente 360° (❂)',
+          'Recogida de radios perimetrales hacia el núcleo central común',
+          all.filter((e) => e.id?.startsWith('d12_')),
+          globalIndex++,
+          'medium',
+          40
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u3_multi',
+          'C3.3',
+          'Constelaciones Multi-Línea Dispersas',
+          '2 y 3 trazos independientes en cuadrantes y pendientes distintas',
+          all.filter((e) => e.singleStrokeConfig?.variationType === 'multi_line'),
+          globalIndex++,
+          'hard',
+          45
+        ),
+      ],
+    },
+    {
+      id: 'unit-cal-4',
+      number: 4,
+      title: 'Carriles de Ritmo y Espaciado Interlineal',
+      description: 'Consistencia de trama en bandas acotadas: espaciado x y x/2, diagonales, quiebros en V, relámpagos y ondas.',
+      bookChapter: 'Paplitz Calisthenics — Carriles y Espaciado Rítmico E1.1 a E17.1',
+      guidebookContent: {
+        title: 'Espaciado Interlineal y Muros de Carril',
+        axioms: [
+          'Observa la muestra entintada a la izquierda y replica el paso exacto dentro de los carriles.',
+          'En quiebros angulares (V, chevron, zigzag), detén el trazo secamente en el vértice antes de cambiar de dirección.',
+          'Respeta los límites superior e inferior de cada franja sin salirte ni quedarte corto.',
+        ],
+        diagramNotes: 'El espaciado regular crea valores tonales homogéneos fundamentales para el render.',
+      },
+      nodes: [
+        createGroupedCalisthenicsNode(
+          'cal_u4_straight',
+          'C4.1',
+          'Espaciado Ortogonal y Cuñas Angulares',
+          'Bandas paralelas rectas, diagonales, quiebros en V y chevron',
+          all.filter(
+            (e) =>
+              e.id?.startsWith('sp_') &&
+              (e.spacingTrackConfig?.kinkType === 'none' ||
+                e.spacingTrackConfig?.kinkType?.includes('chevron') ||
+                e.spacingTrackConfig?.kinkType?.includes('v_') ||
+                e.spacingTrackConfig?.kinkType?.includes('triangle') ||
+                e.spacingTrackConfig?.kinkType?.includes('zigzag')) &&
+              !e.spacingTrackConfig?.hasBlocksWithGaps &&
+              e.spacingTrackConfig?.spacingMultiplier === 1
+          ),
+          globalIndex++,
+          'medium',
+          40
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u4_curves',
+          'C4.2',
+          'Espaciado de Arcos y Ondas Curvas',
+          'Ondas sinusoidales, arcos en bóveda y curvas de nivel en carril',
+          all.filter((e) => e.id?.startsWith('sp_') && e.spacingTrackConfig?.kinkType?.startsWith('curve_')),
+          globalIndex++,
+          'hard',
+          45
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u4_density',
+          'C4.3',
+          'Fraccionamiento y Densidad de Trama',
+          'Subdivisión de paso a la mitad (paso x/2), bloques discontinuos y densidad graduada',
+          all.filter(
+            (e) =>
+              e.id?.startsWith('sp_') &&
+              (e.spacingTrackConfig?.spacingMultiplier === 0.5 || e.spacingTrackConfig?.hasBlocksWithGaps)
+          ),
+          globalIndex++,
+          'hard',
+          50
+        ),
+      ],
+    },
+    {
+      id: 'unit-cal-5',
+      number: 5,
+      title: 'Arcos y Ondas Biomecánicas (Curvas en C y S)',
+      description: 'Transición a la forma orgánica: arcos parabólicos en C y curvas sinusoidales en S de cadencia continua.',
+      bookChapter: 'Paplitz Calisthenics — Arcos en C (CC.01-10) y Ondas en S (CS.11-20)',
+      guidebookContent: {
+        title: 'Curvatura Biomecánica Continua',
+        axioms: [
+          'Las curvas demandan una sincronía entre el codo y la muñeca sin tirones angulares.',
+          'En la onda en S, el punto de inflexión debe ser suave y continuo, sin formar esquinas.',
+          'Conecta con elasticidad los puntos de cresta y valle marcados en la trayectoria.',
+        ],
+        diagramNotes: 'Comienza despacio en Fase 1 (Precisión) y acelera a Fase 2 (Fluidez) y Fase 3 (Velocidad).',
+      },
+      nodes: [
+        createGroupedCalisthenicsNode(
+          'cal_u5_c',
+          'C5.1',
+          'Control de Curvatura: Arcos en C (⌒)',
+          'Arcos cóncavos y convexos de flecha suave, media y pronunciada',
+          all.filter((e) => e.id?.startsWith('cc_')),
+          globalIndex++,
+          'medium',
+          35
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u5_s',
+          'C5.2',
+          'Puntos de Inflexión: Ondas en S (∿)',
+          'Transición de doble curvatura continua sin aristas vivas ni saltos',
+          all.filter((e) => e.id?.startsWith('cs_')),
+          globalIndex++,
+          'hard',
+          45
+        ),
+      ],
+    },
+  ];
+}
+
+export const MODULE_CALISTHENICS: ModuleTrack = {
+  id: 'module-calisthenics',
+  name: 'Líneas, Trazos & Calistenia',
+  subtitle: '237 retos dinámicos de biomecánica: precisión, fluidez, velocidad y ritmo',
+  icon: 'pen-tool',
+  units: buildCalisthenicsModuleUnits(),
+};
 
 export const MODULE_PARALLELEPIPEDS: ModuleTrack = {
   id: 'module-cubes',
@@ -269,3 +606,9 @@ export const MODULE_PARALLELEPIPEDS: ModuleTrack = {
     },
   ],
 };
+
+export const ALL_MODULES: ModuleTrack[] = [
+  MODULE_CALISTHENICS,
+  MODULE_PARALLELEPIPEDS,
+];
+

@@ -22,17 +22,24 @@ import {
   Zap,
   Star,
   Hourglass,
+  Pen,
+  Hand,
+  Ghost,
+  Sparkles,
 } from 'lucide-react';
+import { GhostLineMinigame } from './GhostLineMinigame';
+import { StrokeRushMinigame } from './StrokeRushMinigame';
 
 interface MinigamesViewProps {
   unlockedNodes: LessonNode[];
   activeNode: LessonNode;
+  calisthenicsNodes?: LessonNode[];
   onAwardXP: (amount: number) => void;
   onAvatarMoodChange?: (mood: AvatarMood) => void;
   onDrawingStateChange?: (isDrawing: boolean) => void;
 }
 
-type GameMode = 'blitz' | 'fever' | 'survival' | 'sprint';
+type GameMode = 'blitz' | 'fever' | 'survival' | 'sprint' | 'ghost' | 'rush';
 
 interface HighScoreData {
   [key: string]: number; // ej: "blitz_1.1": 8, "fever_1.1": 12, "sprint_1.1": 42.5
@@ -74,6 +81,7 @@ function drawStar(
 export const MinigamesView: React.FC<MinigamesViewProps> = ({
   unlockedNodes,
   activeNode,
+  calisthenicsNodes,
   onAwardXP,
   onAvatarMoodChange,
   onDrawingStateChange,
@@ -85,6 +93,9 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
   // Estado del Minijuego
   const [gameMode, setGameMode] = useState<GameMode | null>(null);
   const [gameState, setGameState] = useState<'idle' | 'playing' | 'gameover'>('idle');
+
+  // Modo táctil en móviles: 'draw' | 'scroll' (desplazar con 1 dedo)
+  const [touchMode, setTouchMode] = useState<'draw' | 'scroll'>('draw');
 
   // Estadísticas de la partida activa
   const [cubesCompleted, setCubesCompleted] = useState<number>(0);
@@ -184,6 +195,9 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
   const startGame = (mode: GameMode) => {
     setGameMode(mode);
     setGameState('playing');
+    if (mode === 'ghost' || mode === 'rush') {
+      return;
+    }
     setCubesCompleted(0);
     setScoresList([]);
     setStreakCombo(0);
@@ -329,7 +343,7 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
 
   // Validación rápida al presionar Comprobar
   const handleValidate = () => {
-    if (strokes.length === 0 || gameState !== 'playing') return;
+    if (countDetectedAristas(strokes) === 0 || gameState !== 'playing') return;
 
     const res = validateCubeDrawing(challenge, strokes);
     setFeedback(res);
@@ -640,7 +654,9 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
 
       if (e.key === 'Enter') {
         e.preventDefault();
-        handleValidate();
+        if (countDetectedAristas(strokes) > 0) {
+          handleValidate();
+        }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         handleUndo();
@@ -666,6 +682,10 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (gameState !== 'playing') return;
+    // Si estamos en modo scroll y el puntero es táctil (dedo), permitir desplazamiento con 1 dedo
+    if (touchMode === 'scroll' && e.pointerType === 'touch') {
+      return;
+    }
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -719,6 +739,13 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
     const feverRecord = highScores[`fever_${currentLesson.code}`] ?? 0;
     const survivalRecord = highScores[`survival_${currentLesson.code}`] ?? 0;
     const sprintRecord = highScores[`sprint_${currentLesson.code}`];
+    const ghostRecord = parseInt(localStorage.getItem('paplitz_ghost_best_streak') || '0', 10);
+    const rushRecord = parseInt(
+      localStorage.getItem('paplitz_rush_best_cleared') ||
+        localStorage.getItem(`paplitz_rush_survival_${currentLesson.code}`) ||
+        '0',
+      10
+    );
 
     return (
       <div className="max-w-4xl w-full mx-auto px-4 py-6">
@@ -788,7 +815,115 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
           </div>
         </div>
 
-        {/* Tarjetas de Selección de Minijuegos en Rejilla 2x2 */}
+        {/* SECCIÓN 1: MINIJUEGOS DE TRAZOS & CALISTENIA */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest bg-black text-white px-2 py-0.5 font-bold">
+              MODOS DE TRAZOS
+            </span>
+            <span className="text-[10px] font-mono text-neutral-500 font-bold uppercase">
+              Memoria Muscular, Ritmo & Resistencia de Líneas
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* JUEGO 1: LÍNEA FANTASMA */}
+            <div className="card-ink bg-white p-5 flex flex-col justify-between border-2 border-black shadow-[4px_4px_0px_#000000] hover:-translate-y-0.5 transition-transform relative overflow-hidden">
+              <div className="absolute top-2 right-2 bg-black text-white text-[9px] font-mono uppercase px-2 py-0.5 font-bold flex items-center gap-1">
+                <Sparkles className="w-3 h-3 fill-white text-white" />
+                <span>MEMORIA MUSCULAR</span>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 border-2 border-black flex items-center justify-center bg-neutral-100 shadow-[2px_2px_0px_#000000]">
+                    <Ghost className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold font-display leading-tight">Línea Fantasma</h3>
+                    <span className="text-[10px] font-mono uppercase text-neutral-500 font-bold">
+                      Gris Clarito · Sincronía
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs font-sans text-neutral-600 mb-4">
+                  Persigue la silueta del fantasma en gris clarito: cada vez que dibujas debes repetir con fidelidad absoluta la misma trayectoria y longitud. ¡Mantén la racha sin fallar!
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-black/10">
+                <div className="flex items-center justify-between text-xs font-mono mb-3">
+                  <span className="text-neutral-500">Racha Récord:</span>
+                  <span className="font-bold flex items-center gap-1">
+                    <Trophy className="w-3.5 h-3.5 stroke-[2.5]" />
+                    {ghostRecord} {ghostRecord === 1 ? 'acierto' : 'seguidos'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => startGame('ghost')}
+                  className="btn-ink w-full py-2 text-xs font-mono uppercase font-bold flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_#000000]"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white stroke-none" />
+                  <span>Jugar Línea Fantasma</span>
+                </button>
+              </div>
+            </div>
+
+            {/* JUEGO 2: AVALANCHA DE TRAZOS */}
+            <div className="card-ink bg-white p-5 flex flex-col justify-between border-2 border-black shadow-[4px_4px_0px_#000000] hover:-translate-y-0.5 transition-transform relative overflow-hidden">
+              <div className="absolute top-2 right-2 bg-black text-white text-[9px] font-mono uppercase px-2 py-0.5 font-bold flex items-center gap-1">
+                <Zap className="w-3 h-3 fill-white text-white" />
+                <span>NUEVO MINIJUEGO</span>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 border-2 border-black flex items-center justify-center bg-neutral-100 shadow-[2px_2px_0px_#000000]">
+                    <Zap className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold font-display leading-tight">Avalancha de Trazos</h3>
+                    <span className="text-[10px] font-mono uppercase text-neutral-500 font-bold">
+                      Acumulación & Umbral 70%
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs font-sans text-neutral-600 mb-4">
+                  Aparecen líneas basadas en tu nivel de trazos. Si las trazas bien se eliminan; si fallas por debajo del 70% se acumulan hasta saturar la pantalla. ¡Comprueba tus eliminaciones y nota media al final!
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-black/10">
+                <div className="flex items-center justify-between text-xs font-mono mb-3">
+                  <span className="text-neutral-500">Récord Despejadas:</span>
+                  <span className="font-bold flex items-center gap-1">
+                    <Trophy className="w-3.5 h-3.5 stroke-[2.5]" />
+                    {rushRecord} {rushRecord === 1 ? 'línea' : 'líneas'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => startGame('rush')}
+                  className="btn-ink w-full py-2 text-xs font-mono uppercase font-bold flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_#000000]"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white stroke-none" />
+                  <span>Jugar Avalancha</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SECCIÓN 2: MINIJUEGOS DE CAJAS & PARALELEPÍPEDOS */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-[10px] font-mono uppercase tracking-widest bg-black text-white px-2 py-0.5 font-bold">
+            MODOS DE CAJAS
+          </span>
+          <span className="text-[10px] font-mono text-neutral-500 font-bold uppercase">
+            Perspectiva 3D, Geometría & Velocidad
+          </span>
+        </div>
+
+        {/* Tarjetas de Selección de Minijuegos de Cajas en Rejilla 2x2 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* JUEGO 1: FIEBRE DE TIEMPO (CUBOS CON ESTRELLA) */}
           <div className="card-ink bg-white p-5 flex flex-col justify-between border-2 border-black shadow-[4px_4px_0px_#000000] hover:-translate-y-0.5 transition-transform relative overflow-hidden">
@@ -949,6 +1084,32 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
           </div>
         </div>
       </div>
+    );
+  }
+
+  // Si el modo activo es Avalancha de Trazos
+  if (gameMode === 'rush') {
+    return (
+      <StrokeRushMinigame
+        unlockedNodes={calisthenicsNodes && calisthenicsNodes.length > 0 ? calisthenicsNodes : unlockedNodes}
+        activeNode={activeNode}
+        onExit={exitGame}
+        onAwardXP={onAwardXP}
+        onAvatarMoodChange={onAvatarMoodChange}
+        onDrawingStateChange={onDrawingStateChange}
+      />
+    );
+  }
+
+  // Si el modo activo es Línea Fantasma
+  if (gameMode === 'ghost') {
+    return (
+      <GhostLineMinigame
+        onExit={exitGame}
+        onAwardXP={onAwardXP}
+        onAvatarMoodChange={onAvatarMoodChange}
+        onDrawingStateChange={onDrawingStateChange}
+      />
     );
   }
 
@@ -1117,12 +1278,55 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
             ref={canvasRef}
             width={600}
             height={540}
-            className="touch-none cursor-crosshair block w-full h-full"
+            className={`block w-full h-full ${
+              touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
+            }`}
+            style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
           />
+
+          {/* Selector de modo táctil móvil: Lápiz (dibujar) vs Mano (desplazar con 1 dedo) */}
+          <div className="absolute bottom-2.5 right-2 z-20 flex items-center border-2 border-black bg-white shadow-[2px_2px_0px_#000000]">
+            <button
+              type="button"
+              onClick={() => setTouchMode('draw')}
+              className={`px-2 py-1 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                touchMode === 'draw'
+                  ? 'bg-black text-white'
+                  : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
+              }`}
+              title="Modo Trazo: dibuja aristas con el dedo o lápiz táctil"
+            >
+              <Pen className="w-3 h-3 stroke-[2.5]" />
+              <span className="text-[10px] sm:text-xs">Trazo</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTouchMode('scroll')}
+              className={`px-2 py-1 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                touchMode === 'scroll'
+                  ? 'bg-black text-white'
+                  : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
+              }`}
+              title="Modo Mover: desliza libremente la pantalla hacia abajo con 1 dedo"
+            >
+              <Hand className="w-3 h-3 stroke-[2.5]" />
+              <span className="text-[10px] sm:text-xs">Mover (1 dedo)</span>
+            </button>
+          </div>
+
+          {/* Indicador visual cuando el modo Mover con 1 dedo está activo */}
+          {touchMode === 'scroll' && (
+            <div className="absolute inset-x-2 top-11 pointer-events-none z-10 flex justify-center">
+              <div className="bg-black/90 text-white border border-white px-2.5 py-1 shadow-[2px_2px_0px_#000000] text-[11px] font-mono font-bold flex items-center gap-1.5 animate-in fade-in duration-200">
+                <Hand className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Desliza con 1 dedo para mover la pantalla</span>
+              </div>
+            </div>
+          )}
 
           {/* Flash visual de acierto o fallo en pantalla */}
           {flashMessage && (
@@ -1213,9 +1417,13 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
 
             <button
               onClick={handleValidate}
-              disabled={strokes.length === 0}
-              className="btn-ink px-6 sm:px-8 py-1.5 text-xs font-mono uppercase font-bold disabled:opacity-30 cursor-pointer shadow-[3px_3px_0px_#000000] flex items-center gap-1.5"
-              title="Comprobar perspectiva (Enter)"
+              disabled={countDetectedAristas(strokes) === 0}
+              className="btn-ink px-6 sm:px-8 py-1.5 text-xs font-mono uppercase font-bold disabled:opacity-25 disabled:pointer-events-none disabled:cursor-not-allowed cursor-pointer shadow-[3px_3px_0px_#000000] flex items-center gap-1.5"
+              title={
+                countDetectedAristas(strokes) === 0
+                  ? "Dibuja al menos una arista antes de comprobar"
+                  : "Comprobar perspectiva (Enter)"
+              }
             >
               <span>Comprobar</span>
               <Check className="w-4 h-4 stroke-[3]" />

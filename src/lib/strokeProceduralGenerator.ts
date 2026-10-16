@@ -53,8 +53,8 @@ function shuffleWithRNG<T>(array: T[], rng: SeededRNG): T[] {
 export function generateMultiLineChallenge(
   exercise: LabExerciseDef,
   seed: number,
-  canvasWidth = 600,
-  canvasHeight = 540,
+  canvasWidth = 750,
+  canvasHeight = 500,
   lineCount: 2 | 3 = 2
 ): ProceduralStrokeChallenge {
   const rng = new SeededRNG(seed);
@@ -292,9 +292,8 @@ export function generateMultiLineChallenge(
       endKeyPointOrder: endOrder,
     });
 
-    ghostSolutionStrokes.push({ points: idealPath });
-
     if (cfg.guideType === 'gray_line') {
+      ghostSolutionStrokes.push({ points: idealPath });
       guideLines.push({ x1: pStart.x, y1: pStart.y, x2: pEnd.x, y2: pEnd.y, dashed: false });
     }
   }
@@ -318,7 +317,7 @@ export function generateMultiLineChallenge(
     minRequiredStrokes: lineCount,
     multiLineCount: lineCount,
     targetLines,
-    isSingleStrokeAutoEval: true,
+    isSingleStrokeAutoEval: false,
     directionKey: cfg.direction,
     guideMode: cfg.guideType,
     keyPoints,
@@ -335,8 +334,8 @@ export function generateMultiLineChallenge(
 export function generateRadialRosetteChallenge(
   exercise: LabExerciseDef,
   seed: number,
-  canvasWidth = 600,
-  canvasHeight = 540
+  canvasWidth = 750,
+  canvasHeight = 500
 ): ProceduralStrokeChallenge {
   const rng = new SeededRNG(seed);
   const cfg = exercise.singleStrokeConfig || {
@@ -453,9 +452,8 @@ export function generateRadialRosetteChallenge(
       endKeyPointOrder: isOutward ? outerOrder : centerOrder,
     });
 
-    ghostSolutionStrokes.push({ points: idealPath });
-
     if (cfg.guideType === 'gray_line') {
+      ghostSolutionStrokes.push({ points: idealPath });
       guideLines.push({ x1: startPt.x, y1: startPt.y, x2: endPt.x, y2: endPt.y, dashed: false });
     }
   }
@@ -477,7 +475,7 @@ export function generateRadialRosetteChallenge(
     minRequiredStrokes: spokeCount,
     multiLineCount: spokeCount,
     targetLines,
-    isSingleStrokeAutoEval: true,
+    isSingleStrokeAutoEval: spokeCount === 1,
     directionKey: cfg.direction,
     guideMode: cfg.guideType,
     keyPoints,
@@ -653,8 +651,8 @@ export function generateZNStrokePoints(
 export function generateSpacingTrackChallenge(
   exercise: LabExerciseDef,
   seed: number,
-  canvasWidth = 600,
-  canvasHeight = 540
+  canvasWidth = 750,
+  canvasHeight = 500
 ): ProceduralStrokeChallenge {
   const cfg = exercise.spacingTrackConfig || {
     bandCount: 1,
@@ -1334,8 +1332,8 @@ export function generateSpacingTrackChallenge(
 export function generateSingleStrokeChallenge(
   exercise: LabExerciseDef,
   seed: number,
-  canvasWidth = 600,
-  canvasHeight = 540
+  canvasWidth = 750,
+  canvasHeight = 500
 ): ProceduralStrokeChallenge {
   // Si es un reto de espaciado en carriles (Consistencia 1.1)
   if (exercise.spacingTrackConfig) {
@@ -1681,7 +1679,7 @@ export function generateSingleStrokeChallenge(
     directionKey: cfg.direction,
     guideMode: cfg.guideType,
     keyPoints,
-    ghostSolutionStrokes: [{ points: idealPoints }],
+    ghostSolutionStrokes: cfg.guideType === 'gray_line' ? [{ points: idealPoints }] : [],
     idealPath: idealPoints,
     expectedDirectionAngleDeg: angleDeg,
     guideLines:
@@ -1697,8 +1695,8 @@ export function generateSingleStrokeChallenge(
 export function generateStrokeChallenge(
   exerciseOrPage: WorkbookExerciseDef | number,
   seed = Math.floor(Math.random() * 100000),
-  canvasWidth = 600,
-  canvasHeight = 540
+  canvasWidth = 750,
+  canvasHeight = 500
 ): ProceduralStrokeChallenge {
   const exercise: LabExerciseDef =
     typeof exerciseOrPage === 'number'

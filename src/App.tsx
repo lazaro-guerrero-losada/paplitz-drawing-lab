@@ -1,8 +1,19 @@
-import { useState, useEffect } from 'react';
-import { MODULE_PARALLELEPIPEDS, LessonNode, Unit } from './lib/curriculumData';
+import { useState, useEffect, useRef } from 'react';
+import {
+  MODULE_CALISTHENICS,
+  MODULE_PARALLELEPIPEDS,
+  LessonNode,
+  Unit,
+} from './lib/curriculumData';
+import {
+  ALL_SINGLE_STROKE_EXERCISES,
+  StrokeEvaluation,
+} from './lib/strokeTypes';
 import { generateCubeChallenge, CubeChallenge } from './lib/geometry';
-import { validateCubeDrawing, ValidationFeedback, UserStroke } from './lib/validation';
-import { DrawingCanvas } from './components/DrawingCanvas';
+import { validateCubeDrawing, ValidationFeedback, UserStroke, countDetectedAristas } from './lib/validation';
+import { DrawingCanvas, DrawingCanvasRef } from './components/DrawingCanvas';
+import { StrokePracticeCanvas, StrokePracticeCanvasRef } from './components/StrokePracticeCanvas';
+import { MasteryStreakInfoModal, KinematicPhasesInfoModal } from './components/PracticeInfoModals';
 import { LearningPath } from './components/LearningPath';
 import { GuidebookModal } from './components/GuidebookModal';
 import { AnalogSheetsModal } from './components/AnalogSheetsModal';
@@ -10,15 +21,55 @@ import { ProfileView } from './components/ProfileView';
 import { MinigamesView } from './components/MinigamesView';
 import { LevelGuideModal } from './components/LevelGuideModal';
 import { PlacementModal } from './components/PlacementModal';
+import { TinyToast, ToastData } from './components/TinyToast';
+import { StreakModal } from './components/StreakModal';
+import { DailyChallengePanel } from './components/DailyChallengePanel';
+import { DailySetCompletedModal } from './components/DailySetCompletedModal';
+import { LevelCompletionModal } from './components/LevelCompletionModal';
+import { SessionRecordPanel } from './components/SessionRecordPanel';
+import { VariantSelectorModal } from './components/VariantSelectorModal';
 import { StrokeLabView } from './components/StrokeLabView';
 import { Lab3DView } from './components/Lab3D/Lab3DView';
 import { calculatePlayerLevel } from './lib/levelSystem';
 import { SenseiCubo } from './components/avatar/SenseiCubo';
 import { AvatarMood } from './lib/avatarTypes';
-import { Flame, Printer, Compass, Map, User, RefreshCw, Filter, PenTool, Gamepad2, BookOpen, Zap, Menu, X, ChevronRight, FlaskConical, Boxes, Radio } from 'lucide-react';
+import {
+  Flame,
+  Printer,
+  Compass,
+  Map,
+  User,
+  Gamepad2,
+  BookOpen,
+  Menu,
+  X,
+  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  Target,
+  PanelLeft,
+  Maximize2,
+  ArrowRight,
+  FileText,
+  FlaskConical,
+  Boxes,
+} from 'lucide-react';
 import { PaplitzSaveData, applySaveDataToLocalStorage, fastForwardCurriculum } from './lib/saveSystem';
-import { SessionRecordItem, addSessionRecord, updateSessionRecordComment } from './lib/sessionRecorder';
-import { SessionRecordPanel } from './components/SessionRecordPanel';
+import { recordDailyPractice } from './lib/streakSystem';
+import {
+  DailySetSession,
+  DailySetHistoryItem,
+  createDailyChallenge,
+  loadActiveDailySet,
+  saveActiveDailySet,
+  loadDailyChallengeHistory,
+  recordCompletedDailySet,
+} from './lib/dailyChallenge';
+import {
+  SessionRecordItem,
+  addSessionRecord,
+  updateSessionRecordComment,
+} from './lib/sessionRecorder';
 import { buildDebugReport } from './lib/debugReport';
 
 function GithubIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
@@ -30,46 +81,27 @@ function GithubIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
   );
 }
 
-export function App() {
-  // Pestañas principales: 'practice' (Home / Práctica Rápida), 'path' (El Camino), 'minigames' (Minijuegos), 'profile' (Perfil), 'strokelab' (Laboratorio de Trazos Beta), 'lab3d' (Laboratorio de Perspectiva 3D)
-  const [activeTab, setActiveTab] = useState<'practice' | 'path' | 'minigames' | 'profile' | 'strokelab' | 'lab3d'>('practice');
-
-  // Modo Récord de Sesión (100% volátil en memoria)
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState<boolean>(false);
-  const [sessionRecords, setSessionRecords] = useState<SessionRecordItem[]>([]);
-
-  const handleUpdateSessionRecordComment = (recordId: string, comment: string) => {
-    setSessionRecords((prev) => updateSessionRecordComment(recordId, comment, prev));
-  };
-  const handleRecordExercise = (record: SessionRecordItem) => {
-    setSessionRecords((prev) => addSessionRecord(record, prev));
-  };
-
-  // Estado del Menú Lateral Móvil (Drawer) y Detección de Orientación
-  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  const [showRotatePrompt, setShowRotatePrompt] = useState<boolean>(true);
-  const [isPortraitMobile, setIsPortraitMobile] = useState<boolean>(false);
-  const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
-
-  // Estado del Avatar Acompañante Cúbico ("Cubito")
-  const [avatarMood, setAvatarMood] = useState<AvatarMood>('neutral');
-  const [isUserDrawing, setIsUserDrawing] = useState<boolean>(false);
-
-  // Estado del Currículum / Camino
-  // Estado del Currículum / Camino (fusionando progreso guardado con la estructura actual)
-  const [units, setUnits] = useState<Unit[]>(() => {
-    const saved = localStorage.getItem('paplitz_units');
-    if (!saved) return MODULE_PARALLELEPIPEDS.units;
+function loadAndSanitizeUnits(savedKey: string, defaultUnits: Unit[]): Unit[] {
+  const saved = localStorage.getItem(savedKey);
+  let loadedUnits = defaultUnits;
+  if (saved) {
     try {
       const parsed: Unit[] = JSON.parse(saved);
-      return MODULE_PARALLELEPIPEDS.units.map((defaultUnit) => {
-        const savedUnit = parsed.find((u) => u.id === defaultUnit.id);
-        if (!savedUnit) return defaultUnit;
+      const allSavedNodes = parsed.flatMap((u) => u.nodes || []);
+      loadedUnits = defaultUnits.map((defaultUnit) => {
         return {
           ...defaultUnit,
           nodes: defaultUnit.nodes.map((defaultNode) => {
-            const savedNode = savedUnit.nodes.find((n) => n.id === defaultNode.id);
+            const savedNode = allSavedNodes.find(
+              (n) =>
+                n.id === defaultNode.id ||
+                n.title === defaultNode.title ||
+                (defaultNode.id === 'cal_u4_straight' && n.id === 'cal_u5_straight') ||
+                (defaultNode.id === 'cal_u4_curves' && n.id === 'cal_u5_curves') ||
+                (defaultNode.id === 'cal_u4_density' && n.id === 'cal_u5_density') ||
+                (defaultNode.id === 'cal_u5_c' && n.id === 'cal_u4_c') ||
+                (defaultNode.id === 'cal_u5_s' && n.id === 'cal_u4_s')
+            );
             return savedNode
               ? { ...defaultNode, status: savedNode.status, score: savedNode.score }
               : defaultNode;
@@ -77,26 +109,202 @@ export function App() {
         };
       });
     } catch {
-      return MODULE_PARALLELEPIPEDS.units;
+      loadedUnits = defaultUnits;
     }
+  }
+
+  let foundFirstUncompleted = false;
+  return loadedUnits.map((u) => ({
+    ...u,
+    nodes: u.nodes.map((n) => {
+      if (n.status === 'completed') {
+        return n;
+      }
+      if (!foundFirstUncompleted) {
+        foundFirstUncompleted = true;
+        return { ...n, status: 'current' as const };
+      }
+      return { ...n, status: 'locked' as const };
+    }),
+  }));
+}
+
+export function App() {
+  // Pestañas principales: 'practice' (Home / Práctica Rápida), 'path' (El Camino), 'minigames' (Minijuegos), 'profile' (Perfil), 'strokelab' (Laboratorio de Trazos Beta), 'lab3d' (Laboratorio de Perspectiva 3D)
+  const [activeTab, setActiveTab] = useState<'practice' | 'path' | 'minigames' | 'profile' | 'strokelab' | 'lab3d'>('practice');
+
+  // Estado del Menú Lateral Móvil (Drawer) y Detección de Orientación
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [showRotatePrompt, setShowRotatePrompt] = useState<boolean>(true);
+  const [isPortraitMobile, setIsPortraitMobile] = useState<boolean>(false);
+  const [isLandscapeMobile, setIsLandscapeMobile] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth > window.innerHeight && (window.innerHeight <= 520 || (window.innerWidth <= 960 && window.innerHeight <= 560));
+  });
+  const [, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
+
+  // Estado del Avatar Acompañante Cúbico ("Cubito")
+  const [avatarMood, setAvatarMood] = useState<AvatarMood>('neutral');
+  const [isUserDrawing, setIsUserDrawing] = useState<boolean>(false);
+
+  // Módulo activo del Camino: 'module-calisthenics' (Líneas y Trazos) vs 'module-cubes' (Paralelepípedos)
+  const [activeModuleId, setActiveModuleId] = useState<'module-calisthenics' | 'module-cubes'>(() => {
+    return (localStorage.getItem('paplitz_active_module') as any) || 'module-calisthenics';
   });
 
-  // Lista aplanada de todos los nodos del camino
+  // Estado de Unidades por módulo
+  const [calisthenicsUnits, setCalisthenicsUnits] = useState<Unit[]>(() =>
+    loadAndSanitizeUnits('paplitz_calisthenics_units', MODULE_CALISTHENICS.units)
+  );
+  const [cubeUnits, setCubeUnits] = useState<Unit[]>(() =>
+    loadAndSanitizeUnits('paplitz_units', MODULE_PARALLELEPIPEDS.units)
+  );
+
+  const units = activeModuleId === 'module-calisthenics' ? calisthenicsUnits : cubeUnits;
+  const setUnits = (newUnits: Unit[] | ((prev: Unit[]) => Unit[])) => {
+    if (activeModuleId === 'module-calisthenics') {
+      setCalisthenicsUnits(newUnits);
+    } else {
+      setCubeUnits(newUnits);
+    }
+  };
+
+  // Lista aplanada de todos los nodos del camino activo
   const allNodes = units.flatMap((u) => u.nodes);
   const unlockedNodes = allNodes.filter((n) => n.status !== 'locked');
 
   // Nodo activo seleccionado
   const [activeNode, setActiveNode] = useState<LessonNode>(() => {
-    return allNodes.find((n) => n.status === 'current') || allNodes[0];
+    const initialUnits = (localStorage.getItem('paplitz_active_module') as any) === 'module-cubes'
+      ? cubeUnits
+      : calisthenicsUnits;
+    const all = initialUnits.flatMap((u) => u.nodes);
+    return all.find((n) => n.status === 'current') || all[0];
   });
+
+  // Fases cinemáticas activas por nodo (1: Precisión, 2: Fluidez, 3: Velocidad) - SOLO para calistenia
+  const [nodePhases, setNodePhases] = useState<Record<string, 1 | 2 | 3>>(() => {
+    const saved = localStorage.getItem('paplitz_node_phases');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('paplitz_node_phases', JSON.stringify(nodePhases));
+  }, [nodePhases]);
+
+  const currentPhase: 1 | 2 | 3 = activeNode ? (nodePhases[activeNode.id] || 1) : 1;
+  const setCurrentPhase = (phase: 1 | 2 | 3) => {
+    if (activeNode) {
+      setNodePhases((prev) => ({ ...prev, [activeNode.id]: phase }));
+    }
+  };
+
+  // Estados visuales y modales pedagógicos de maestría y fases de motricidad
+  const [justEarnedMastery, setJustEarnedMastery] = useState<boolean>(false);
+  const [phaseTransitionNotice, setPhaseTransitionNotice] = useState<{
+    fromPhase: 1 | 2 | 3;
+    toPhase: 1 | 2 | 3;
+    nodeCode: string;
+    nodeTitle?: string;
+    isVersionAdvance?: boolean;
+    fromVersion?: number;
+    toVersion?: number;
+    totalVersions?: number;
+  } | null>(null);
+
+  const [levelCompletionModal, setLevelCompletionModal] = useState<{
+    isOpen: boolean;
+    completedNode: LessonNode | null;
+    nextNode: LessonNode | null;
+    score: number;
+  }>({
+    isOpen: false,
+    completedNode: null,
+    nextNode: null,
+    score: 0,
+  });
+
+  // Modo de práctica en la barra lateral: 'camino' (por defecto), 'daily' (reto diario), o 'record' (modo récord de sesión)
+  const [practiceMode, setPracticeMode] = useState<'camino' | 'daily' | 'record'>('camino');
+  // Estado de grabación activa del Modo Récord (por defecto inactivo al entrar o recargar)
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  // Visibilidad del modal flotante de Modo Récord
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState<boolean>(false);
+  // Registro de ejercicios de la sesión (Modo Récord) - 100% volátil en memoria
+  const [sessionRecords, setSessionRecords] = useState<SessionRecordItem[]>([]);
+  // Referencia al último ejercicio evaluado para poder guardarlo con comentario si el usuario activa REC a posteriori
+  const lastEvaluatedRecordRef = useRef<SessionRecordItem | null>(null);
+
+  const handleUpdateLatestRecordComment = (comment: string) => {
+    setSessionRecords((prev) => {
+      if (prev.length === 0) return prev;
+      return updateSessionRecordComment(prev[0].id, comment, prev);
+    });
+  };
+
+  const handleRecordExercise = (record: SessionRecordItem) => {
+    setSessionRecords((prev) => addSessionRecord(record, prev));
+  };
+
+  const handleStartRecordingAndAddCurrent = (comment: string = '') => {
+    setIsRecording(true);
+    if (lastEvaluatedRecordRef.current) {
+      const trimmed = comment.trim();
+      const recordToAdd: SessionRecordItem = {
+        ...lastEvaluatedRecordRef.current,
+        userComment: trimmed,
+        reportMarkdown: trimmed
+          ? `### NOTA DEL USUARIO:\n> ${trimmed}\n\n${lastEvaluatedRecordRef.current.reportMarkdown}`
+          : lastEvaluatedRecordRef.current.reportMarkdown,
+      };
+      setSessionRecords((prev) => addSessionRecord(recordToAdd, prev));
+    }
+  };
+
+  // Colapso de la barra lateral izquierda (por defecto oculta en modo enfoque)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
+  // Visibilidad de trazos de usuario y soluciones/guías
+  const [showUserStrokes, setShowUserStrokes] = useState<boolean>(true);
+  const [showSolution, setShowSolution] = useState<boolean>(true);
+  // Modales de información didáctica
+  const [showMasteryStreakInfo, setShowMasteryStreakInfo] = useState<boolean>(false);
+  const [showKinematicPhasesInfo, setShowKinematicPhasesInfo] = useState<boolean>(false);
+
+  // Refs de lienzos de dibujo
+  const strokeCanvasRef = useRef<StrokePracticeCanvasRef | null>(null);
+  const cubeCanvasRef = useRef<DrawingCanvasRef | null>(null);
+
+  // Semilla y evaluación para calistenia
+  const [calisthenicsSeed, setCalisthenicsSeed] = useState<number>(() => Math.floor(Math.random() * 90000 + 10000));
+  const [, setStrokeEvaluation] = useState<StrokeEvaluation | null>(null);
+
+  // Control de versiones/variantes activas por nivel de calistenia
+  const [nodeVariantIndices, setNodeVariantIndices] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('paplitz_node_variant_indices');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('paplitz_node_variant_indices', JSON.stringify(nodeVariantIndices));
+  }, [nodeVariantIndices]);
+
+  // Variantes del nivel actual
+  const activeVariants = activeNode?.variants || (activeNode?.exerciseDef ? [activeNode.exerciseDef] : []);
+  const currentVariantIndex = activeVariants.length > 0
+    ? (nodeVariantIndices[activeNode?.id || ''] || 0) % activeVariants.length
+    : 0;
+  const currentExerciseDef = activeVariants[currentVariantIndex] || activeNode?.exerciseDef || ALL_SINGLE_STROKE_EXERCISES[0];
+
+  // Modal selector desplegable de variantes
+  const [isVariantSelectorOpen, setIsVariantSelectorOpen] = useState<boolean>(false);
 
   // Modales
   const [guidebookUnit, setGuidebookUnit] = useState<Unit | null>(null);
   const [showAnalogModal, setShowAnalogModal] = useState(false);
 
-  // Desafío de Dibujo actual
+  // Desafío de Cubo 3D actual
   const [challenge, setChallenge] = useState<CubeChallenge>(() => {
-    const initial = allNodes.find((n) => n.status === 'current') || allNodes[0];
+    const initial = cubeUnits.flatMap((u) => u.nodes).find((n) => n.status === 'current') || cubeUnits[0].nodes[0];
     return generateCubeChallenge(101, 600, 540, {
       mode: initial.perspectiveMode,
       axesMode: initial.axesMode,
@@ -107,7 +315,6 @@ export function App() {
   });
   const [strokes, setStrokes] = useState<UserStroke[]>([]);
   const [feedback, setFeedback] = useState<ValidationFeedback | null>(null);
-  const [showSolution, setShowSolution] = useState(false);
 
   // Gamificación y Progreso
   const [streak, setStreak] = useState<number>(() => {
@@ -125,15 +332,69 @@ export function App() {
   const [showLevelGuide, setShowLevelGuide] = useState<boolean>(false);
   const [isPlacementModalOpen, setIsPlacementModalOpen] = useState<boolean>(false);
   const [placementTestNode, setPlacementTestNode] = useState<LessonNode | null>(null);
+  // Sistema de Notificaciones Ligeras (Tiny Toast no intrusivo)
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const showToast = (
+    icon: string,
+    title: string,
+    message: string,
+    actionLabel?: string,
+    onAction?: () => void,
+    type?: 'success' | 'info' | 'warning'
+  ) => {
+    setToast({
+      id: Date.now(),
+      icon,
+      title,
+      message,
+      actionLabel,
+      onAction,
+      type,
+    });
+  };
+
+  // Racha de maestría por nivel (se requieren al menos 3 cubos seguidos con nota ≥90% para superar el nivel actual)
+  const [masteryStreaks, setMasteryStreaks] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('paplitz_mastery_streaks');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('paplitz_mastery_streaks', JSON.stringify(masteryStreaks));
+  }, [masteryStreaks]);
+
+  const currentMasteryStreak = activeNode ? (masteryStreaks[activeNode.id] || 0) : 0;
+
+  const [streakModalState, setStreakModalState] = useState<{
+    isOpen: boolean;
+    isNewDayAward: boolean;
+  }>({ isOpen: false, isNewDayAward: false });
   const playerLevel = calculatePlayerLevel(xp);
+
+  // Reto Diario / Lote de ejercicios (hábito diario de 12 ejercicios)
+  const [dailySetSession, setDailySetSession] = useState<DailySetSession | null>(() => {
+    return loadActiveDailySet(allNodes);
+  });
+  const [dailySetHistory, setDailySetHistory] = useState<DailySetHistoryItem[]>(() => {
+    return loadDailyChallengeHistory();
+  });
+  const [completedDailySetForModal, setCompletedDailySetForModal] = useState<DailySetHistoryItem | null>(null);
 
   // Guardar en LocalStorage
   useEffect(() => {
-    localStorage.setItem('paplitz_units', JSON.stringify(units));
+    localStorage.setItem('paplitz_calisthenics_units', JSON.stringify(calisthenicsUnits));
+    localStorage.setItem('paplitz_units', JSON.stringify(cubeUnits));
+    localStorage.setItem('paplitz_active_module', activeModuleId);
     localStorage.setItem('paplitz_streak', streak.toString());
     localStorage.setItem('paplitz_xp', xp.toString());
     localStorage.setItem('paplitz_scores', JSON.stringify(scoresHistory));
-  }, [units, streak, xp, scoresHistory]);
+  }, [calisthenicsUnits, cubeUnits, activeModuleId, streak, xp, scoresHistory]);
+
+
+  // Persistir estado de reto diario activo
+  useEffect(() => {
+    saveActiveDailySet(dailySetSession);
+  }, [dailySetSession]);
 
   // Detección de tamaño de pantalla y orientación para móvil
   useEffect(() => {
@@ -142,6 +403,7 @@ export function App() {
       const h = window.innerHeight;
       setWindowWidth(w);
       setIsPortraitMobile(w <= 768 && h > w);
+      setIsLandscapeMobile(w > h && (h <= 520 || (w <= 960 && h <= 560)));
     };
     handleDimensions();
     window.addEventListener('resize', handleDimensions);
@@ -168,6 +430,20 @@ export function App() {
   const handleNewPracticeCube = (nodeToUse?: LessonNode) => {
     const targetNode = nodeToUse || activeNode || allNodes[0];
     const newSeed = Math.floor(Math.random() * 100000);
+
+    // Si hay un reto diario activo, actualizar la semilla del ejercicio actual
+    if (dailySetSession && !dailySetSession.isCompleted) {
+      const updatedProblems = [...dailySetSession.problems];
+      updatedProblems[dailySetSession.currentIndex] = {
+        ...updatedProblems[dailySetSession.currentIndex],
+        seed: newSeed,
+      };
+      setDailySetSession({
+        ...dailySetSession,
+        problems: updatedProblems,
+      });
+    }
+
     setChallenge(
       generateCubeChallenge(newSeed, 600, 540, {
         mode: targetNode.perspectiveMode,
@@ -181,6 +457,88 @@ export function App() {
     setShowSolution(false);
     setStrokes([]);
     setAvatarMood('neutral');
+  };
+
+  // Pasar al siguiente problema del lote diario o nuevo cubo de práctica libre
+  const handleNextCubeOrProblem = () => {
+    if (dailySetSession && !dailySetSession.isCompleted) {
+      const nextIndex = dailySetSession.currentIndex + 1;
+      if (nextIndex < dailySetSession.totalCount) {
+        const nextProblem = dailySetSession.problems[nextIndex];
+        setDailySetSession({
+          ...dailySetSession,
+          currentIndex: nextIndex,
+        });
+        setActiveNode(nextProblem.node);
+        if (nextProblem.node.isCalisthenics) {
+          setCalisthenicsSeed(nextProblem.seed);
+        } else {
+          setChallenge(
+            generateCubeChallenge(nextProblem.seed, 600, 540, {
+              mode: nextProblem.node.perspectiveMode,
+              axesMode: nextProblem.node.axesMode,
+              forceSide: nextProblem.node.forceSide,
+              isShadowLevel: nextProblem.node.isShadowLevel,
+              hasGroundGrid: nextProblem.node.hasGroundGrid,
+            })
+          );
+        }
+        setFeedback(null);
+        setShowSolution(false);
+        setStrokes([]);
+        setStrokeEvaluation(null);
+        setAvatarMood('neutral');
+        return;
+      }
+    }
+    handleNewPracticeCube();
+  };
+
+  // Iniciar un nuevo reto diario de N ejercicios
+  const handleStartDailyChallenge = (
+    count: number,
+    levelMode: 'random' | 'specific',
+    selectedNodeIds: string[]
+  ) => {
+    const newSession = createDailyChallenge(count, levelMode, selectedNodeIds, unlockedNodes);
+    setDailySetSession(newSession);
+
+    const firstProblem = newSession.problems[0];
+    if (firstProblem) {
+      setActiveNode(firstProblem.node);
+      if (firstProblem.node.isCalisthenics) {
+        setCalisthenicsSeed(firstProblem.seed);
+      } else {
+        setChallenge(
+          generateCubeChallenge(firstProblem.seed, 600, 540, {
+            mode: firstProblem.node.perspectiveMode,
+            axesMode: firstProblem.node.axesMode,
+            forceSide: firstProblem.node.forceSide,
+            isShadowLevel: firstProblem.node.isShadowLevel,
+            hasGroundGrid: firstProblem.node.hasGroundGrid,
+          })
+        );
+      }
+      setFeedback(null);
+      setShowSolution(false);
+      setStrokes([]);
+      setStrokeEvaluation(null);
+      setAvatarMood('speed-lightning');
+      setTimeout(() => setAvatarMood('neutral'), 2200);
+    }
+    setActiveTab('practice');
+  };
+
+  // Cancelar reto diario en curso
+  const handleCancelDailyChallenge = () => {
+    setDailySetSession(null);
+    saveActiveDailySet(null);
+  };
+
+  // Limpiar el historial de retos diarios completados
+  const handleClearDailyHistory = () => {
+    setDailySetHistory([]);
+    localStorage.removeItem('paplitz_daily_challenge_history');
   };
 
   // Convalidación directa de niveles (Fast-Forward)
@@ -209,23 +567,260 @@ export function App() {
     setTimeout(() => setAvatarMood('neutral'), 2500);
   };
 
-  // Al seleccionar una lección desde el filtro desplegable
-  const handleSelectLessonById = (nodeId: string) => {
-    const node = allNodes.find((n) => n.id === nodeId);
-    if (node) {
-      setPlacementTestNode(null);
-      setActiveNode(node);
+  // Al hacer clic en un nodo del Camino
+  const handleSelectNode = (node: LessonNode, variantIndex?: number) => {
+    setPlacementTestNode(null);
+    setActiveNode(node);
+    if (variantIndex !== undefined) {
+      setNodeVariantIndices((prev) => ({ ...prev, [node.id]: variantIndex }));
+    }
+    setCurrentPhase(1);
+    setFeedback(null);
+    setShowSolution(false);
+    setStrokes([]);
+    setStrokeEvaluation(null);
+    setPhaseTransitionNotice(null);
+    setLevelCompletionModal({ isOpen: false, completedNode: null, nextNode: null, score: 0 });
+    if (!node.isCalisthenics) {
       handleNewPracticeCube(node);
+    } else {
+      setCalisthenicsSeed(Math.floor(Math.random() * 90000 + 10000));
+    }
+    setActiveTab('practice');
+  };
+
+  const handleDismissPhaseTransition = () => {
+    if (phaseTransitionNotice && activeNode) {
+      if (phaseTransitionNotice.isVersionAdvance && phaseTransitionNotice.toVersion) {
+        // Avanzar a la siguiente versión / variante del nivel
+        const nextVariantIdx = phaseTransitionNotice.toVersion - 1;
+        setNodeVariantIndices((prev) => ({
+          ...prev,
+          [activeNode.id]: nextVariantIdx,
+        }));
+        setCurrentPhase(1);
+        setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 0 }));
+      } else {
+        // Avanzar a la siguiente fase de motricidad dentro de la misma versión
+        setCurrentPhase(phaseTransitionNotice.toPhase);
+        setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 0 }));
+      }
+    }
+    setPhaseTransitionNotice(null);
+    setStrokeEvaluation(null);
+    setCalisthenicsSeed(Math.floor(Math.random() * 90000 + 10000));
+  };
+
+  const handleSelectModule = (modId: string) => {
+    const validModId = modId === 'module-cubes' ? 'module-cubes' : 'module-calisthenics';
+    setActiveModuleId(validModId);
+    setStrokeEvaluation(null);
+    const targetUnits = validModId === 'module-calisthenics' ? calisthenicsUnits : cubeUnits;
+    const targetAll = targetUnits.flatMap((u) => u.nodes);
+    const nextNode = targetAll.find((n) => n.status === 'current') || targetAll[0];
+    handleSelectNode(nextNode);
+  };
+
+  const handleSidebarNext = () => {
+    setStrokeEvaluation(null);
+    setFeedback(null);
+    setShowSolution(false);
+    setStrokes([]);
+
+    // Si hay un reto diario activo, avanzar al siguiente problema del lote (línea o cubo)
+    if (dailySetSession && !dailySetSession.isCompleted) {
+      handleNextCubeOrProblem();
+      return;
+    }
+
+    if (activeNode?.isCalisthenics) {
+      // En calistenia, avanzar genera una nueva semilla del mismo ejercicio y versión.
+      // NO avanza de versión. El avance de versión requiere superar las 3 fases (3 x 3 maestrías por versión).
+      setCalisthenicsSeed(Math.floor(Math.random() * 90000 + 10000));
+    } else {
+      handleNextCubeOrProblem();
     }
   };
 
-  // Al hacer clic en un nodo del Camino
-  const handleSelectNode = (node: LessonNode) => {
-    setPlacementTestNode(null);
-    setActiveNode(node);
-    handleNewPracticeCube(node);
-    setActiveTab('practice');
+  // Evaluación de trazos de calistenia completada
+  const handleCalisthenicsEvaluationComplete = (
+    evalResult: StrokeEvaluation | null,
+    context?: {
+      challenge: any;
+      strokes: any[];
+      reportMarkdown: string;
+      reportJsonString: string;
+    }
+  ) => {
+    setStrokeEvaluation(evalResult);
+    if (!evalResult) return;
+
+    const recordedScore = Math.round(evalResult.overallScore);
+    setScoresHistory((prev) => [...prev.slice(-19), recordedScore]);
+
+    // 1. Guardar en el Modo Récord si la grabación está activa
+    const reportMd = context?.reportMarkdown || '';
+    const newRecord: SessionRecordItem = {
+      id: `rec-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toISOString(),
+      displayTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      type: 'calisthenics',
+      nodeCode: dailySetSession ? `${dailySetSession.currentIndex + 1}/${dailySetSession.totalCount}` : (activeNode?.code || '1.1'),
+      nodeTitle: activeNode?.title || 'Ejercicio de Trazo',
+      seed: calisthenicsSeed,
+      score: recordedScore,
+      passed: evalResult.passed,
+      phase: currentPhase,
+      userComment: '',
+      metricsSummary: `Rectitud: ${evalResult.metrics.straightnessScore}% · Puntería: ${evalResult.metrics.boundaryScore}%`,
+      reportMarkdown: reportMd,
+    };
+    lastEvaluatedRecordRef.current = newRecord;
+
+    if (isRecording) {
+      setSessionRecords((prev) => addSessionRecord(newRecord, prev));
+    }
+
+    // 2. Si hay un reto diario activo, registrar la nota de esta línea
+    if (dailySetSession && !dailySetSession.isCompleted) {
+      const updatedProblems = [...dailySetSession.problems];
+      updatedProblems[dailySetSession.currentIndex] = {
+        ...updatedProblems[dailySetSession.currentIndex],
+        score: recordedScore,
+        passed: evalResult.passed,
+      };
+
+      const isLastProblem = dailySetSession.currentIndex >= dailySetSession.totalCount - 1;
+      if (isLastProblem) {
+        const completedSession: DailySetSession = {
+          ...dailySetSession,
+          problems: updatedProblems,
+          isCompleted: true,
+          completedAt: new Date().toISOString(),
+        };
+        const historyItem = recordCompletedDailySet(completedSession);
+        setDailySetHistory((prev) => [historyItem, ...prev]);
+        setDailySetSession(null);
+        setXp((prev) => prev + 50);
+        setCompletedDailySetForModal(historyItem);
+      } else {
+        setDailySetSession({
+          ...dailySetSession,
+          problems: updatedProblems,
+        });
+      }
+
+      if (evalResult.passed) {
+        setAvatarMood('success-stars');
+        setTimeout(() => setAvatarMood('neutral'), 2600);
+        setXp((prev) => prev + 25);
+      } else {
+        setAvatarMood('fail-spiral');
+        setTimeout(() => setAvatarMood('neutral'), 3000);
+      }
+
+      // En el Reto Diario cada línea es 1 ejercicio del lote; no evalúa ni altera las fases de El Camino
+      return;
+    }
+
+    const targetThreshold = currentPhase === 1 ? 80 : currentPhase === 2 ? 85 : 90;
+
+    if (evalResult.passed && evalResult.phasePassed !== false && recordedScore >= targetThreshold) {
+      setAvatarMood('success-stars');
+      setTimeout(() => setAvatarMood('neutral'), 2600);
+      setXp((prev) => prev + 25);
+
+      const currentStreak = masteryStreaks[activeNode.id] || 0;
+      const newStreak = currentStreak + 1;
+
+      // Disparar animación de ganancia de maestría en el HUD del lienzo
+      setJustEarnedMastery(true);
+      setTimeout(() => setJustEarnedMastery(false), 900);
+
+      if (newStreak < 3) {
+        // Aún no ha completado la fase actual: incrementar racha (sin toast intrusivo)
+        setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: newStreak }));
+      } else {
+        // ¡HA CONSEGUIDO 3 SEGUIDOS DE MAESTRÍA EN LA FASE ACTUAL!
+        // Dejarlo visible como 3/3 para que se vea completo en el HUD
+        setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 3 }));
+
+        if (currentPhase < 3) {
+          // PASA DE FASE DE MOTRICIDAD (Fase 1 -> Fase 2, o Fase 2 -> Fase 3) DENTRO DE LA MISMA VERSIÓN
+          const nextPhase = (currentPhase + 1) as 1 | 2 | 3;
+          // Mostramos la ventana de paso de fase pero dejamos el trazo y nota visibles.
+          // El cambio a nextPhase y reseteo de racha a 0 ocurre al pulsar "Continuar a Fase X".
+          setPhaseTransitionNotice({
+            fromPhase: currentPhase,
+            toPhase: nextPhase,
+            nodeCode: activeNode.code,
+            nodeTitle: activeNode.title,
+            isVersionAdvance: false,
+          });
+        } else {
+          // ¡HA ACABADO LA FASE DE VELOCIDAD (FASE 3)!
+          // Se han completado las 3 fases (Precisión, Fluidez, Velocidad) de esta versión.
+          const hasMoreVariants = activeVariants.length > 1 && currentVariantIndex < activeVariants.length - 1;
+
+          if (hasMoreVariants) {
+            // PASA A LA SIGUIENTE VERSIÓN (ej: V1 -> V2) EMPEZANDO EN FASE 1
+            const nextVariantNum = currentVariantIndex + 2; // 1-indexed
+            setPhaseTransitionNotice({
+              fromPhase: 3,
+              toPhase: 1,
+              nodeCode: activeNode.code,
+              nodeTitle: activeNode.title,
+              isVersionAdvance: true,
+              fromVersion: currentVariantIndex + 1,
+              toVersion: nextVariantNum,
+              totalVersions: activeVariants.length,
+            });
+          } else {
+            // ¡HA ACABADO LA ÚLTIMA VERSIÓN Y LA FASE 3!
+            // ¡EL NIVEL ESTÁ TOTALMENTE SUPERADO! (3 fases x 3 maestrías x N versiones)
+            const currentIndexInAll = allNodes.findIndex((n) => n.id === activeNode.id);
+            const immediateNextNode =
+              currentIndexInAll >= 0 && currentIndexInAll < allNodes.length - 1
+                ? allNodes[currentIndexInAll + 1]
+                : null;
+
+            const nextUnits = units.map((unit) => ({
+              ...unit,
+              nodes: unit.nodes.map((n) => {
+                if (n.id === activeNode.id) {
+                  return { ...n, status: 'completed' as const, score: Math.max(n.score || 0, recordedScore) };
+                }
+                if (immediateNextNode && n.id === immediateNextNode.id && n.status === 'locked') {
+                  return { ...n, status: 'current' as const };
+                }
+                return n;
+              }),
+            }));
+
+            setUnits(nextUnits);
+            setActiveNode((prev) =>
+              prev ? { ...prev, status: 'completed', score: Math.max(prev.score || 0, recordedScore) } : prev
+            );
+
+            // Mostrar modal de nivel superado al acabar todas las versiones y fases
+            setLevelCompletionModal({
+              isOpen: true,
+              completedNode: activeNode,
+              nextNode: immediateNextNode,
+              score: recordedScore,
+            });
+          }
+        }
+      }
+    } else {
+      setAvatarMood('fail-spiral');
+      setTimeout(() => setAvatarMood('neutral'), 3000);
+
+      // Reiniciar racha al fallar (sin toast intrusivo)
+      setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 0 }));
+    }
   };
+
 
   // Practicar un reto específico (por ejemplo desde la vista detallada de hojas A4)
   const handlePracticeSpecificChallenge = (lesson: LessonNode, specificSeed: number) => {
@@ -249,9 +844,78 @@ export function App() {
 
   // Validar dibujo
   const handleValidate = (timeRemainingSeconds?: number) => {
+    if (countDetectedAristas(strokes) === 0) return;
     const res = validateCubeDrawing(challenge, strokes, timeRemainingSeconds);
     setFeedback(res);
     setShowSolution(true);
+
+    const currentScore = res.totalScore ?? res.score;
+
+    // 1. Guardar en el Modo Récord si la grabación está activa
+    const cubeReport = buildDebugReport(challenge, strokes, res, activeNode);
+    const newRecord: SessionRecordItem = {
+      id: `rec-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toISOString(),
+      displayTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      type: 'cube',
+      nodeCode: dailySetSession ? `${dailySetSession.currentIndex + 1}/${dailySetSession.totalCount}` : (activeNode?.code || '3D'),
+      nodeTitle: activeNode?.title || 'Cubo en Perspectiva',
+      seed: challenge.seed,
+      score: currentScore,
+      passed: res.passed,
+      userComment: '',
+      metricsSummary: `Vértices: ${res.vertexAccuracyScore}% · Perspectiva: ${res.perspectiveScore}%`,
+      reportMarkdown: cubeReport.markdownText,
+      reportJsonString: cubeReport.jsonString,
+    };
+    lastEvaluatedRecordRef.current = newRecord;
+
+    if (isRecording) {
+      setSessionRecords((prev) => addSessionRecord(newRecord, prev));
+    }
+
+    // 2. Registrar puntuación en el reto diario activo si existe
+    if (dailySetSession && !dailySetSession.isCompleted) {
+      const updatedProblems = [...dailySetSession.problems];
+      updatedProblems[dailySetSession.currentIndex] = {
+        ...updatedProblems[dailySetSession.currentIndex],
+        score: currentScore,
+        passed: res.passed,
+      };
+
+      const isLastProblem = dailySetSession.currentIndex >= dailySetSession.totalCount - 1;
+      if (isLastProblem) {
+        const completedSession: DailySetSession = {
+          ...dailySetSession,
+          problems: updatedProblems,
+          isCompleted: true,
+          completedAt: new Date().toISOString(),
+        };
+        const historyItem = recordCompletedDailySet(completedSession);
+        setDailySetHistory((prev) => [historyItem, ...prev]);
+        setDailySetSession(null);
+        // Bonus de Hábito Diario por completar el lote de ejercicios (+50 XP)
+        setXp((prev) => prev + 50);
+        setCompletedDailySetForModal(historyItem);
+      } else {
+        setDailySetSession({
+          ...dailySetSession,
+          problems: updatedProblems,
+        });
+      }
+
+      if (res.passed) {
+        setAvatarMood('success-stars');
+        setTimeout(() => setAvatarMood('neutral'), 3500);
+        setXp((prev) => prev + 25);
+      } else {
+        setAvatarMood('fail-spiral');
+        setTimeout(() => setAvatarMood('neutral'), 3000);
+      }
+
+      // En el Reto Diario cada dibujo es 1 ejercicio del lote; no altera las fases de El Camino
+      return;
+    }
 
     if (res.passed) {
       // Reacción del Avatar: Éxito con ojos de estrella o bonus de rayo
@@ -272,7 +936,14 @@ export function App() {
       const recordedScore = res.totalScore ?? res.score;
 
       setXp((prev) => prev + totalXp);
-      setStreak((prev) => (prev === 0 ? 1 : prev));
+
+      // Actualizar racha diaria
+      const streakResult = recordDailyPractice(streak);
+      setStreak(streakResult.newStreak);
+      if (streakResult.isNewDay) {
+        showToast('🔥', `¡Racha Diaria: ${streakResult.newStreak} días!`, 'Has registrado tu práctica de hoy. Haz clic en la llama del menú superior para ver tu historial.');
+      }
+
       setScoresHistory((prev) => [...prev, recordedScore]);
 
       // Si se estaba realizando un examen de nivelación y se ha aprobado
@@ -283,77 +954,122 @@ export function App() {
         setXp((prev) => prev + placementBonusXp);
         setPlacementTestNode(null);
         setActiveNode((prev) => (prev ? { ...prev, status: 'current' } : prev));
+        showToast('⚡', '¡Examen Convalidado!', `Has saltado hasta el nivel ${placementTestNode.code} (+50 XP).`);
         return;
       }
 
-      // Desbloquear siguiente nodo en el camino si el actual estaba en curso
+      // GESTIÓN DE NIVELES Y PROGRESIÓN SECUENCIAL
       if (activeNode) {
-        setUnits((prevUnits) => {
-          let foundCurrent = false;
-          return prevUnits.map((unit) => ({
-            ...unit,
-            nodes: unit.nodes.map((n) => {
-              if (n.id === activeNode.id) {
-                foundCurrent = true;
-                return { ...n, status: 'completed' as const, score: Math.max(n.score || 0, recordedScore) };
-              }
-              if (foundCurrent && n.status === 'locked') {
-                foundCurrent = false;
-                return { ...n, status: 'current' as const };
-              }
-              return n;
-            }),
-          }));
-        });
+        // CASO A: Nivel inferior ya superado ('completed')
+        // Regla estricta: Practicar un nivel inferior NUNCA desbloquea niveles futuros. Solo actualiza su récord.
+        if (activeNode.status === 'completed') {
+          if (recordedScore > (activeNode.score || 0)) {
+            setUnits((prevUnits) =>
+              prevUnits.map((unit) => ({
+                ...unit,
+                nodes: unit.nodes.map((n) =>
+                  n.id === activeNode.id
+                    ? { ...n, score: Math.max(n.score || 0, recordedScore) }
+                    : n
+                ),
+              }))
+            );
+            setActiveNode((prev) => (prev ? { ...prev, score: Math.max(prev.score || 0, recordedScore) } : prev));
+          }
+          return;
+        }
 
-        // Actualizar el estado de la lección activa
-        setActiveNode((prev) => (prev ? { ...prev, status: 'completed', score: Math.max(prev.score || 0, recordedScore) } : prev));
-      }
+        // CASO B: Nivel activo actual ('current')
+        // Regla pedagógica: Se requieren AL MENOS 3 CUBOS SEGUIDOS CON NOTA ≥90% para superar el nivel
+        if (activeNode.status === 'current') {
+          if (recordedScore >= 90) {
+            const currentStreak = masteryStreaks[activeNode.id] || 0;
+            const newStreak = currentStreak + 1;
+            setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: newStreak }));
 
-      // Si el Modo Récord está activo, registrar ejercicio automáticamente
-      if (isRecording) {
-        const rep = buildDebugReport(challenge, strokes, res, activeNode);
-        const recordToAdd: SessionRecordItem = {
-          id: `${Date.now()}_${challenge.seed}`,
-          timestamp: new Date().toISOString(),
-          displayTime: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-          type: 'cube',
-          nodeCode: activeNode?.code || 'P-LIBRE',
-          nodeTitle: activeNode?.title || 'Práctica de Cubo',
-          seed: challenge.seed,
-          score: res.totalScore ?? res.score,
-          passed: true,
-          userComment: '',
-          metricsSummary: `Rectitud: ${res.straightnessScore}% · Vértices: ${res.vertexAccuracyScore}% · Persp: ${res.perspectiveScore}%`,
-          reportMarkdown: rep.markdownText,
-          reportJsonString: rep.jsonString,
-        };
-        handleRecordExercise(recordToAdd);
+            if (newStreak < 3) {
+              // Aún no ha alcanzado los 3 cubos seguidos
+              showToast(
+                '🎯',
+                `Racha de Maestría: ${newStreak}/3 (≥90%)`,
+                newStreak === 1
+                  ? `¡Gran cubo con ${recordedScore}%! Necesitas 2 cubos más seguidos ≥90% para superar ${activeNode.code}.`
+                  : `¡Excelente precisión (${recordedScore}%)! Solo te falta 1 cubo más para superar ${activeNode.code}.`
+              );
+            } else {
+              // ¡HA COMPLETADO 3 CUBOS SEGUIDOS CON ≥90%! Supera el nivel
+              setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 0 }));
+
+              // Buscar estrictamente el SIGUIENTE nodo inmediato en la lista secuencial
+              const currentIndexInAll = allNodes.findIndex((n) => n.id === activeNode.id);
+              const immediateNextNode =
+                currentIndexInAll >= 0 && currentIndexInAll < allNodes.length - 1
+                  ? allNodes[currentIndexInAll + 1]
+                  : null;
+
+              const nextUnits = units.map((unit) => ({
+                ...unit,
+                nodes: unit.nodes.map((n) => {
+                  if (n.id === activeNode.id) {
+                    return { ...n, status: 'completed' as const, score: Math.max(n.score || 0, recordedScore) };
+                  }
+                  // Solo se desbloquea el nodo inmediatamente siguiente si estaba bloqueado
+                  if (immediateNextNode && n.id === immediateNextNode.id && n.status === 'locked') {
+                    return { ...n, status: 'current' as const };
+                  }
+                  return n;
+                }),
+              }));
+
+              setUnits(nextUnits);
+              setActiveNode((prev) => (prev ? { ...prev, status: 'completed', score: Math.max(prev.score || 0, recordedScore) } : prev));
+
+              if (immediateNextNode && immediateNextNode.status === 'locked') {
+                showToast(
+                  '✨',
+                  `¡Nivel ${activeNode.code} Superado! (3/3)`,
+                  `Has dominado ${activeNode.code}. Nuevo nivel desbloqueado: ${immediateNextNode.code} ${immediateNextNode.title}`,
+                  `Ir a ${immediateNextNode.code}`,
+                  () => handleSelectNode(immediateNextNode)
+                );
+              } else {
+                showToast(
+                  '✨',
+                  `¡Nivel ${activeNode.code} Superado! (3/3)`,
+                  `¡Maestría demostrada con 3 cubos seguidos ≥90%!`
+                );
+              }
+            }
+          } else {
+            // La nota fue < 90%: la racha consecutiva se rompe y reinicia a 0
+            const prevStreak = masteryStreaks[activeNode.id] || 0;
+            setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 0 }));
+            if (prevStreak > 0) {
+              showToast(
+                '⚠️',
+                `Racha reiniciada (${recordedScore}%)`,
+                `Para superar ${activeNode.code} necesitas 3 cubos consecutivos con nota ≥90%. ¡Sigue practicando!`
+              );
+            }
+          }
+        }
       }
     } else {
       // Suspenso: avatar con espirales y sudor
       setAvatarMood('fail-spiral');
-      setTimeout(() => setAvatarMood('neutral'), 3000);
+      setTimeout(() => setAvatarMood('neutral'), 3500);
 
-      // Si el Modo Récord está activo, registrar ejercicio no superado
-      if (isRecording) {
-        const rep = buildDebugReport(challenge, strokes, res, activeNode);
-        const recordToAdd: SessionRecordItem = {
-          id: `${Date.now()}_${challenge.seed}`,
-          timestamp: new Date().toISOString(),
-          displayTime: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-          type: 'cube',
-          nodeCode: activeNode?.code || 'P-LIBRE',
-          nodeTitle: activeNode?.title || 'Práctica de Cubo',
-          seed: challenge.seed,
-          score: res.totalScore ?? res.score,
-          passed: false,
-          userComment: '',
-          metricsSummary: `Rectitud: ${res.straightnessScore}% · Vértices: ${res.vertexAccuracyScore}% · Persp: ${res.perspectiveScore}%`,
-          reportMarkdown: rep.markdownText,
-          reportJsonString: rep.jsonString,
-        };
-        handleRecordExercise(recordToAdd);
+      // Si estaba en el nivel actual, romper la racha de maestría
+      if (activeNode && activeNode.status === 'current') {
+        const prevStreak = masteryStreaks[activeNode.id] || 0;
+        setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 0 }));
+        if (prevStreak > 0) {
+          showToast(
+            '⚠️',
+            `Racha reiniciada`,
+            `Para superar ${activeNode.code} necesitas 3 cubos seguidos con nota ≥90%.`
+          );
+        }
       }
     }
   };
@@ -365,6 +1081,8 @@ export function App() {
     setStreak(0);
     setXp(0);
     setScoresHistory([]);
+    setMasteryStreaks({});
+    setNodePhases({});
     const firstNode = MODULE_PARALLELEPIPEDS.units[0].nodes[0];
     setActiveNode(firstNode);
     handleNewPracticeCube(firstNode);
@@ -437,26 +1155,30 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-white text-black flex flex-col antialiased">
-      {/* 1. BARRA SUPERIOR CON PESTAÑAS PRINCIPALES */}
+      {/* 1. BARRA SUPERIOR CON PESTAÑAS PRINCIPALES (COMPACTA EN MÓVIL HORIZONTAL PARA MÁXIMO ESPACIO DE LIENZO) */}
       <header className="sticky top-0 z-40 bg-white border-b-2 border-black">
-        <div className="max-w-6xl xl:max-w-7xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+        <div className={`max-w-6xl xl:max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4 ${
+          isLandscapeMobile ? 'px-2.5 h-10' : 'px-3 sm:px-4 h-14 sm:h-16'
+        }`}>
           {/* Logo Paplitz */}
           <div
             onClick={() => { setActiveTab('practice'); setMobileMenuOpen(false); }}
-            className="flex items-center gap-2 sm:gap-3 cursor-pointer group select-none shrink-0"
+            className="flex items-center gap-1.5 sm:gap-3 cursor-pointer group select-none shrink-0"
           >
             <img
               src="/paplitz-logo.svg"
               alt="Paplitz Logo"
-              className="w-8 h-8 sm:w-10 sm:h-10 group-hover:scale-105 transition-transform"
+              className={`${isLandscapeMobile ? 'w-6 h-6' : 'w-8 h-8 sm:w-10 sm:h-10'} group-hover:scale-105 transition-transform`}
             />
             <div>
-              <span className="text-lg sm:text-2xl font-bold font-display tracking-tight block leading-none">
+              <span className={`${isLandscapeMobile ? 'text-sm' : 'text-lg sm:text-2xl'} font-bold font-display tracking-tight block leading-none`}>
                 Paplitz
               </span>
-              <span className="text-[7px] sm:text-[9px] font-mono tracking-widest uppercase text-neutral-500 block">
-                Drawing Practice
-              </span>
+              {!isLandscapeMobile && (
+                <span className="text-[7px] sm:text-[9px] font-mono tracking-widest uppercase text-neutral-500 block">
+                  Drawing Practice
+                </span>
+              )}
             </div>
           </div>
 
@@ -520,14 +1242,43 @@ export function App() {
               }`}
               title="Laboratorio de Perspectiva 3D Dinámica (Forms - Guess)"
             >
-              <Boxes className="w-4 h-4 shrink-0 text-indigo-500" />
+              <Boxes className="w-4 h-4 shrink-0 text-indigo-600" />
               <span>Lab 3D</span>
-              <span className="text-[9px] bg-indigo-200 text-indigo-900 font-extrabold px-1 py-0.2 rounded">3D</span>
             </button>
           </nav>
 
-          {/* Estadísticas de Gamificación & Hojas A4 en Desktop (>= lg) */}
+          {/* Estadísticas de Gamificación, Modo Récord & Hojas A4 en Desktop (>= lg) */}
           <div className="hidden lg:flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Botón Modo Récord (REC) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (!isRecording) {
+                  setIsRecording(true);
+                  showToast('🔴', 'Modo Récord Activado', 'Cada ejercicio que completes se guardará en esta sesión temporal.', 'Ver', () => setIsRecordModalOpen(true));
+                } else {
+                  setIsRecordModalOpen(true);
+                }
+              }}
+              className={`px-2 sm:px-2.5 py-1 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer border-2 border-black transition-colors shadow-[2px_2px_0px_#000000] ${
+                isRecording
+                  ? 'bg-black text-white hover:bg-neutral-800'
+                  : 'bg-white hover:bg-neutral-100 text-black'
+              }`}
+              title={
+                isRecording
+                  ? `Modo Récord ACTIVO (${sessionRecords.length} ejercicios). Clic para ver o exportar sesión.`
+                  : 'Activar Modo Récord para guardar todos los ejercicios de la sesión'
+              }
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'
+                }`}
+              />
+              <span>{isRecording ? `REC (${sessionRecords.length})` : 'REC'}</span>
+            </button>
+
             <button
               onClick={() => setShowAnalogModal(true)}
               className="btn-ink-outline px-2 sm:px-2.5 py-1 text-xs flex items-center gap-1 cursor-pointer font-mono"
@@ -538,7 +1289,11 @@ export function App() {
             </button>
 
             {/* Racha */}
-            <div className="flex items-center gap-1 border-2 border-black px-2 py-1 text-xs font-mono font-bold shadow-[2px_2px_0px_#000000]">
+            <div
+              onClick={() => setStreakModalState({ isOpen: true, isNewDayAward: false })}
+              className="flex items-center gap-1 border-2 border-black px-2 py-1 text-xs font-mono font-bold shadow-[2px_2px_0px_#000000] cursor-pointer hover:bg-neutral-100 transition-colors"
+              title={`Racha: ${streak} días seguidos — Clic para ver historial semanal`}
+            >
               <Flame className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>{streak}</span>
             </div>
@@ -558,29 +1313,6 @@ export function App() {
               </div>
               <span className="text-[10px] sm:text-[11px] tabular-nums hidden xs:inline">{xp} XP</span>
             </div>
-
-            {/* Botón Modo Récord (REC) Desktop */}
-            <button
-              type="button"
-              onClick={() => {
-                if (isRecording) {
-                  setIsRecordModalOpen(true);
-                } else {
-                  setIsRecording(true);
-                }
-              }}
-              className={`px-2 sm:px-2.5 py-1 text-xs font-mono font-bold border-2 border-black cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center gap-1.5 transition-colors ${
-                isRecording ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-              }`}
-              title={
-                isRecording
-                  ? `Grabando: ${sessionRecords.length} ejercicios. Clic para ver o exportar sesión`
-                  : 'Activar Modo Récord (grabar sesión)'
-              }
-            >
-              <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
-              <span>{isRecording ? `REC (${sessionRecords.length})` : 'REC'}</span>
-            </button>
 
             {/* Botón de Guía a la derecha de XP */}
             <button
@@ -607,27 +1339,32 @@ export function App() {
 
           {/* Barra de Acciones Móvil (< lg): REC + Racha + Nivel + Botón Hamburguesa */}
           <div className="flex lg:hidden items-center gap-1.5 shrink-0">
-            {/* REC compacto móvil */}
+            {/* REC Button en móvil */}
             <button
               type="button"
               onClick={() => {
-                if (isRecording) {
-                  setIsRecordModalOpen(true);
-                } else {
+                if (!isRecording) {
                   setIsRecording(true);
+                  showToast('🔴', 'Modo Récord Activado', 'Cada ejercicio se guardará en esta sesión.');
+                } else {
+                  setIsRecordModalOpen(true);
                 }
               }}
-              className={`px-1.5 py-0.5 text-[10px] font-mono font-bold border-2 border-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1 ${
+              className={`flex items-center gap-1 border-2 border-black px-1.5 py-1 text-[11px] font-mono font-bold shadow-[1px_1px_0px_#000000] cursor-pointer ${
                 isRecording ? 'bg-black text-white' : 'bg-white text-black'
               }`}
-              title="Modo Récord"
+              title={isRecording ? `Grabando (${sessionRecords.length}). Clic para ver o exportar` : 'Activar Modo Récord'}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400 border border-black'}`} />
-              <span>{isRecording ? `REC (${sessionRecords.length})` : 'REC'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400'}`} />
+              <span>{isRecording ? `REC(${sessionRecords.length})` : 'REC'}</span>
             </button>
 
             {/* Racha compacta */}
-            <div className="flex items-center gap-0.5 border-2 border-black px-1.5 py-1 text-[11px] font-mono font-bold shadow-[1px_1px_0px_#000000]">
+            <div
+              onClick={() => setStreakModalState({ isOpen: true, isNewDayAward: false })}
+              className="flex items-center gap-0.5 border-2 border-black px-1.5 py-1 text-[11px] font-mono font-bold shadow-[1px_1px_0px_#000000] cursor-pointer active:scale-95"
+              title={`Racha: ${streak} días seguidos — Clic para ver historial`}
+            >
               <Flame className="w-3 h-3 stroke-[2.5]" />
               <span>{streak}</span>
             </div>
@@ -691,24 +1428,6 @@ export function App() {
                 <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 font-bold block mb-1">
                   Secciones
                 </span>
-
-                {/* Botón Modo Récord dentro del menú móvil */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRecordModalOpen(true);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full p-2.5 text-xs font-mono font-bold flex items-center justify-between border-2 border-black shadow-[2px_2px_0px_#000000] transition-colors cursor-pointer mb-2 ${
-                    isRecording ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Radio className="w-4 h-4 stroke-[2.5]" />
-                    <span className="uppercase font-bold">Modo Récord {isRecording ? `(${sessionRecords.length})` : ''}</span>
-                  </div>
-                  <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400'}`} />
-                </button>
 
                 <button
                   onClick={() => { setActiveTab('practice'); setMobileMenuOpen(false); }}
@@ -877,151 +1596,354 @@ export function App() {
           </div>
         )}
 
-        {/* PESTAÑA 1: HOME / PRÁCTICA RÁPIDA (TODO AL ALCANCE, SIN SCROLL) */}
+        {/* PESTAÑA 1: HOME / PRÁCTICA RÁPIDA (REDiseño LIMPIO, INTUITIVO Y SIN DISTRACCIONES) */}
         {activeTab === 'practice' && (
-          <div className="flex-1 w-full practice-grid px-4 py-2 sm:py-3">
-            {/* Columna izquierda espaciadora para centrar matemáticamente el lienzo en el centro de la pantalla */}
-            <div className="hidden lg:block w-full min-w-0" aria-hidden="true" />
+          <div className={`flex-1 w-full flex flex-col items-center overflow-hidden relative bg-neutral-100 ${
+            isLandscapeMobile
+              ? 'p-1.5 justify-center min-h-[calc(100vh-42px)] max-h-[calc(100vh-42px)]'
+              : 'p-1.5 sm:p-4 pt-1 sm:pt-4 justify-start sm:justify-center min-h-[calc(100vh-64px)]'
+          }`}>
+            {/* BARRA SUPERIOR EXCLUSIVA MÓVIL VERTICAL (< sm): ANCLAJE ELEGANTE DEL PANEL Y CONTEXTO */}
+            {!isLandscapeMobile && (
+              <div className="w-full max-w-[750px] flex items-center justify-between gap-2 px-0.5 pb-1 sm:hidden z-20 select-none">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                  className="bg-white hover:bg-neutral-100 text-black px-2.5 py-1 border-2 border-black shadow-[2px_2px_0px_#000000] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+                  title={isSidebarCollapsed ? "Abrir panel de práctica" : "Ocultar panel"}
+                >
+                  <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Panel</span>
+                </button>
 
-            {/* Columna central: Lienzo 100% centrado con la pantalla */}
-            <div
-              className="w-full min-w-0 flex flex-col items-center shrink-0 justify-self-center"
-              style={{
-                width: 'min(100%, 600px, max(280px, calc((100vh - 330px) * 600 / 540)))',
-              }}
+                <div className="flex items-center gap-1 min-w-0 bg-white border border-black px-2 py-0.5 shadow-[1px_1px_0px_#000000]">
+                  <span className="text-[10px] font-mono font-bold text-neutral-500 uppercase">
+                    {dailySetSession ? `${dailySetSession.currentIndex + 1}/${dailySetSession.totalCount}` : (practiceMode === 'camino' ? (activeNode ? activeNode.code : '1.1') : 'RETO')}
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-black truncate max-w-[130px]">
+                    {dailySetSession ? `Reto (${activeNode?.code || ''})` : (practiceMode === 'camino' ? (activeNode?.title || '') : 'Diario')}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* BOTÓN TOGGLE FLOTANTE EN TABLET Y ESCRITORIO (>= sm, OCULTO EN MÓVIL HORIZONTAL) */}
+            {!isLandscapeMobile && (
+              <button
+                type="button"
+                onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                className="hidden sm:flex absolute top-3 left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[2px_2px_0px_#000000] text-xs font-mono font-bold items-center gap-1.5 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                title={isSidebarCollapsed ? "Abrir panel de práctica" : "Ocultar panel"}
+              >
+                <PanelLeft className="w-4 h-4 stroke-[2.5]" />
+                <span>Panel</span>
+              </button>
+            )}
+
+            {/* BACKDROP FLOTANTE CUANDO EL PANEL ESTÁ ABIERTO */}
+            {!isSidebarCollapsed && (
+              <div
+                className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px] md:bg-black/20"
+                onClick={() => setIsSidebarCollapsed(true)}
+              />
+            )}
+
+            {/* DRAWER FLOTANTE DESPLEGABLE (MÓVIL: FULLSCREEN, DESKTOP: SLIDE-OVER W-80 SIN DESPLAZAR EL LIENZO) */}
+            <aside
+              className={`fixed md:absolute top-0 bottom-0 left-0 z-50 bg-white border-r-2 border-black shadow-[6px_0px_0px_#000000] flex flex-col select-none transition-transform duration-200 ease-in-out ${
+                isSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0 pointer-events-auto'
+              } w-full sm:w-85 md:w-80 h-full`}
             >
-              {/* Barra superior compacta con Selector de Lección alineado 1:1 con el Camino */}
-              <div className="w-full flex items-center justify-between gap-2 mb-2 border-b-2 border-black pb-2 flex-nowrap">
-                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <Filter className="w-4 h-4 text-black shrink-0" />
-                  <span className="text-xs font-mono uppercase font-bold shrink-0 hidden xs:inline">Lección:</span>
-                  <select
-                    value={activeNode?.id || ''}
-                    onChange={(e) => handleSelectLessonById(e.target.value)}
-                    className="border-2 border-black px-2 py-1 text-xs font-mono font-bold bg-white shadow-[2px_2px_0px_#000000] cursor-pointer min-w-0 w-full truncate"
+              <div className="w-full flex flex-col h-full overflow-y-auto p-3.5 space-y-3 font-sans">
+                {/* CABECERA DEL PANEL CON BOTÓN CERRAR */}
+                <div className="flex items-center justify-between pb-1.5 border-b-2 border-black">
+                  <div className="flex items-center gap-1.5">
+                    <Compass className="w-4 h-4 stroke-[2.5]" />
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider">
+                      Panel de Práctica
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    className="p-1 border border-black hover:bg-neutral-100 active:scale-95 cursor-pointer shadow-[1px_1px_0px_#000000]"
+                    title="Cerrar panel"
                   >
-                    {unlockedNodes.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.code} · {n.title}
-                      </option>
-                    ))}
-                  </select>
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {activeNode && (
-                    <span
-                      className={`text-[10px] font-mono px-1.5 py-0.5 font-bold border shrink-0 ${
-                        activeNode.status === 'completed'
-                          ? 'bg-black text-white border-black'
-                          : 'bg-white text-black border-black'
-                      }`}
-                    >
-                      <span className="hidden xs:inline">{activeNode.status === 'completed' ? 'Superado ✓' : 'En curso ★'}</span>
-                      <span className="xs:hidden">{activeNode.status === 'completed' ? '✓' : '★'}</span>
-                    </span>
-                  )}
+                {/* 1. SELECTOR DE MODO: [ EL CAMINO ] vs [ RETO DIARIO ] vs [ MODO RÉCORD ] */}
+                <div className="grid grid-cols-3 gap-1 p-1 border-2 border-black bg-neutral-100 shadow-[2px_2px_0px_#000000]">
                   <button
-                    onClick={() => handleNewPracticeCube()}
-                    className="btn-ink-outline px-2.5 py-1 text-xs font-mono flex items-center gap-1 cursor-pointer shrink-0"
-                    title="Generar otro cubo aleatorio con la misma lección"
+                    type="button"
+                    onClick={() => setPracticeMode('camino')}
+                    className={`py-1.5 px-1 text-[11px] font-mono font-bold flex items-center justify-center gap-1 cursor-pointer border border-black transition-colors ${
+                      practiceMode === 'camino'
+                        ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                        : 'bg-white text-black hover:bg-neutral-200'
+                    }`}
+                    title="El Camino: Progresión de niveles y fases"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Nuevo</span>
+                    <Map className="w-3 h-3" />
+                    <span className="truncate">Camino</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPracticeMode('daily')}
+                    className={`py-1.5 px-1 text-[11px] font-mono font-bold flex items-center justify-center gap-1 cursor-pointer border border-black transition-colors ${
+                      practiceMode === 'daily'
+                        ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                        : 'bg-white text-black hover:bg-neutral-200'
+                    }`}
+                    title="Reto Diario: Mini-set de 12 ejercicios para crear hábito"
+                  >
+                    <Target className="w-3 h-3" />
+                    <span className="truncate">Reto {dailySetSession ? `(${dailySetSession.currentIndex + 1}/${dailySetSession.totalCount})` : ''}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPracticeMode('record')}
+                    className={`py-1.5 px-1 text-[11px] font-mono font-bold flex items-center justify-center gap-1 cursor-pointer border border-black transition-colors relative ${
+                      practiceMode === 'record'
+                        ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                        : 'bg-white text-black hover:bg-neutral-200'
+                    }`}
+                    title="Modo Récord: Historial de todos los ejercicios de la sesión, comentarios y exportación"
+                  >
+                    <FileText className="w-3 h-3" />
+                    <span className="truncate">Récord</span>
+                    {isRecording && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                    )}
+                    {sessionRecords.length > 0 && (
+                      <span className={`text-[8px] font-mono font-black px-1 rounded-full ${
+                        practiceMode === 'record' ? 'bg-white text-black' : 'bg-black text-white'
+                      }`}>
+                        {sessionRecords.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* 2. SI MODO ES "EL CAMINO": CONTEXTO Y PROGRESIÓN */}
+                {practiceMode === 'camino' && (
+                  <div className="border-2 border-black p-2.5 bg-white shadow-[2px_2px_0px_#000000] space-y-2 font-mono">
+                    {/* Información completa del ejercicio en una misma línea */}
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="px-1.5 py-0.5 bg-black text-white text-[10px] font-bold shrink-0">
+                          {activeModuleId === 'module-calisthenics' ? 'M1' : 'M2'} · {activeNode?.code || '1.1'}
+                        </span>
+                        <span className="font-bold text-xs text-neutral-900 truncate" title={activeNode?.title}>
+                          {activeNode?.title || 'Ejercicio'}
+                        </span>
+                      </div>
+
+                      {/* Variante (si aplica) con flechas compactas y selector */}
+                      {activeNode?.isCalisthenics && activeVariants.length > 1 && (
+                        <div className="flex items-center gap-0.5 shrink-0 bg-neutral-100 border border-black px-1 py-0.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextIdx = (currentVariantIndex - 1 + activeVariants.length) % activeVariants.length;
+                              setNodeVariantIndices((prev) => ({ ...prev, [activeNode.id]: nextIdx }));
+                              setCalisthenicsSeed(Math.floor(Math.random() * 90000 + 10000));
+                            }}
+                            className="hover:text-black text-neutral-500 font-bold px-0.5 cursor-pointer leading-none"
+                            title="Variante anterior"
+                          >
+                            <ChevronLeft className="w-3 h-3 stroke-[2.5]" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsVariantSelectorOpen(true)}
+                            className="text-[10px] font-bold tabular-nums hover:underline cursor-pointer px-1 hover:bg-neutral-200 transition-colors"
+                            title="Ver qué hace cada versión y elegir subnivel"
+                          >
+                            V{currentVariantIndex + 1}/{activeVariants.length}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextIdx = (currentVariantIndex + 1) % activeVariants.length;
+                              setNodeVariantIndices((prev) => ({ ...prev, [activeNode.id]: nextIdx }));
+                              setCalisthenicsSeed(Math.floor(Math.random() * 90000 + 10000));
+                            }}
+                            className="hover:text-black text-neutral-500 font-bold px-0.5 cursor-pointer leading-none"
+                            title="Siguiente variante"
+                          >
+                            <ChevronRight className="w-3 h-3 stroke-[2.5]" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tarjeta explicativa de la versión actual con selector desplegable */}
+                    {activeNode?.isCalisthenics && (
+                      <div
+                        onClick={() => setIsVariantSelectorOpen(true)}
+                        className="p-2 border border-black bg-neutral-50 hover:bg-neutral-100 cursor-pointer shadow-[1px_1px_0px_#000000] transition-colors"
+                        title="Haz clic para ver qué hace esta versión y elegir entre subniveles"
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-bold text-neutral-600 mb-0.5">
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="bg-black text-white px-1 py-0.2 shrink-0">V{currentVariantIndex + 1}</span>
+                            <span className="text-black uppercase truncate font-bold">{currentExerciseDef.title}</span>
+                          </span>
+                          <span className="flex items-center gap-0.5 text-[9px] text-neutral-500 uppercase hover:text-black shrink-0">
+                            <span>Cambiar</span>
+                            <ChevronDown className="w-3 h-3 stroke-[2.5]" />
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-neutral-600 font-sans line-clamp-2 leading-tight">
+                          {currentExerciseDef.desc || currentExerciseDef.instruction}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Botón para más información y selector de nivel desde el mapa de El Camino */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('path')}
+                      className="w-full btn-ink-outline py-2 px-2.5 text-xs font-mono font-bold flex items-center justify-between cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100 transition-colors"
+                      title="Ir a El Camino para ver el mapa, requisitos, explicaciones y elegir nivel"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Map className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Elegir nivel en El Camino</span>
+                      </div>
+                      <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </button>
+                  </div>
+                )}
+
+                {/* 2. SI MODO ES "RETO DIARIO": CONTROLES DE DAILY CHALLENGE */}
+                {practiceMode === 'daily' && (
+                  <DailyChallengePanel
+                    unlockedNodes={unlockedNodes}
+                    activeSession={dailySetSession}
+                    onStartChallenge={handleStartDailyChallenge}
+                    onCancelChallenge={handleCancelDailyChallenge}
+                    history={dailySetHistory}
+                    onClearHistory={handleClearDailyHistory}
+                  />
+                )}
+
+                {/* 3. SI MODO ES "MODO RÉCORD": HISTORIAL DE SESIÓN, COMENTARIOS Y EXPORTACIÓN */}
+                {practiceMode === 'record' && (
+                  <SessionRecordPanel
+                    records={sessionRecords}
+                    onRecordsChange={setSessionRecords}
+                    onClearRecords={() => setSessionRecords([])}
+                    isRecording={isRecording}
+                    onToggleRecording={() => setIsRecording((prev) => !prev)}
+                  />
+                )}
+
+                {/* SENSEI CUBO Y BOTÓN CERRAR PANEL */}
+                <div className="pt-2 flex flex-col items-center gap-2">
+                  <SenseiCubo
+                    mood={avatarMood}
+                    isDrawing={isUserDrawing}
+                    size={90}
+                    onPoke={() => {
+                      setAvatarMood('poked');
+                      setTimeout(() => setAvatarMood('neutral'), 1800);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    className="w-full py-1.5 px-2 text-[11px] font-mono font-bold border border-neutral-300 text-neutral-600 hover:border-black hover:text-black hover:bg-neutral-50 flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-[1px_1px_0px_#000000]"
+                    title="Cerrar panel y volver al lienzo"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Cerrar Panel</span>
                   </button>
                 </div>
               </div>
+            </aside>
 
-              {/* Banner de Examen de Nivelación Activo */}
-              {placementTestNode && placementTestNode.id === activeNode?.id && (
-                <div className="w-full mb-2 px-3 py-1.5 border-2 border-black bg-neutral-100 flex items-center justify-between text-xs shadow-[2px_2px_0px_#000000]">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-black text-white px-1.5 py-0.2 font-mono font-bold text-[10px] flex items-center gap-1">
-                      <Zap className="w-3 h-3" /> EXAMEN
-                    </span>
-                    <span className="font-mono font-bold text-xs">
-                      Supera este reto (≥75%) para convalidar lecciones anteriores (+50 XP bonus).
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setPlacementTestNode(null)}
-                    className="text-[10px] font-mono uppercase font-bold text-neutral-600 hover:text-black underline cursor-pointer"
-                  >
-                    Cancelar Examen
-                  </button>
-                </div>
-              )}
-
-              {/* Banner de Guía Activa compacto */}
-              {activeNode && (
-                <div className="w-full mb-2 px-3 py-1.5 border border-black bg-neutral-50 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="font-mono font-bold bg-black text-white px-1.5 py-0.2 text-[10px]">
-                      {activeNode.code}
-                    </span>
-                    <span className="font-display font-bold text-xs truncate">
-                      {activeNode.title}
-                    </span>
-                    <span className="text-[10px] text-neutral-500 font-sans hidden sm:inline truncate">
-                      — {activeNode.subtitle}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {activeNode.axesMode === 'xyz' && (
-                      <span className="text-[10px] font-mono bg-white text-black border border-black px-2 py-0.5 font-bold shrink-0 flex items-center gap-1 shadow-[1px_1px_0px_#000000]">
-                        <Compass className="w-3 h-3 stroke-[2.5]" />
-                        <span>Ejes X, Y, Z</span>
-                      </span>
-                    )}
-                    {activeNode.axesMode === 'base_axes' && (
-                      <span className="text-[10px] font-mono bg-white text-black border border-black px-2 py-0.5 font-bold shrink-0 flex items-center gap-1 shadow-[1px_1px_0px_#000000]">
-                        <Compass className="w-3 h-3 stroke-[2.5]" />
-                        <span>Ejes X e Y</span>
-                      </span>
-                    )}
-                    {activeNode.axesMode === 'none' && (
-                      <span className="text-[10px] font-mono bg-white text-black border border-black px-2 py-0.5 font-bold shrink-0 flex items-center gap-1 shadow-[1px_1px_0px_#000000]">
-                        <PenTool className="w-3 h-3 stroke-[2.5]" />
-                        <span>Reto Libre</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Lienzo de dibujo responsivo con controles unificados inmediatamente al alcance */}
-              <DrawingCanvas
-                challenge={challenge}
-                feedback={feedback}
-                onStrokesChange={setStrokes}
-                showSolution={showSolution}
-                onValidate={handleValidate}
-                onNextCube={() => handleNewPracticeCube()}
-                onDrawingStateChange={setIsUserDrawing}
-                activeLesson={activeNode}
-              />
-            </div>
-
-            {/* Columna Lateral Derecha: Cubito (en el lateral derecho sin empujar el centro del lienzo) */}
-            <div className="w-full min-w-0 flex flex-col items-center justify-center shrink-0 pt-4 sm:pt-6 lg:pt-20">
-              <SenseiCubo
-                mood={avatarMood}
-                isDrawing={isUserDrawing}
-                size={windowWidth < 640 ? 140 : 185}
-                onPoke={() => {
-                  setAvatarMood('poked');
-                  setTimeout(() => setAvatarMood('neutral'), 1800);
-                }}
-              />
+            {/* ÁREA CENTRAL: LIENZO PEGADO ARRIBA EN MÓVIL VERTICAL (SIN HUECAZO) Y CENTRADO EN HORIZONTAL/DESKTOP */}
+            <div className={`flex-1 w-full flex flex-col items-center overflow-hidden min-h-0 ${
+              isLandscapeMobile ? 'justify-center h-full' : 'justify-start sm:justify-center pt-1 sm:pt-0'
+            }`}>
+              <div className={`w-full flex flex-col items-center ${
+                isLandscapeMobile ? 'justify-center h-full' : 'justify-start sm:justify-center'
+              }`}>
+                {activeNode?.isCalisthenics ? (
+                  <StrokePracticeCanvas
+                    ref={strokeCanvasRef}
+                    exerciseDef={currentExerciseDef}
+                    currentPhase={currentPhase}
+                    showSolution={true}
+                    showUserStrokes={showUserStrokes}
+                    onToggleSolution={undefined}
+                    onToggleUserStrokes={() => setShowUserStrokes((prev) => !prev)}
+                    seed={calisthenicsSeed}
+                    onNewSeed={setCalisthenicsSeed}
+                    onDrawingStateChange={setIsUserDrawing}
+                    onEvaluationComplete={handleCalisthenicsEvaluationComplete}
+                    onNext={handleSidebarNext}
+                    masteryStreak={currentMasteryStreak}
+                    justEarnedMastery={justEarnedMastery}
+                    phaseTransitionNotice={phaseTransitionNotice}
+                    onDismissPhaseTransition={handleDismissPhaseTransition}
+                    onOpenMasteryInfo={() => setShowMasteryStreakInfo(true)}
+                    onOpenPhaseInfo={() => setShowKinematicPhasesInfo(true)}
+                    onPhaseChange={(phase) => setCurrentPhase(phase)}
+                    isLandscapeMobile={isLandscapeMobile}
+                    onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
+                    nodeCode={dailySetSession ? `${dailySetSession.currentIndex + 1}/${dailySetSession.totalCount}` : (practiceMode === 'camino' ? (activeNode ? activeNode.code : '1.1') : 'RETO')}
+                    nodeTitle={dailySetSession ? `Reto Diario (${activeNode?.code || ''})` : (practiceMode === 'camino' ? (activeNode?.title || '') : 'Diario')}
+                    isDailyChallenge={Boolean(dailySetSession && !dailySetSession.isCompleted)}
+                    dailyProgress={dailySetSession ? { current: dailySetSession.currentIndex + 1, total: dailySetSession.totalCount } : undefined}
+                    onCommentChange={handleUpdateLatestRecordComment}
+                    isRecording={isRecording}
+                    recordedCount={sessionRecords.length}
+                    onToggleRecording={() => setIsRecording((prev) => !prev)}
+                    onOpenRecordModal={() => setIsRecordModalOpen(true)}
+                    onAddCurrentToRecording={handleStartRecordingAndAddCurrent}
+                  />
+                ) : (
+                  <DrawingCanvas
+                    ref={cubeCanvasRef}
+                    challenge={challenge}
+                    feedback={feedback}
+                    onStrokesChange={setStrokes}
+                    showSolution={showSolution}
+                    showUserDrawing={showUserStrokes}
+                    showParametricSolution={showSolution}
+                    onValidate={handleValidate}
+                    onNextCube={handleNextCubeOrProblem}
+                    onDrawingStateChange={setIsUserDrawing}
+                    activeLesson={activeNode}
+                    isLandscapeMobile={isLandscapeMobile}
+                    onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
+                    nodeCode={dailySetSession ? `${dailySetSession.currentIndex + 1}/${dailySetSession.totalCount}` : (practiceMode === 'camino' ? (activeNode ? activeNode.code : '1.1') : 'RETO')}
+                    isDailyChallenge={Boolean(dailySetSession && !dailySetSession.isCompleted)}
+                    dailyProgress={dailySetSession ? { current: dailySetSession.currentIndex + 1, total: dailySetSession.totalCount } : undefined}
+                    onCommentChange={handleUpdateLatestRecordComment}
+                    isRecording={isRecording}
+                    recordedCount={sessionRecords.length}
+                    onToggleRecording={() => setIsRecording((prev) => !prev)}
+                    onOpenRecordModal={() => setIsRecordModalOpen(true)}
+                    onAddCurrentToRecording={handleStartRecordingAndAddCurrent}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )}
+
 
         {/* PESTAÑA 2: MINIJUEGOS */}
         {activeTab === 'minigames' && (
           <MinigamesView
             unlockedNodes={unlockedNodes}
             activeNode={activeNode}
+            calisthenicsNodes={calisthenicsUnits.flatMap((u) => u.nodes)}
             onAwardXP={(amount) => setXp((prev) => prev + amount)}
             onAvatarMoodChange={(mood) => {
               setAvatarMood(mood);
@@ -1036,18 +1958,21 @@ export function App() {
           <div className="flex-1 bg-white">
             <div className="text-center pt-8 pb-4">
               <span className="text-xs font-mono uppercase tracking-widest bg-black text-white px-2 py-0.5 font-bold">
-                MÓDULO 1
+                {activeModuleId === 'module-calisthenics' ? 'MÓDULO 1' : 'MÓDULO 2'}
               </span>
               <h1 className="text-3xl sm:text-4xl font-bold font-display mt-2">
-                {MODULE_PARALLELEPIPEDS.name}
+                {activeModuleId === 'module-calisthenics' ? MODULE_CALISTHENICS.name : MODULE_PARALLELEPIPEDS.name}
               </h1>
               <p className="text-sm text-neutral-600 font-sans max-w-md mx-auto mt-1">
-                {MODULE_PARALLELEPIPEDS.subtitle}
+                {activeModuleId === 'module-calisthenics' ? MODULE_CALISTHENICS.subtitle : MODULE_PARALLELEPIPEDS.subtitle}
               </p>
             </div>
 
             <LearningPath
               units={units}
+              activeModuleId={activeModuleId}
+              nodeVariantIndices={nodeVariantIndices}
+              onSelectModule={handleSelectModule}
               onSelectNode={handleSelectNode}
               onOpenGuidebook={(unit) => setGuidebookUnit(unit)}
               onOpenPlacementModal={() => setIsPlacementModalOpen(true)}
@@ -1090,32 +2015,13 @@ export function App() {
             onAvatarMoodChange={(mood) => setAvatarMood(mood)}
             onExit={() => setActiveTab('practice')}
             isRecording={isRecording}
-            onToggleRecording={() => setIsRecording((prev) => !prev)}
-            onOpenRecordModal={() => setIsRecordModalOpen(true)}
-            recordedCount={sessionRecords.length}
             onRecordExercise={handleRecordExercise}
-            onUpdateRecordComment={handleUpdateSessionRecordComment}
+            onOpenRecordModal={() => setIsRecordModalOpen(true)}
           />
         )}
       </main>
 
       {/* MODALES */}
-      {/* MODAL MODO RÉCORD DE SESIÓN (EXPORTACIÓN Y COMENTARIOS) */}
-      {isRecordModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in font-sans">
-          <div className="max-w-xl w-full max-h-[92vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_#000000]">
-            <SessionRecordPanel
-              records={sessionRecords}
-              onRecordsChange={setSessionRecords}
-              onClearRecords={() => setSessionRecords([])}
-              isRecording={isRecording}
-              onToggleRecording={() => setIsRecording((prev) => !prev)}
-              onClose={() => setIsRecordModalOpen(false)}
-            />
-          </div>
-        </div>
-      )}
-
       <PlacementModal
         isOpen={isPlacementModalOpen}
         onClose={() => setIsPlacementModalOpen(false)}
@@ -1149,6 +2055,101 @@ export function App() {
             setActiveTab('minigames');
           }}
         />
+      )}
+      <TinyToast toast={toast} onClose={() => setToast(null)} />
+      <StreakModal
+        streak={streak}
+        isOpen={streakModalState.isOpen}
+        isNewDayAward={streakModalState.isNewDayAward}
+        onClose={() => setStreakModalState({ isOpen: false, isNewDayAward: false })}
+      />
+      {completedDailySetForModal && (
+        <DailySetCompletedModal
+          completedSet={completedDailySetForModal}
+          onClose={() => setCompletedDailySetForModal(null)}
+        />
+      )}
+      <MasteryStreakInfoModal
+        isOpen={showMasteryStreakInfo}
+        onClose={() => setShowMasteryStreakInfo(false)}
+      />
+      <KinematicPhasesInfoModal
+        isOpen={showKinematicPhasesInfo}
+        onClose={() => setShowKinematicPhasesInfo(false)}
+      />
+      {levelCompletionModal.isOpen && levelCompletionModal.completedNode && (
+        <LevelCompletionModal
+          isOpen={levelCompletionModal.isOpen}
+          completedNode={levelCompletionModal.completedNode}
+          nextNode={levelCompletionModal.nextNode}
+          score={levelCompletionModal.score}
+          onGoToNextNode={() => {
+            if (levelCompletionModal.nextNode) {
+              handleSelectNode(levelCompletionModal.nextNode);
+            }
+            setLevelCompletionModal({ isOpen: false, completedNode: null, nextNode: null, score: 0 });
+          }}
+          onStayAndPractice={() => {
+            setLevelCompletionModal({ isOpen: false, completedNode: null, nextNode: null, score: 0 });
+            setCalisthenicsSeed(Math.floor(Math.random() * 90000 + 10000));
+          }}
+          onGoToCamino={() => {
+            setActiveTab('path');
+            setLevelCompletionModal({ isOpen: false, completedNode: null, nextNode: null, score: 0 });
+          }}
+        />
+      )}
+      {/* Modal Selector Desplegable de Variantes/Subniveles */}
+      <VariantSelectorModal
+        isOpen={isVariantSelectorOpen}
+        onClose={() => setIsVariantSelectorOpen(false)}
+        activeNode={activeNode}
+        activeVariants={activeVariants}
+        currentVariantIndex={currentVariantIndex}
+        onSelectVariant={(variantIdx) => {
+          if (activeNode) {
+            setNodeVariantIndices((prev) => ({ ...prev, [activeNode.id]: variantIdx }));
+            setCalisthenicsSeed(Math.floor(Math.random() * 90000 + 10000));
+            setStrokeEvaluation(null);
+            setCurrentPhase(1);
+            setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 0 }));
+          }
+        }}
+      />
+      {/* Modal de Sesión de Grabación (Modo Récord) */}
+      {isRecordModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in font-sans">
+          <div className="bg-white border-4 border-black max-w-xl w-full shadow-[8px_8px_0px_#000000] flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="p-3 border-b-2 border-black flex items-center justify-between bg-neutral-100">
+              <div className="flex items-center gap-2">
+                <span className={`w-3 h-3 rounded-full border border-black ${
+                  isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400'
+                }`} />
+                <h2 className="font-display font-bold text-sm sm:text-base uppercase tracking-tight">
+                  Sesión de Grabación {isRecording ? '(REC Activo)' : '(Pausado)'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRecordModalOpen(false)}
+                className="p-1 border border-black hover:bg-neutral-200 cursor-pointer shadow-[1px_1px_0px_#000000]"
+                title="Cerrar modal"
+              >
+                <X className="w-4 h-4 text-black stroke-[2.5]" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-2 sm:p-3">
+              <SessionRecordPanel
+                records={sessionRecords}
+                onRecordsChange={setSessionRecords}
+                onClearRecords={() => setSessionRecords([])}
+                isRecording={isRecording}
+                onToggleRecording={() => setIsRecording((prev) => !prev)}
+                onClose={() => setIsRecordModalOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

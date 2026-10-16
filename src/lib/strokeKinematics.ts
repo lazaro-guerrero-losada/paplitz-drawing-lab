@@ -65,13 +65,28 @@ export function getUserSpeedProfile(): UserSpeedProfile {
 }
 
 /**
- * Guarda y actualiza la media adaptativa del usuario por dirección biomecánica
+ * Guarda y actualiza la media adaptativa del usuario por dirección biomecánica.
+ * Ignora trazos con mala geometría para no envenenar la media de velocidad con barridos descontrolados.
  */
-export function recordStrokeSpeed(direction: StrokeDirection | string, speedPxPerSec: number): UserSpeedProfile {
+export function recordStrokeSpeed(
+  direction: StrokeDirection | string,
+  speedPxPerSec: number,
+  qualityOptions?: { straightnessScore?: number; boundaryScore?: number }
+): UserSpeedProfile {
   const profile = getUserSpeedProfile();
   if (speedPxPerSec <= 40 || speedPxPerSec > 3500) {
     // Descartar valores atípicos (clicks erróneos o saltos de puntero)
     return profile;
+  }
+
+  // Descartar trazos descontrolados o con mala geometría para no contaminar la media adaptativa
+  if (qualityOptions) {
+    if (
+      (qualityOptions.straightnessScore !== undefined && qualityOptions.straightnessScore < 60) ||
+      (qualityOptions.boundaryScore !== undefined && qualityOptions.boundaryScore < 55)
+    ) {
+      return profile;
+    }
   }
 
   const dirKey = direction || 'general';
@@ -84,7 +99,8 @@ export function recordStrokeSpeed(direction: StrokeDirection | string, speedPxPe
 
   // Media móvil ponderada exponencial: da más peso al historial a medida que acumula intentos
   const alpha = existing.count < 5 ? 0.35 : 0.18;
-  const newAvg = Math.round(existing.avgSpeedPxPerSec * (1 - alpha) + speedPxPerSec * alpha);
+  const cappedSpeed = Math.min(620, Math.max(120, speedPxPerSec));
+  const newAvg = Math.min(620, Math.round(existing.avgSpeedPxPerSec * (1 - alpha) + cappedSpeed * alpha));
   const fastest = Math.max(existing.fastestSpeedPxPerSec, Math.round(speedPxPerSec));
 
   profile.directions[dirKey] = {
@@ -100,7 +116,7 @@ export function recordStrokeSpeed(direction: StrokeDirection | string, speedPxPe
   const allDirs = Object.values(profile.directions);
   if (allDirs.length > 0) {
     const sum = allDirs.reduce((acc, d) => acc + d.avgSpeedPxPerSec, 0);
-    profile.globalAvgSpeedPxPerSec = Math.round(sum / allDirs.length);
+    profile.globalAvgSpeedPxPerSec = Math.min(620, Math.round(sum / allDirs.length));
   }
 
   try {
@@ -121,9 +137,9 @@ export function getUserBaselineSpeed(direction: StrokeDirection | string): numbe
   const profile = getUserSpeedProfile();
   const dirKey = direction || 'general';
   if (profile.directions[dirKey] && profile.directions[dirKey].count >= 2) {
-    return profile.directions[dirKey].avgSpeedPxPerSec;
+    return Math.min(620, profile.directions[dirKey].avgSpeedPxPerSec);
   }
-  return profile.globalAvgSpeedPxPerSec || DEFAULT_INITIAL_SPEED;
+  return Math.min(620, profile.globalAvgSpeedPxPerSec || DEFAULT_INITIAL_SPEED);
 }
 
 /**
@@ -219,29 +235,32 @@ export function analyzeStrokeKinematics(
     }
   } else if (currentPhase === 2) {
     // FASE 2: RITMO Y FLUIDEZ
-    // Exige velocidad continua sin titubeos ni micro-paradas (fluidez >= 65% y velocidad >= 60% de su media)
-    const minSpeed = userBaseline * 0.55;
-    phaseRequirementText = `Fase 2: Trazo continuo y fluido (≥${Math.round(minSpeed)} px/s sin frenazos)`;
-    phasePassed = fluencyScore >= 62 && avgSpeedPxPerSec >= minSpeed && microStopCount <= 2;
+    // Exige velocidad continua de dibujo sin titubeos ni micro-paradas (fluidez >= 60% y velocidad sostenida >= 200 px/s o 55% baseline, hasta un tope razonable de 380 px/s)
+    const minSpeed = Math.min(380, Math.max(200, Math.round(userBaseline * 0.55)));
+    phaseRequirementText = `Fase 2: Trazo continuo y fluido (≥${minSpeed} px/s sin vacilaciones)`;
+    phasePassed = fluencyScore >= 60 && avgSpeedPxPerSec >= minSpeed && microStopCount <= 2;
 
-    if (fluencyScore < 62 || microStopCount > 2) {
+    if (fluencyScore < 60 || microStopCount > 2) {
       speedDiagnosisLabel = 'Se detectó titubeo o micro-paradas';
     } else if (avgSpeedPxPerSec < minSpeed) {
-      speedDiagnosisLabel = 'Demasiado cauto para Fase 2';
+      speedDiagnosisLabel = `Demasiado lento para Fase 2 (${avgSpeedPxPerSec} px/s, requieres ≥${minSpeed} px/s)`;
     } else {
       speedDiagnosisLabel = 'Fluidez constante excelente';
     }
   } else {
     // FASE 3: VELOCIDAD Y DISPARO BALÍSTICO
-    // Exige golpe decidido y rápido: >= 1.25x su media personal (o duración rápida <= 360ms)
-    const targetFastSpeed = Math.round(userBaseline * 1.25);
-    phaseRequirementText = `Fase 3: Trazo balístico rápido (≥${targetFastSpeed} px/s)`;
-    phasePassed = avgSpeedPxPerSec >= targetFastSpeed || durationMs <= 360;
+    // Exige golpe decidido y rápido con buen impulso reflejo (≥340 px/s o 85% baseline, con un tope saludable de 520 px/s para evitar descontrol)
+    const targetFastSpeed = Math.min(520, Math.max(340, Math.round(userBaseline * 0.85)));
+    const maxDurationMs = Math.max(700, Math.round(totalLength * 1.8));
+    phaseRequirementText = `Fase 3: Trazo balístico rápido (≥${targetFastSpeed} px/s en ≤${maxDurationMs}ms)`;
+    phasePassed = avgSpeedPxPerSec >= targetFastSpeed && durationMs <= maxDurationMs;
 
     if (phasePassed) {
-      speedDiagnosisLabel = '¡Disparo balístico certero!';
+      speedDiagnosisLabel = '¡Disparo balístico certero a gran velocidad!';
+    } else if (avgSpeedPxPerSec < targetFastSpeed) {
+      speedDiagnosisLabel = `Velocidad insuficiente: vas a ${avgSpeedPxPerSec} px/s (requieres ≥${targetFastSpeed} px/s)`;
     } else {
-      speedDiagnosisLabel = `Aumenta la velocidad: requieres ≥${targetFastSpeed} px/s`;
+      speedDiagnosisLabel = `Demasiado tiempo en el lienzo: ${durationMs}ms (requieres impulso rápido ≤${maxDurationMs}ms)`;
     }
   }
 
