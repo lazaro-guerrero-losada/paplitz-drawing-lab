@@ -1132,167 +1132,175 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
         </div>
       )}
 
-      {/* LIENZO 600x540 CENTRADO EN PANTALLA COMPLETA */}
-      <canvas
-        ref={canvasRef}
-        width={600}
-        height={540}
-        className={`block max-w-full max-h-full aspect-[600/540] z-10 ${
-          touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
-        }`}
-        style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      />
+      {/* CONTENEDOR ANCLADO AL JUEGO (Mantiene aspecto exacto 600x540 y centra los HUDs junto al lienzo) */}
+      <div
+        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        style={{
+          width: 'min(100%, 620px, calc((100vh - 90px) * (600 / 540)))',
+          height: 'auto',
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={600}
+          height={540}
+          className={`block w-full h-full z-10 pointer-events-auto ${
+            touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
+          }`}
+          style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        />
 
-      {/* 1. HUD SUPERIOR IZQUIERDO: MENÚ, MODO, NIVEL Y MODO TÁCTIL */}
-      <div className="absolute top-3 left-3 sm:left-5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
-        <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
-          <button
-            onClick={exitGame}
-            className="btn-ink-outline px-2 py-0.5 text-xs font-mono uppercase font-bold flex items-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000]"
-            title="Volver a la selección de minijuegos"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Menú</span>
-          </button>
-          <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
-            {gameMode === 'fever'
-              ? 'FIEBRE'
-              : gameMode === 'blitz'
-              ? 'BLITZ 60s'
-              : gameMode === 'survival'
-              ? 'SUPERVIVENCIA'
-              : 'SPRINT 5'}
-          </span>
-          <span className="text-xs font-mono font-bold truncate max-w-[100px] sm:max-w-[140px] bg-neutral-100 border border-black px-1.5 py-0.5">
-            Nivel {currentLesson.code}
-          </span>
-          <span className="text-[9px] font-mono font-bold text-neutral-500 uppercase">
-            #{challenge.seed}
-          </span>
-        </div>
-
-        {/* Toggle de Modo Táctil (Trazo vs Mover) */}
-        <div className="bg-white border-2 border-black p-1 shadow-[3px_3px_0px_#000000] flex items-center gap-1 w-fit">
-          <button
-            type="button"
-            onClick={() => setTouchMode('draw')}
-            className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
-              touchMode === 'draw' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
-            }`}
-            title="Modo Trazo: dibuja aristas"
-          >
-            <Pen className="w-2.5 h-2.5 inline mr-0.5" />
-            Trazo
-          </button>
-          <button
-            type="button"
-            onClick={() => setTouchMode('scroll')}
-            className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
-              touchMode === 'scroll' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
-            }`}
-            title="Modo Mover: desplazar con 1 dedo"
-          >
-            <Hand className="w-2.5 h-2.5 inline mr-0.5" />
-            Mover
-          </button>
-        </div>
-      </div>
-
-      {/* 2. HUD SUPERIOR DERECHO: ESTADÍSTICAS ARCADE EN VIVO */}
-      <div className="absolute top-3 right-3 sm:right-6 z-20 flex items-center gap-1.5 font-mono text-xs font-bold pointer-events-auto select-none">
-        <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] flex items-center gap-2">
-          {gameMode === 'fever' && (
-            <>
-              <div
-                className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
-                  feverTime <= 6 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
-                }`}
-              >
-                <Hourglass className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span className="tabular-nums">{feverTime.toFixed(1)}s</span>
-              </div>
-              <div className="bg-neutral-100 border border-black px-2 py-0.5 flex items-center gap-1">
-                <span>{cubesCompleted} cubos</span>
-                {specialCubesCount > 0 && (
-                  <span className="text-[10px] flex items-center">
-                    (<Star className="w-2.5 h-2.5 fill-black text-black inline" />
-                    {specialCubesCount})
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-
-          {gameMode === 'blitz' && (
-            <>
-              <div
-                className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
-                  blitzTime <= 10 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span className="tabular-nums">{blitzTime.toFixed(1)}s</span>
-              </div>
-              <div className="bg-neutral-100 border border-black px-2 py-0.5">
-                <span>{cubesCompleted} cubos</span>
-              </div>
-            </>
-          )}
-
-          {gameMode === 'survival' && (
-            <>
-              {/* Vidas */}
-              <div className="flex items-center gap-0.5 px-1 py-0.5">
-                {[1, 2, 3].map((heartIdx) => (
-                  <Heart
-                    key={heartIdx}
-                    className={`w-3.5 h-3.5 ${
-                      heartIdx <= survivalLives
-                        ? 'fill-black text-black stroke-[2]'
-                        : 'fill-none text-neutral-300 stroke-[1.5]'
-                    }`}
-                  />
-                ))}
-              </div>
-              {/* Tiempo */}
-              <div
-                className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
-                  survivalTime <= 5 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span className="tabular-nums">{survivalTime.toFixed(1)}s</span>
-              </div>
-              <div className="bg-neutral-100 border border-black px-2 py-0.5">
-                <span>{streakCombo} combo</span>
-              </div>
-            </>
-          )}
-
-          {gameMode === 'sprint' && (
-            <>
-              <div className="px-2 py-0.5 border border-black flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span className="tabular-nums">{sprintTime.toFixed(1)}s</span>
-              </div>
-              <div className="bg-neutral-100 border border-black px-2 py-0.5">
-                <span>{cubesCompleted}/5 cubos</span>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Badge Cubo Estrella en Fiebre */}
-        {gameMode === 'fever' && isSpecialCube && (
-          <div className="border-2 border-black bg-black text-white px-2 py-1 text-xs font-mono font-bold flex items-center gap-1 shadow-[3px_3px_0px_#000000] animate-pulse">
-            <Star className="w-3.5 h-3.5 fill-white text-white" />
-            <span>ESTRELLA (+20s)</span>
+        {/* 1. HUD SUPERIOR IZQUIERDO: ANCLADO AL CUBO (MENÚ, MODO, NIVEL Y MODO TÁCTIL) */}
+        <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
+          <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
+            <button
+              onClick={exitGame}
+              className="btn-ink-outline px-2 py-0.5 text-xs font-mono uppercase font-bold flex items-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000]"
+              title="Volver a la selección de minijuegos"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Menú</span>
+            </button>
+            <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
+              {gameMode === 'fever'
+                ? 'FIEBRE'
+                : gameMode === 'blitz'
+                ? 'BLITZ 60s'
+                : gameMode === 'survival'
+                ? 'SUPERVIVENCIA'
+                : 'SPRINT 5'}
+            </span>
+            <span className="text-xs font-mono font-bold truncate max-w-[100px] sm:max-w-[140px] bg-neutral-100 border border-black px-1.5 py-0.5">
+              Nivel {currentLesson.code}
+            </span>
+            <span className="text-[9px] font-mono font-bold text-neutral-500 uppercase">
+              #{challenge.seed}
+            </span>
           </div>
-        )}
+
+          {/* Toggle de Modo Táctil (Trazo vs Mover) */}
+          <div className="bg-white border-2 border-black p-1 shadow-[3px_3px_0px_#000000] flex items-center gap-1 w-fit">
+            <button
+              type="button"
+              onClick={() => setTouchMode('draw')}
+              className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
+                touchMode === 'draw' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
+              }`}
+              title="Modo Trazo: dibuja aristas"
+            >
+              <Pen className="w-2.5 h-2.5 inline mr-0.5" />
+              Trazo
+            </button>
+            <button
+              type="button"
+              onClick={() => setTouchMode('scroll')}
+              className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
+                touchMode === 'scroll' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
+              }`}
+              title="Modo Mover: desplazar con 1 dedo"
+            >
+              <Hand className="w-2.5 h-2.5 inline mr-0.5" />
+              Mover
+            </button>
+          </div>
+        </div>
+
+        {/* 2. HUD SUPERIOR DERECHO: ANCLADO AL CUBO (ESTADÍSTICAS ARCADE EN VIVO) */}
+        <div className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 flex items-center gap-1.5 font-mono text-xs font-bold pointer-events-auto select-none">
+          <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] flex items-center gap-2">
+            {gameMode === 'fever' && (
+              <>
+                <div
+                  className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
+                    feverTime <= 6 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
+                  }`}
+                >
+                  <Hourglass className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span className="tabular-nums">{feverTime.toFixed(1)}s</span>
+                </div>
+                <div className="bg-neutral-100 border border-black px-2 py-0.5 flex items-center gap-1">
+                  <span>{cubesCompleted} cubos</span>
+                  {specialCubesCount > 0 && (
+                    <span className="text-[10px] flex items-center">
+                      (<Star className="w-2.5 h-2.5 fill-black text-black inline" />
+                      {specialCubesCount})
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+
+            {gameMode === 'blitz' && (
+              <>
+                <div
+                  className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
+                    blitzTime <= 10 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span className="tabular-nums">{blitzTime.toFixed(1)}s</span>
+                </div>
+                <div className="bg-neutral-100 border border-black px-2 py-0.5">
+                  <span>{cubesCompleted} cubos</span>
+                </div>
+              </>
+            )}
+
+            {gameMode === 'survival' && (
+              <>
+                {/* Vidas */}
+                <div className="flex items-center gap-0.5 px-1 py-0.5">
+                  {[1, 2, 3].map((heartIdx) => (
+                    <Heart
+                      key={heartIdx}
+                      className={`w-3.5 h-3.5 ${
+                        heartIdx <= survivalLives
+                          ? 'fill-black text-black stroke-[2]'
+                          : 'fill-none text-neutral-300 stroke-[1.5]'
+                      }`}
+                    />
+                  ))}
+                </div>
+                {/* Tiempo */}
+                <div
+                  className={`px-2 py-0.5 border border-black flex items-center gap-1 ${
+                    survivalTime <= 5 ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span className="tabular-nums">{survivalTime.toFixed(1)}s</span>
+                </div>
+                <div className="bg-neutral-100 border border-black px-2 py-0.5">
+                  <span>{streakCombo} combo</span>
+                </div>
+              </>
+            )}
+
+            {gameMode === 'sprint' && (
+              <>
+                <div className="px-2 py-0.5 border border-black flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span className="tabular-nums">{sprintTime.toFixed(1)}s</span>
+                </div>
+                <div className="bg-neutral-100 border border-black px-2 py-0.5">
+                  <span>{cubesCompleted}/5 cubos</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Badge Cubo Estrella en Fiebre */}
+          {gameMode === 'fever' && isSpecialCube && (
+            <div className="border-2 border-black bg-black text-white px-2 py-1 text-xs font-mono font-bold flex items-center gap-1 shadow-[3px_3px_0px_#000000] animate-pulse">
+              <Star className="w-3.5 h-3.5 fill-white text-white" />
+              <span>ESTRELLA (+20s)</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Flash visual de acierto o fallo en pantalla */}

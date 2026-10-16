@@ -956,120 +956,128 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
         />
       </div>
 
-      {/* LIENZO 600x540 ESCALADO MATEMÁTICAMENTE SIN DEFORMACIÓN */}
-      <canvas
-        ref={canvasRef}
-        width={600}
-        height={540}
-        className={`block max-w-full max-h-full aspect-[600/540] z-10 ${
-          touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
-        }`}
-        style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      />
+      {/* CONTENEDOR ANCLADO AL DIBUJO (Mantiene aspecto exacto 600x540 y centra los HUDs junto al cubo) */}
+      <div
+        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        style={{
+          width: 'min(100%, 620px, calc((100vh - 90px) * (600 / 540)))',
+          height: 'auto',
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={600}
+          height={540}
+          className={`block w-full h-full z-10 pointer-events-auto ${
+            touchMode === 'scroll' ? 'touch-pan-y cursor-grab' : 'touch-none cursor-crosshair'
+          }`}
+          style={{ touchAction: touchMode === 'scroll' ? 'pan-y' : 'none' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        />
 
-      {/* 1. HUD SUPERIOR IZQUIERDO: CONTEXTO, PANEL, SEED Y MODO TÁCTIL */}
-      <div className="absolute top-3 left-3 sm:left-5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
-        {/* Cabecera: Panel + Nivel */}
-        <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
-          {onToggleSidebar && (
-            <button
-              type="button"
-              onClick={onToggleSidebar}
-              className="bg-white hover:bg-neutral-100 text-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
-              title="Abrir / cerrar panel de práctica"
-            >
-              <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Panel</span>
-            </button>
-          )}
-          <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
-            <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
-              {isDailyChallenge && dailyProgress
-                ? `RETO ${dailyProgress.current}/${dailyProgress.total}`
-                : (nodeCode || activeLesson?.code || '1.1')}
-            </span>
-            <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[110px] sm:max-w-[160px]">
-              {activeLesson?.title || (challenge.isShadowLevel ? 'Sombras' : 'Prisma 3D')}
-            </span>
+        {/* 1. HUD SUPERIOR IZQUIERDO: ANCLADO AL CUBO (CONTEXTO, PANEL, SEED Y MODO TÁCTIL) */}
+        <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
+          {/* Cabecera: Panel + Nivel */}
+          <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
+            {onToggleSidebar && (
+              <button
+                type="button"
+                onClick={onToggleSidebar}
+                className="bg-white hover:bg-neutral-100 text-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
+                title="Abrir / cerrar panel de práctica"
+              >
+                <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Panel</span>
+              </button>
+            )}
+            <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
+              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
+                {isDailyChallenge && dailyProgress
+                  ? `RETO ${dailyProgress.current}/${dailyProgress.total}`
+                  : (nodeCode || activeLesson?.code || '1.1')}
+              </span>
+              <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[110px] sm:max-w-[160px]">
+                {activeLesson?.title || (challenge.isShadowLevel ? 'Sombras' : 'Prisma 3D')}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Info secundaria: Semilla y Nivel de Sombras si aplica */}
-        <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
-          <span className="text-[9px] sm:text-[10px] font-bold bg-neutral-100 px-1.5 py-0.5 border border-black">
-            #{challenge.seed}
-          </span>
-          {challenge.isShadowLevel && (
-            <span className="text-[9px] sm:text-[10px] font-bold text-neutral-700 truncate max-w-[160px]">
-              {challenge.hasGroundGrid ? '☀️ Suelo Guía' : '☀️ Sombra Libre'}
+          {/* Info secundaria: Semilla y Nivel de Sombras si aplica */}
+          <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
+            <span className="text-[9px] sm:text-[10px] font-bold bg-neutral-100 px-1.5 py-0.5 border border-black">
+              #{challenge.seed}
             </span>
-          )}
-          {/* Toggle de Modo Táctil (Trazo vs Mover) */}
-          <div className="flex items-center border border-black ml-auto">
-            <button
-              type="button"
-              onClick={() => setTouchMode('draw')}
-              className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
-                touchMode === 'draw' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
-              }`}
-              title="Modo Trazo: dibuja aristas"
-            >
-              <Pen className="w-2.5 h-2.5 inline mr-0.5" />
-              Trazo
-            </button>
-            <button
-              type="button"
-              onClick={() => setTouchMode('scroll')}
-              className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
-                touchMode === 'scroll' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
-              }`}
-              title="Modo Mover: desplazar con 1 dedo"
-            >
-              <Hand className="w-2.5 h-2.5 inline mr-0.5" />
-              Mover
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. HUD SUPERIOR DERECHO: TEMPORIZADOR O CUADRADITO CON LA NOTA (SIN MENSAJE) */}
-      {!feedback ? (
-        <div className="absolute top-3 right-3 sm:right-6 z-20 pointer-events-auto font-mono text-xs select-none">
-          <div
-            className={`border-2 border-black p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 ${
-              timeLeft <= 5 && isTimerRunning ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span className="font-bold tabular-nums text-sm">{timeLeft.toFixed(1)}s</span>
-            {!isTimerRunning && strokes.length === 0 && (
-              <span className="text-[9px] uppercase font-bold tracking-tighter opacity-70 hidden sm:inline">
-                · Arranca al trazar
+            {challenge.isShadowLevel && (
+              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-700 truncate max-w-[160px]">
+                {challenge.hasGroundGrid ? '☀️ Suelo Guía' : '☀️ Sombra Libre'}
               </span>
             )}
+            {/* Toggle de Modo Táctil (Trazo vs Mover) */}
+            <div className="flex items-center border border-black ml-auto">
+              <button
+                type="button"
+                onClick={() => setTouchMode('draw')}
+                className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
+                  touchMode === 'draw' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
+                }`}
+                title="Modo Trazo: dibuja aristas"
+              >
+                <Pen className="w-2.5 h-2.5 inline mr-0.5" />
+                Trazo
+              </button>
+              <button
+                type="button"
+                onClick={() => setTouchMode('scroll')}
+                className={`px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition-colors ${
+                  touchMode === 'scroll' ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700'
+                }`}
+                title="Modo Mover: desplazar con 1 dedo"
+              >
+                <Hand className="w-2.5 h-2.5 inline mr-0.5" />
+                Mover
+              </button>
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="absolute top-3 right-3 sm:right-6 z-20 flex flex-col items-center justify-center bg-white border-2 border-black p-2.5 sm:p-3 shadow-[3px_3px_0px_#000000] font-mono pointer-events-auto min-w-[76px] sm:min-w-[84px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
-          <span className="text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
-            Nota
-          </span>
-          <span className="text-2xl sm:text-3xl font-black leading-none my-1">
-            {feedback.totalScore ?? feedback.score}%
-          </span>
-          <span
-            className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-black ${
-              feedback.passed ? 'bg-black text-white' : 'bg-white text-neutral-700'
-            }`}
-          >
-            {feedback.passed ? 'Aprobado' : 'Reintentar'}
-          </span>
-        </div>
-      )}
+
+        {/* 2. HUD SUPERIOR DERECHO: TEMPORIZADOR O CUADRADITO CON LA NOTA (ANCLADO AL CUBO) */}
+        {!feedback ? (
+          <div className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 pointer-events-auto font-mono text-xs select-none">
+            <div
+              className={`border-2 border-black p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 ${
+                timeLeft <= 5 && isTimerRunning ? 'bg-black text-white animate-pulse' : 'bg-white text-black'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="font-bold tabular-nums text-sm">{timeLeft.toFixed(1)}s</span>
+              {!isTimerRunning && strokes.length === 0 && (
+                <span className="text-[9px] uppercase font-bold tracking-tighter opacity-70 hidden sm:inline">
+                  · Arranca al trazar
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 flex flex-col items-center justify-center bg-white border-2 border-black p-2.5 sm:p-3 shadow-[3px_3px_0px_#000000] font-mono pointer-events-auto min-w-[76px] sm:min-w-[84px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
+            <span className="text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+              Nota
+            </span>
+            <span className="text-2xl sm:text-3xl font-black leading-none my-1">
+              {feedback.totalScore ?? feedback.score}%
+            </span>
+            <span
+              className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-black ${
+                feedback.passed ? 'bg-black text-white' : 'bg-white text-neutral-700'
+              }`}
+            >
+              {feedback.passed ? 'Aprobado' : 'Reintentar'}
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* 3. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR */}
       <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">

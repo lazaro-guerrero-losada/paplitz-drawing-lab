@@ -1110,182 +1110,190 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
 
     return (
       <div className="relative w-full h-full overflow-hidden flex items-center justify-center select-none bg-white pattern-grid-paper">
-        {/* LIENZO DE PRÁCTICA (Resolución interna 750x500 con ratio exacto para evitar deformaciones) */}
-        <canvas
-          ref={canvasRef}
-          width={750}
-          height={500}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          className="block max-w-full max-h-full aspect-[750/500] cursor-crosshair touch-none select-none z-10"
-        />
+        {/* CONTENEDOR ANCLADO AL DIBUJO (Mantiene aspecto exacto 750x500 y centra los HUDs junto al lienzo) */}
+        <div
+          className="relative aspect-[750/500] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+          style={{
+            width: 'min(100%, 750px, calc((100vh - 90px) * (750 / 500)))',
+            height: 'auto',
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            width={750}
+            height={500}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className="block w-full h-full cursor-crosshair touch-none select-none z-10 pointer-events-auto"
+          />
 
-        {/* 1. HUD SUPERIOR IZQUIERDO: CONTEXTO, PANEL, FASES Y MAESTRÍA */}
-        <div className="absolute top-3 left-3 sm:left-5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
-          {/* Fila superior: Botón Panel + Título/Código del Nodo */}
-          <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
-            {onToggleSidebar && (
-              <button
-                type="button"
-                onClick={onToggleSidebar}
-                className="bg-white hover:bg-neutral-100 text-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
-                title="Abrir / cerrar panel de práctica"
-              >
-                <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Panel</span>
-              </button>
-            )}
-            <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
-              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
-                {isDailyChallenge && dailyProgress ? `RETO ${dailyProgress.current}/${dailyProgress.total}` : (nodeCode || '1.1')}
-              </span>
-              {nodeTitle && (
-                <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[110px] sm:max-w-[160px]">
-                  {nodeTitle}
-                </span>
+          {/* 1. HUD SUPERIOR IZQUIERDO: ANCLADO AL DIBUJO (FASES, MAESTRÍA, RETO) */}
+          <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 z-20 flex flex-col gap-1.5 pointer-events-auto font-mono text-xs select-none">
+            {/* Fila superior: Botón Panel + Título/Código del Nodo */}
+            <div className="bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5">
+              {onToggleSidebar && (
+                <button
+                  type="button"
+                  onClick={onToggleSidebar}
+                  className="bg-white hover:bg-neutral-100 text-black px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000000] text-[10px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
+                  title="Abrir / cerrar panel de práctica"
+                >
+                  <PanelLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Panel</span>
+                </button>
               )}
-            </div>
-          </div>
-
-          {/* Fila inferior: Indicadores de Maestría y Fases de Motricidad */}
-          {!isDailyChallenge && (
-            <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] flex flex-col gap-1.5">
-              {/* Maestría: M: [✓][✓][ ] 2/3 [i] */}
-              <div className={`flex items-center gap-1.5 text-xs transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
-                <span className="text-[10px] font-bold text-neutral-600">M:</span>
-                <div className="flex items-center gap-0.5">
-                  {[0, 1, 2].map((i) => {
-                    const isFilled = i < (masteryStreak ?? 0);
-                    const isJustFilled = justEarnedMastery && i === (masteryStreak ?? 0) - 1;
-                    return (
-                      <span
-                        key={i}
-                        className={`w-3.5 h-3.5 border border-black flex items-center justify-center transition-all ${
-                          isJustFilled
-                            ? 'bg-black text-white animate-mastery-pop scale-125 z-10 shadow-[0_0_0_2px_#000000]'
-                            : isFilled
-                            ? 'bg-black text-white'
-                            : 'bg-neutral-100 text-transparent'
-                        }`}
-                      >
-                        {isFilled && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
-                      </span>
-                    );
-                  })}
-                </div>
-                <span className={`text-[10px] font-bold tabular-nums transition-colors ${justEarnedMastery ? 'text-black font-black' : ''}`}>
-                  {masteryStreak ?? 0}/3
+              <div className="flex items-center gap-1 min-w-0 bg-neutral-100 border border-black px-1.5 py-0.5">
+                <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 uppercase">
+                  {isDailyChallenge && dailyProgress ? `RETO ${dailyProgress.current}/${dailyProgress.total}` : (nodeCode || '1.1')}
                 </span>
-                {justEarnedMastery && (
-                  <span className="bg-black text-white text-[8px] font-black px-1 border border-black animate-bounce shadow-[1px_1px_0px_#000]">
-                    +1
+                {nodeTitle && (
+                  <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[110px] sm:max-w-[160px]">
+                    {nodeTitle}
                   </span>
                 )}
-                {onOpenMasteryInfo && (
-                  <button
-                    type="button"
-                    onClick={onOpenMasteryInfo}
-                    className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
-                    title={`Información de Maestría (Racha de 3 aciertos ≥${targetMasteryScore}%)`}
-                  >
-                    i
-                  </button>
-                )}
               </div>
+            </div>
 
-              {/* Fases: F: [1][2][3] [i] */}
-              <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-300 text-xs">
-                <span className="text-[10px] font-bold text-neutral-600">F:</span>
-                <div className="flex items-center gap-1">
-                  {([1, 2, 3] as const).map((ph) => (
+            {/* Fila inferior: Indicadores de Maestría y Fases de Motricidad */}
+            {!isDailyChallenge && (
+              <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] flex flex-col gap-1.5">
+                {/* Maestría: M: [✓][✓][ ] 2/3 [i] */}
+                <div className={`flex items-center gap-1.5 text-xs transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
+                  <span className="text-[10px] font-bold text-neutral-600">M:</span>
+                  <div className="flex items-center gap-0.5">
+                    {[0, 1, 2].map((i) => {
+                      const isFilled = i < (masteryStreak ?? 0);
+                      const isJustFilled = justEarnedMastery && i === (masteryStreak ?? 0) - 1;
+                      return (
+                        <span
+                          key={i}
+                          className={`w-3.5 h-3.5 border border-black flex items-center justify-center transition-all ${
+                            isJustFilled
+                              ? 'bg-black text-white animate-mastery-pop scale-125 z-10 shadow-[0_0_0_2px_#000000]'
+                              : isFilled
+                              ? 'bg-black text-white'
+                              : 'bg-neutral-100 text-transparent'
+                          }`}
+                        >
+                          {isFilled && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <span className={`text-[10px] font-bold tabular-nums transition-colors ${justEarnedMastery ? 'text-black font-black' : ''}`}>
+                    {masteryStreak ?? 0}/3
+                  </span>
+                  {justEarnedMastery && (
+                    <span className="bg-black text-white text-[8px] font-black px-1 border border-black animate-bounce shadow-[1px_1px_0px_#000]">
+                      +1
+                    </span>
+                  )}
+                  {onOpenMasteryInfo && (
                     <button
-                      key={ph}
                       type="button"
-                      onClick={() => onPhaseChange && onPhaseChange(ph)}
-                      className={`w-4 h-4 border border-black flex items-center justify-center text-[9px] font-bold cursor-pointer transition-colors ${
-                        currentPhase === ph
-                          ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
-                          : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                      }`}
-                      title={`Fase ${ph}: ${ph === 1 ? 'Precisión (extremos, ≥80%)' : ph === 2 ? 'Fluidez (velocidad constante, ≥85%)' : 'Velocidad (inercia ágil, ≥90%)'}`}
+                      onClick={onOpenMasteryInfo}
+                      className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
+                      title={`Información de Maestría (Racha de 3 aciertos ≥${targetMasteryScore}%)`}
                     >
-                      {ph}
+                      i
                     </button>
-                  ))}
+                  )}
                 </div>
-                {onOpenPhaseInfo && (
-                  <button
-                    type="button"
-                    onClick={onOpenPhaseInfo}
-                    className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
-                    title="Información de Fases de Motricidad"
-                  >
-                    i
-                  </button>
-                )}
+
+                {/* Fases: F: [1][2][3] [i] */}
+                <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-300 text-xs">
+                  <span className="text-[10px] font-bold text-neutral-600">F:</span>
+                  <div className="flex items-center gap-1">
+                    {([1, 2, 3] as const).map((ph) => (
+                      <button
+                        key={ph}
+                        type="button"
+                        onClick={() => onPhaseChange && onPhaseChange(ph)}
+                        className={`w-4 h-4 border border-black flex items-center justify-center text-[9px] font-bold cursor-pointer transition-colors ${
+                          currentPhase === ph
+                            ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                            : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                        }`}
+                        title={`Fase ${ph}: ${ph === 1 ? 'Precisión (extremos, ≥80%)' : ph === 2 ? 'Fluidez (velocidad constante, ≥85%)' : 'Velocidad (inercia ágil, ≥90%)'}`}
+                      >
+                        {ph}
+                      </button>
+                    ))}
+                  </div>
+                  {onOpenPhaseInfo && (
+                    <button
+                      type="button"
+                      onClick={onOpenPhaseInfo}
+                      className="w-3.5 h-3.5 border border-black flex items-center justify-center text-[9px] font-bold text-neutral-600 hover:text-black hover:bg-neutral-200 cursor-pointer"
+                      title="Información de Fases de Motricidad"
+                    >
+                      i
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 2. HUD SUPERIOR DERECHO: CUADRADITO CON LA NOTA (ANCLADO A LA ESQUINA DEL DIBUJO) */}
+          {evaluation && (
+            <div className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 flex flex-col items-center justify-center bg-white border-2 border-black p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] font-mono pointer-events-auto min-w-[72px] sm:min-w-[80px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+              <span className="text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+                Nota
+              </span>
+              <span className="text-2xl sm:text-3xl font-black leading-none my-1">
+                {Math.round(evaluation.overallScore)}%
+              </span>
+              <span
+                className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-black ${
+                  isMasterySuccess
+                    ? 'bg-black text-white'
+                    : evaluation.passed
+                    ? 'bg-neutral-200 text-black'
+                    : 'bg-white text-neutral-700'
+                }`}
+              >
+                {isMasterySuccess
+                  ? 'Excelente'
+                  : evaluation.passed
+                  ? 'Aprobado'
+                  : 'Reintentar'}
+              </span>
+            </div>
+          )}
+
+          {/* 3. MINI-POPUP DE PASO DE FASE O AVANCE DE VERSIÓN (FLOTANTE CENTRADO EN EL DIBUJO) */}
+          {phaseTransitionNotice && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center p-3 select-none pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+              <div className="bg-black text-white border-2 sm:border-3 border-white p-3.5 sm:p-4 shadow-[6px_6px_0px_#000000] max-w-xs sm:max-w-sm w-full text-center font-mono space-y-2 animate-phase-pop pointer-events-auto">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white text-black text-[10px] font-black uppercase tracking-wider shadow-[1px_1px_0px_#000000]">
+                  <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>¡Siguiente Fase!</span>
+                </div>
+
+                <div className="space-y-0.5">
+                  <h3 className="text-base sm:text-lg font-black font-display text-white tracking-tight uppercase">
+                    {phaseTransitionNotice.isVersionAdvance
+                      ? `VERSIÓN ${phaseTransitionNotice.toVersion}: FASE 1`
+                      : `FASE ${phaseTransitionNotice.toPhase}: ${phaseTransitionNotice.toPhase === 2 ? 'FLUIDEZ' : 'VELOCIDAD'}`}
+                  </h3>
+                  <div className="text-[10px] sm:text-[11px] text-neutral-300 font-bold">
+                    {phaseTransitionNotice.isVersionAdvance
+                      ? `¡Versión ${phaseTransitionNotice.fromVersion}/${phaseTransitionNotice.totalVersions} dominada! Iniciando versión ${phaseTransitionNotice.toVersion}...`
+                      : `¡3/3 aciertos completados! Avanzando automáticamente...`}
+                  </div>
+                </div>
+
+                {/* Barra de progreso de 1 segundo */}
+                <div className="w-full h-1 bg-neutral-800 border border-neutral-700 overflow-hidden mt-1">
+                  <div className="h-full bg-white transition-all duration-1000 w-full animate-pulse" />
+                </div>
               </div>
             </div>
           )}
         </div>
-
-        {/* 2. HUD SUPERIOR DERECHO: CUADRADITO CON LA NOTA (SIN MENSAJE, ESTILO EXACTO PEDIDO POR EL USUARIO) */}
-        {evaluation && (
-          <div className="absolute top-3 right-3 sm:right-6 z-20 flex flex-col items-center justify-center bg-white border-2 border-black p-2.5 sm:p-3 shadow-[3px_3px_0px_#000000] font-mono pointer-events-auto min-w-[76px] sm:min-w-[84px] aspect-square animate-in fade-in zoom-in-95 duration-150">
-            <span className="text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
-              Nota
-            </span>
-            <span className="text-2xl sm:text-3xl font-black leading-none my-1">
-              {Math.round(evaluation.overallScore)}%
-            </span>
-            <span
-              className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border border-black ${
-                isMasterySuccess
-                  ? 'bg-black text-white'
-                  : evaluation.passed
-                  ? 'bg-neutral-200 text-black'
-                  : 'bg-white text-neutral-700'
-              }`}
-            >
-              {isMasterySuccess
-                ? 'Excelente'
-                : evaluation.passed
-                ? 'Aprobado'
-                : 'Reintentar'}
-            </span>
-          </div>
-        )}
-
-        {/* 3. MINI-POPUP DE PASO DE FASE O AVANCE DE VERSIÓN (FLOTANTE CENTRADO) */}
-        {phaseTransitionNotice && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center p-3 select-none pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-black text-white border-2 sm:border-3 border-white p-3.5 sm:p-4 shadow-[6px_6px_0px_#000000] max-w-xs sm:max-w-sm w-full text-center font-mono space-y-2 animate-phase-pop pointer-events-auto">
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white text-black text-[10px] font-black uppercase tracking-wider shadow-[1px_1px_0px_#000000]">
-                <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>¡Siguiente Fase!</span>
-              </div>
-
-              <div className="space-y-0.5">
-                <h3 className="text-base sm:text-lg font-black font-display text-white tracking-tight uppercase">
-                  {phaseTransitionNotice.isVersionAdvance
-                    ? `VERSIÓN ${phaseTransitionNotice.toVersion}: FASE 1`
-                    : `FASE ${phaseTransitionNotice.toPhase}: ${phaseTransitionNotice.toPhase === 2 ? 'FLUIDEZ' : 'VELOCIDAD'}`}
-                </h3>
-                <div className="text-[10px] sm:text-[11px] text-neutral-300 font-bold">
-                  {phaseTransitionNotice.isVersionAdvance
-                    ? `¡Versión ${phaseTransitionNotice.fromVersion}/${phaseTransitionNotice.totalVersions} dominada! Iniciando versión ${phaseTransitionNotice.toVersion}...`
-                    : `¡3/3 aciertos completados! Avanzando automáticamente...`}
-                </div>
-              </div>
-
-              {/* Barra de progreso de 1 segundo */}
-              <div className="w-full h-1 bg-neutral-800 border border-neutral-700 overflow-hidden mt-1">
-                <div className="h-full bg-white transition-all duration-1000 w-full animate-pulse" />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* 4. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (NEOBRUTALISTA PAPLITZ) */}
         <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
