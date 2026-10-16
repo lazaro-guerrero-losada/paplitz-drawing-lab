@@ -92,6 +92,24 @@ export const Perspective3DPreviewCard: React.FC<Perspective3DPreviewCardProps> =
         ctx.stroke();
       });
     }
+
+    // 3. Dibujar aristas y siluetas tangenciales diferenciadas (más grises con trazo técnico)
+    if (model.tangentRings) {
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = '#64748b'; // Gris técnico pizarra diferenciado
+      ctx.setLineDash([5, 2, 1.5, 2]); // Trazo cadena fino
+      model.tangentRings.forEach((ring) => {
+        if (ring.length < 2) return;
+        ctx.beginPath();
+        ring.forEach((pt, idx) => {
+          const proj = project(pt);
+          if (idx === 0) ctx.moveTo(proj.x, proj.y);
+          else ctx.lineTo(proj.x, proj.y);
+        });
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+    }
   }, [model, rotation]);
 
   // Manejo de interacción de arrastre para rotar 360° libremente

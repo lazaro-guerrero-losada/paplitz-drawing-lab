@@ -87,6 +87,22 @@ export function generateDynamicCamera(
   };
 }
 
+export function isTangentCurve(curve: { id: string; label: string; isTangent?: boolean }): boolean {
+  if (curve.isTangent !== undefined) return curve.isTangent;
+  const id = curve.id.toLowerCase();
+  const label = curve.label.toLowerCase();
+  return (
+    id.includes('slant') ||
+    id.includes('side') ||
+    id.includes('tangent') ||
+    id.includes('silhouette') ||
+    id.includes('envelope') ||
+    label.includes('tangente') ||
+    label.includes('tangencial') ||
+    label.includes('contorno lateral')
+  );
+}
+
 /**
  * Convierte un conjunto de puntos 3D muestreados a un CurveSegment2D proyectado en pantalla
  */
@@ -99,7 +115,8 @@ function sample3DCurveTo2D(
   label: string,
   isGiven: boolean,
   style: 'solid' | 'dashed' | 'faint' = 'solid',
-  role: 'form' | 'construction' | 'hidden' = 'form'
+  role: 'form' | 'construction' | 'hidden' = 'form',
+  isTangent?: boolean
 ): CurveSegment2D {
   const points2D: Point2D[] = [];
   points3D.forEach((p3) => {
@@ -109,6 +126,11 @@ function sample3DCurveTo2D(
     }
   });
 
+  const calculatedIsTangent =
+    isTangent !== undefined
+      ? isTangent
+      : isTangentCurve({ id, label });
+
   return {
     id,
     points: points2D,
@@ -116,6 +138,7 @@ function sample3DCurveTo2D(
     label,
     style,
     role,
+    isTangent: calculatedIsTangent,
   };
 }
 
@@ -227,7 +250,8 @@ export function createSpherePrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [],
     edges: [],
-    rings: [fullEquator, fullMeridianXY, fullMeridianYZ, silhouette3D],
+    rings: [fullEquator, fullMeridianXY, fullMeridianYZ],
+    tangentRings: [silhouette3D],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -327,7 +351,8 @@ export function createRingPrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [],
     edges: [],
-    rings: [centerRing, upperEnvelope3D, lowerEnvelope3D, ...crossSections],
+    rings: [centerRing, ...crossSections],
+    tangentRings: [upperEnvelope3D, lowerEnvelope3D],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -476,7 +501,8 @@ export function createCylinderPrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [bLeft, bRight, tLeft, tRight],
     edges: [],
-    rings: [bottomRing, topRing, leftSide, rightSide, heightAxis],
+    rings: [bottomRing, topRing, heightAxis],
+    tangentRings: [leftSide, rightSide],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -556,7 +582,8 @@ export function createConePrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [apex, pLeft, pRight],
     edges: [],
-    rings: [baseRing, leftSlant3D, rightSlant3D, heightAxis],
+    rings: [baseRing, heightAxis],
+    tangentRings: [leftSlant3D, rightSlant3D],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
@@ -712,7 +739,8 @@ export function createCapsulePrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [bLeft, bRight, tLeft, tRight],
     edges: [],
-    rings: [lowerRing, upperRing, upperDomeArc, leftSide, rightSide, heightAxis],
+    rings: [lowerRing, upperRing, upperDomeArc, heightAxis],
+    tangentRings: [leftSide, rightSide],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };

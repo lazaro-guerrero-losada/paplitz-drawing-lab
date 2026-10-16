@@ -7,7 +7,7 @@ import {
   PrimitiveType,
   AidMode,
 } from '../../lib/perspective3d/types';
-import { generate3DChallenge, ALL_PRIMITIVES } from '../../lib/perspective3d/primitives';
+import { generate3DChallenge, ALL_PRIMITIVES, isTangentCurve } from '../../lib/perspective3d/primitives';
 import { evaluate3DSubmission } from '../../lib/perspective3d/evaluator3d';
 import { Perspective3DPreviewCard } from './Perspective3DPreviewCard';
 import { PrimitiveSelectorPanel } from './PrimitiveSelectorPanel';
@@ -229,7 +229,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       ctx.globalAlpha = 1.0;
     }
 
-    // 2. DIBUJAR LÍNEAS ANCLA / BASE DADAS (Negras sólidas / grises posteriores)
+    // 2. DIBUJAR LÍNEAS ANCLA / BASE DADAS (Negras sólidas / grises posteriores / tangentes)
     challenge.anchorCurves.forEach((curve) => {
       if (curve.points.length < 2) return;
       ctx.beginPath();
@@ -238,7 +238,12 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         else ctx.lineTo(pt.x, pt.y);
       });
 
-      if (curve.style === 'faint') {
+      const isTangent = isTangentCurve(curve);
+      if (isTangent) {
+        ctx.strokeStyle = '#64748b'; // Gris pizarra técnico para tangentes
+        ctx.lineWidth = 2.0;
+        ctx.setLineDash([8, 3, 2, 3]); // Trazo cadena técnico
+      } else if (curve.style === 'faint') {
         ctx.strokeStyle = '#94a3b8'; // Mitad posterior tenue
         ctx.lineWidth = 1.4;
         ctx.setLineDash([4, 4]);
@@ -256,16 +261,25 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     // 3. AYUDAS VISUALES 3D (3 Estados: Off, Línea, Vértices)
     if (!evaluation) {
       if (aidMode === 'line') {
-        // ESTADO 1: Línea gris de puntos que muestra el trazo completo para terminar la forma
+        // ESTADO 1: Línea que muestra el trazo completo para terminar la forma
         ctx.save();
-        ctx.strokeStyle = '#94a3b8'; // Slate 400
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([3, 5]); // Línea de puntos gris
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         challenge.targetCurves.forEach((tc) => {
           if (tc.points.length < 2) return;
+          const isTangent = isTangentCurve(tc);
           ctx.beginPath();
+          if (isTangent) {
+            // Líneas tangentes: diferenciadas con trazo cadena y color más gris
+            ctx.strokeStyle = '#64748b'; // Gris pizarra técnico
+            ctx.lineWidth = 1.8;
+            ctx.setLineDash([8, 3, 2, 3]); // Trazo cadena: guión largo (8px), hueco (3px), punto (2px), hueco (3px)
+          } else {
+            // Curvas y aristas estándar: línea de puntos gris
+            ctx.strokeStyle = '#94a3b8'; // Slate 400
+            ctx.lineWidth = 1.8;
+            ctx.setLineDash([3, 5]);
+          }
           tc.points.forEach((pt, idx) => {
             if (idx === 0) ctx.moveTo(pt.x, pt.y);
             else ctx.lineTo(pt.x, pt.y);
@@ -276,11 +290,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       } else if (aidMode === 'vertices') {
         // ESTADO 2: Solo vértices y una línea fina que apunta hacia el otro vértice (Estética monocromática)
         ctx.save();
-        ctx.strokeStyle = '#000000'; // Trazo técnico negro
-        ctx.lineWidth = 1.6;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.setLineDash([]);
 
         const drawnVertices: Point2D[] = [];
         const addVertex = (p: Point2D) => {
@@ -292,6 +303,10 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         challenge.targetCurves.forEach((tc) => {
           if (tc.points.length < 2) return;
           const pts = tc.points;
+          const isTangent = isTangentCurve(tc);
+          ctx.strokeStyle = isTangent ? '#64748b' : '#000000';
+          ctx.lineWidth = isTangent ? 1.8 : 1.6;
+          ctx.setLineDash(isTangent ? [5, 2] : []);
 
           if (pts.length === 2) {
             // Segmento recto entre 2 vértices
@@ -422,18 +437,29 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       }
 
       // SUPERPOSICIÓN DE EVALUACIÓN (SOLUCIÓN TÉCNICA MONOCROMÁTICA):
-      // Estética 100% sin colores: trazo discontinuo negro técnico y vértices con aros vacíos
+      // Estética 100% sin colores: trazo discontinuo negro técnico para formas y trazo cadena gris pizarra para tangentes
       if (shouldDrawSolution) {
         ctx.save();
-        ctx.strokeStyle = '#000000'; // Solución técnica negra en línea discontinua
-        ctx.lineWidth = 2.4;
-        ctx.setLineDash([6, 4]);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
         challenge.targetCurves.forEach((curve) => {
           if (curve.points.length < 2) return;
+          const isTangent = isTangentCurve(curve);
+
           ctx.beginPath();
+          if (isTangent) {
+            // Líneas tangentes: trazo cadena (dash-dot) y visiblemente más gris (#64748b)
+            ctx.strokeStyle = '#64748b'; // Gris pizarra técnico claramente visible
+            ctx.lineWidth = 2.0;
+            ctx.setLineDash([8, 3, 2, 3]); // Trazo cadena: guión largo (8px) + hueco (3px) + punto (2px) + hueco (3px)
+          } else {
+            // Curvas y aristas estándar de la forma: negro técnico discontinuo
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2.4;
+            ctx.setLineDash([6, 4]);
+          }
+
           curve.points.forEach((pt, idx) => {
             if (idx === 0) ctx.moveTo(pt.x, pt.y);
             else ctx.lineTo(pt.x, pt.y);

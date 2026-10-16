@@ -47,6 +47,7 @@ export interface CurveSegment2D {
   label: string;
   style?: 'solid' | 'dashed' | 'faint';
   role?: 'form' | 'construction' | 'hidden';
+  isTangent?: boolean; // True si es una arista / generatriz tangencial a una superficie curva
 }
 
 export type PrimitiveType =
@@ -65,6 +66,7 @@ export interface WireframeModel3D {
   vertices: Vector3D[];
   edges: [number, number][];
   rings?: Vector3D[][]; // Para primitivas con curvas continuas
+  tangentRings?: Vector3D[][]; // Generatrices y siluetas tangentes
 }
 
 export interface Primitive3DChallenge {
