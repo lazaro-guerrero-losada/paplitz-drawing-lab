@@ -190,6 +190,7 @@ export function evaluate3DSubmission(
       curve.id.includes('ellipse') ||
       curve.id.includes('dome') ||
       curve.id.includes('ring') ||
+      curve.id.includes('envelope') ||
       curve.id.includes('silhouette') ||
       curve.id.includes('meridian') ||
       curve.role === 'construction';

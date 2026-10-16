@@ -284,9 +284,9 @@ export function createRingPrimitive(
     sample3DCurveTo2D(centerRing, viewProj, W, H, 'center-ring', 'Eje Central del Toroide', true, 'solid'),
   ];
 
-  // Siluetas tangenciales superior e inferior del toroide desde el punto de vista de la cámara
-  const upperEnvelope3D: Vector3D[] = [];
-  const lowerEnvelope3D: Vector3D[] = [];
+  // Siluetas tangenciales concéntricas exterior e interior del toroide desde el punto de vista de la cámara
+  const outerEnvelope3D: Vector3D[] = [];
+  const innerEnvelope3D: Vector3D[] = [];
 
   for (let i = 0; i <= segments; i++) {
     const th = (i / segments) * Math.PI * 2;
@@ -304,23 +304,30 @@ export function createRingPrimitive(
     const len = Math.hypot(a, b);
 
     if (len > 0.001) {
-      // Normal tangencial a la visual
+      // Normal tangencial a la visual en el plano de la sección
       const cosA = -b / len;
       const sinA = a / len;
 
       const p1 = vAdd(centerPt, vAdd(vScale(radDir, r * cosA), vScale(upDir, r * sinA)));
       const p2 = vAdd(centerPt, vAdd(vScale(radDir, -r * cosA), vScale(upDir, -r * sinA)));
 
-      if (p1.y >= p2.y) {
-        upperEnvelope3D.push(p1);
-        lowerEnvelope3D.push(p2);
+      // El contorno exterior del donut es aquel cuya distancia radial al origen central es mayor;
+      // el contorno interior (agujero del donut) es el de menor distancia radial.
+      // Esta coherencia radial continua para todo theta in [0, 2pi] garantiza que ambos
+      // anillos se cierren de forma perfectamente continua sin saltos, cruces ni fisuras en los laterales.
+      const dist1 = Math.hypot(p1.x, p1.z);
+      const dist2 = Math.hypot(p2.x, p2.z);
+
+      if (dist2 >= dist1) {
+        outerEnvelope3D.push(p2);
+        innerEnvelope3D.push(p1);
       } else {
-        upperEnvelope3D.push(p2);
-        lowerEnvelope3D.push(p1);
+        outerEnvelope3D.push(p1);
+        innerEnvelope3D.push(p2);
       }
     } else {
-      upperEnvelope3D.push(vAdd(centerPt, vScale(upDir, r)));
-      lowerEnvelope3D.push(vAdd(centerPt, vScale(upDir, -r)));
+      outerEnvelope3D.push(vAdd(centerPt, vScale(radDir, r)));
+      innerEnvelope3D.push(vAdd(centerPt, vScale(radDir, -r)));
     }
   }
 
@@ -343,8 +350,8 @@ export function createRingPrimitive(
   });
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(upperEnvelope3D, viewProj, W, H, 'envelope-upper', 'Silueta Tangencial Superior', false, 'solid', 'form', true),
-    sample3DCurveTo2D(lowerEnvelope3D, viewProj, W, H, 'envelope-lower', 'Silueta Tangencial Inferior', false, 'solid', 'form', true),
+    sample3DCurveTo2D(outerEnvelope3D, viewProj, W, H, 'envelope-outer', 'Silueta Tangencial Exterior', false, 'solid', 'form', true),
+    sample3DCurveTo2D(innerEnvelope3D, viewProj, W, H, 'envelope-inner', 'Silueta Tangencial Interior', false, 'solid', 'form', true),
     ...crossSections.map((cs, idx) =>
       sample3DCurveTo2D(cs, viewProj, W, H, `cross-${idx}`, `Sección de Construcción ${idx + 1}`, false, 'solid', 'construction')
     ),
@@ -354,7 +361,7 @@ export function createRingPrimitive(
     vertices: [],
     edges: [],
     rings: [centerRing, ...crossSections],
-    tangentRings: [upperEnvelope3D, lowerEnvelope3D],
+    tangentRings: [outerEnvelope3D, innerEnvelope3D],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
