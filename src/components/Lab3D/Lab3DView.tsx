@@ -680,56 +680,36 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         />
       </div>
 
-      {/* 2. TARJETA CON EL MODELO 3D OBJETIVO (SUPERIOR DERECHA) */}
-      <div className="absolute top-3 right-4 sm:right-6 z-20">
-        <Perspective3DPreviewCard
-          model={challenge.previewModel3D}
-          primitiveType={challenge.type}
-          title={challenge.name}
-        />
-      </div>
-
-      {/* 3. BANNER DE CALIFICACIÓN Y PUNTUACIÓN TRAS EVALUAR (MÉTODO IDÉNTICO A PRÁCTICA) */}
-      {evaluation && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="card-ink bg-white text-black p-3 sm:px-5 sm:py-3 flex flex-col items-center min-w-[280px] sm:min-w-[340px] shadow-[4px_4px_0px_#000000]">
-            <div className="flex items-center gap-3">
-              {/* Badge Aprobado / No Superado idéntico a Práctica */}
-              <div className="flex items-center gap-1.5">
-                {evaluation.passed ? (
-                  <CheckCircle className="w-5 h-5 text-black stroke-[2.5]" />
-                ) : (
-                  <AlertTriangle className="w-5 h-5 text-black stroke-[2.5]" />
-                )}
-                <span
-                  className={`text-[11px] font-mono px-2 py-0.5 font-bold uppercase shadow-[1px_1px_0px_#000000] ${
-                    evaluation.passed
-                      ? 'bg-black text-white'
-                      : 'bg-white text-black border-2 border-black'
-                  }`}
-                >
-                  {evaluation.passed ? 'Aprobado ✓' : 'No Superado'}
-                </span>
-              </div>
-
-              {/* Puntaje Numérico en Porcentaje (%) */}
-              <div className="flex items-baseline gap-1 font-mono">
-                <span className="text-3xl font-black text-black tracking-tight">
-                  {Math.round(evaluation.score)}%
-                </span>
-                <span className="text-[10px] font-bold text-neutral-500 uppercase">
-                  (Mín. 70%)
-                </span>
-              </div>
-            </div>
-
-            {/* Mensaje de retroalimentación didáctica */}
-            <p className="mt-2 text-xs font-mono font-bold text-neutral-800 border-t-2 border-black pt-1.5 w-full text-center">
-              {evaluation.feedbackMessage}
-            </p>
+      {/* 2. TARJETA CON EL MODELO 3D OBJETIVO Y CUADRADITO DE NOTA (SUPERIOR DERECHA, COMO EN PRÁCTICA) */}
+      <div className="absolute top-3 right-4 sm:right-6 z-20 flex items-start gap-2 sm:gap-2.5 pointer-events-none">
+        {evaluation && (
+          <div className="pointer-events-auto bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[68px] sm:min-w-[76px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+              Nota
+            </span>
+            <span className="text-xl sm:text-2xl font-black leading-none my-0.5">
+              {Math.round(evaluation.score)}%
+            </span>
+            <span
+              className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
+                evaluation.passed
+                  ? 'bg-black text-white'
+                  : 'bg-neutral-200 text-black'
+              }`}
+            >
+              {evaluation.passed ? 'Aprobado' : 'Reintentar'}
+            </span>
           </div>
+        )}
+
+        <div className="pointer-events-auto">
+          <Perspective3DPreviewCard
+            model={challenge.previewModel3D}
+            primitiveType={challenge.type}
+            title={challenge.name}
+          />
         </div>
-      )}
+      </div>
 
       {/* 4. LIENZO PRINCIPAL INTERACTIVO CON DETALLES TÉCNICOS PAPLITZ */}
       <div
