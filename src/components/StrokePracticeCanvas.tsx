@@ -1110,33 +1110,38 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
 
     return (
       <div className="relative w-full h-full overflow-hidden flex items-center justify-center select-none bg-white pattern-grid-paper">
-        {/* 1. BOTÓN TOGGLE PANEL Y BADGE DE RETO/NODO JUNTOS A LA IZQUIERDA DE LA PANTALLA */}
-        <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-30 flex items-center gap-1.5 sm:gap-2 font-mono select-none pointer-events-auto">
-          {onToggleSidebar && (
-            <button
-              type="button"
-              onClick={onToggleSidebar}
-              className="bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[3px_3px_0px_#000000] text-xs font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform shrink-0"
-              title="Abrir / cerrar panel de práctica"
-            >
+        {/* 1. BOTÓN TOGGLE PANEL UNIFICADO CON EL NODO/RETO A LA IZQUIERDA DE LA PANTALLA */}
+        <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-30 flex items-center font-mono select-none pointer-events-auto">
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            disabled={!onToggleSidebar}
+            className="h-9 bg-white hover:bg-neutral-100 disabled:hover:bg-white text-black px-2.5 border-2 border-black shadow-[3px_3px_0px_#000000] text-xs font-bold flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:cursor-default active:scale-95 transition-transform shrink-0"
+            title="Abrir / cerrar panel de práctica"
+          >
+            <div className="flex items-center gap-1.5 shrink-0">
               <PanelLeft className="w-4 h-4 stroke-[2.5]" />
               <span>Panel</span>
-            </button>
-          )}
-
-          {/* Badge del Nodo / Reto junto al botón de panel */}
-          {(nodeCode || nodeTitle || isDailyChallenge) && (
-            <div className="flex items-center gap-1 bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] shrink-0">
-              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-black px-1.5 py-0.5 uppercase">
-                {isDailyChallenge && dailyProgress ? `RETO ${dailyProgress.current}/${dailyProgress.total}` : (nodeCode || '1.1')}
-              </span>
-              {nodeTitle && (
-                <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[90px] sm:max-w-[150px] px-0.5">
-                  {nodeTitle}
-                </span>
-              )}
             </div>
-          )}
+
+            {(nodeCode || nodeTitle || isDailyChallenge) && (
+              <>
+                <div className="w-px h-3.5 bg-neutral-300 shrink-0" />
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-black px-1.5 py-0.5 uppercase leading-none">
+                    {isDailyChallenge && dailyProgress
+                      ? `RETO ${dailyProgress.current}/${dailyProgress.total}`
+                      : (nodeCode || '1.1')}
+                  </span>
+                  {nodeTitle && (
+                    <span className="text-[10px] sm:text-[11px] font-bold text-black truncate max-w-[90px] sm:max-w-[150px] px-0.5 leading-none">
+                      {nodeTitle}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </button>
         </div>
 
         {/* 2. HUD SUPERIOR: ALINEADO ARRIBA CON items-start PARA QUE NUNCA SE DESPLACE AL EVALUAR */}
@@ -1146,9 +1151,9 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
             width: 'min(calc(100% - 130px), 750px, calc((100dvh - 180px) * (750 / 500)))',
           }}
         >
-          {/* A la izquierda del dibujo: SOLO FASE Y MAESTRÍA (ASENTADO ARRIBA CON self-start) */}
+          {/* A la izquierda del dibujo: SOLO FASE Y MAESTRÍA (MISMA ALTURA QUE EL BOTÓN PANEL) */}
           {!isDailyChallenge ? (
-            <div className="pointer-events-auto self-start font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+            <div className="h-9 pointer-events-auto self-start font-mono text-xs select-none bg-white border-2 border-black px-2 sm:px-2.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
               {/* Maestría: M: [✓][✓][ ] 2/3 [i] */}
               <div className={`flex items-center gap-1 text-xs shrink-0 transition-transform ${justEarnedMastery ? 'scale-105' : ''}`}>
                 <span className="text-[10px] font-bold text-neutral-600">M:</span>
