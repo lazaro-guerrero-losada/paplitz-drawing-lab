@@ -302,15 +302,26 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
     }
   }, [isTimerRunning, feedback]);
 
-  // Renderizado del canvas
+  // Renderizado del canvas de alta definición (HiDPI / Retina responsive)
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const width = 600;
+    const height = 540;
+    const targetW = Math.round(width * dpr);
+    const targetH = Math.round(height * dpr);
+
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
 
     // Limpiar lienzo manteniendo transparencia sobre la cuadrícula milimétrica continua
     ctx.clearRect(0, 0, width, height);
@@ -781,10 +792,19 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
         ctx.stroke();
       }
     }
+    ctx.restore();
   }, [challenge, strokes, isDrawing, showSolution, showUserDrawing, showParametricSolution]);
 
   useEffect(() => {
     render();
+  }, [render]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      render();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [render]);
 
   // Atajos de teclado para un flujo de dibujo ágil y sin fricciones
@@ -828,8 +848,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
     if (!canvas) return { x: 0, y: 0, pressure: 0.5 };
 
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const scaleX = 600 / rect.width;
+    const scaleY = 540 / rect.height;
 
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;

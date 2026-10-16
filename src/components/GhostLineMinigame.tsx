@@ -384,17 +384,26 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
     }
   };
 
-  // Renderizado del lienzo técnico Paplitz
+  // Renderizado del lienzo técnico Paplitz de alta definición (HiDPI / Retina responsive)
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
     const W = 600;
     const H = 540;
+    const targetW = Math.round(W * dpr);
+    const targetH = Math.round(H * dpr);
+
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
 
     ctx.save();
+    ctx.scale(dpr, dpr);
 
     // 1. Fondo blanco técnico
     ctx.fillStyle = '#FFFFFF';
@@ -534,6 +543,14 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
 
   useEffect(() => {
     renderCanvas();
+  }, [renderCanvas]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      renderCanvas();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [renderCanvas]);
 
   // Captura y normalización de coordenadas

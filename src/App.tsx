@@ -19,6 +19,10 @@ import { GuidebookModal } from './components/GuidebookModal';
 import { AnalogSheetsModal } from './components/AnalogSheetsModal';
 import { ProfileView } from './components/ProfileView';
 import { MinigamesView } from './components/MinigamesView';
+import { CubeMinigamePractice, MinigameLiveStats, CubeGameMode } from './components/CubeMinigamePractice';
+import { MinigameSidebarPanel } from './components/MinigameSidebarPanel';
+import { GhostLineMinigame } from './components/GhostLineMinigame';
+import { StrokeRushMinigame } from './components/StrokeRushMinigame';
 import { LevelGuideModal } from './components/LevelGuideModal';
 import { PlacementModal } from './components/PlacementModal';
 import { TinyToast, ToastData } from './components/TinyToast';
@@ -223,8 +227,25 @@ export function App() {
     score: 0,
   });
 
-  // Modo de práctica en la barra lateral: 'camino' (por defecto), 'daily' (reto diario), o 'record' (modo récord de sesión)
-  const [practiceMode, setPracticeMode] = useState<'camino' | 'daily' | 'record'>('camino');
+  // Modo de práctica en la barra lateral: 'camino' (por defecto), 'daily' (reto diario), 'record' (modo récord) o 'minigame' (arcade en vivo)
+  const [practiceMode, setPracticeMode] = useState<'camino' | 'daily' | 'record' | 'minigame'>('camino');
+  const [activeMinigame, setActiveMinigame] = useState<{
+    mode: 'blitz' | 'fever' | 'survival' | 'sprint' | 'ghost' | 'rush';
+    lesson: LessonNode;
+  } | null>(null);
+  const [minigameStats, setMinigameStats] = useState<MinigameLiveStats | null>(null);
+  const [minigameSessionId, setMinigameSessionId] = useState<number>(1);
+
+  const handleStartMinigame = (
+    mode: 'blitz' | 'fever' | 'survival' | 'sprint' | 'ghost' | 'rush',
+    lesson: LessonNode
+  ) => {
+    setActiveMinigame({ mode, lesson });
+    setMinigameSessionId((prev) => prev + 1);
+    setPracticeMode('minigame');
+    setActiveTab('practice');
+    setIsSidebarCollapsed(true);
+  };
   // Estado de grabación activa del Modo Récord (por defecto inactivo al entrar o recargar)
   const [isRecording, setIsRecording] = useState<boolean>(false);
   // Visibilidad del modal flotante de Modo Récord
@@ -1631,12 +1652,12 @@ export function App() {
                   </button>
                 </div>
 
-                {/* 1. SELECTOR DE MODO: [ EL CAMINO ] vs [ RETO DIARIO ] vs [ MODO RÉCORD ] */}
-                <div className="grid grid-cols-3 gap-1 p-1 border-2 border-black bg-neutral-100 shadow-[2px_2px_0px_#000000]">
+                {/* 1. SELECTOR DE MODO: [ EL CAMINO ] vs [ RETO DIARIO ] vs [ ARCADE ] vs [ MODO RÉCORD ] */}
+                <div className="grid grid-cols-4 gap-1 p-1 border-2 border-black bg-neutral-100 shadow-[2px_2px_0px_#000000]">
                   <button
                     type="button"
                     onClick={() => setPracticeMode('camino')}
-                    className={`py-1.5 px-1 text-[11px] font-mono font-bold flex items-center justify-center gap-1 cursor-pointer border border-black transition-colors ${
+                    className={`py-1.5 px-1 text-[10px] font-mono font-bold flex items-center justify-center gap-0.5 cursor-pointer border border-black transition-colors ${
                       practiceMode === 'camino'
                         ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
                         : 'bg-white text-black hover:bg-neutral-200'
@@ -1649,7 +1670,7 @@ export function App() {
                   <button
                     type="button"
                     onClick={() => setPracticeMode('daily')}
-                    className={`py-1.5 px-1 text-[11px] font-mono font-bold flex items-center justify-center gap-1 cursor-pointer border border-black transition-colors ${
+                    className={`py-1.5 px-1 text-[10px] font-mono font-bold flex items-center justify-center gap-0.5 cursor-pointer border border-black transition-colors ${
                       practiceMode === 'daily'
                         ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
                         : 'bg-white text-black hover:bg-neutral-200'
@@ -1657,12 +1678,31 @@ export function App() {
                     title="Reto Diario: Mini-set de 12 ejercicios para crear hábito"
                   >
                     <Target className="w-3 h-3" />
-                    <span className="truncate">Reto {dailySetSession ? `(${dailySetSession.currentIndex + 1}/${dailySetSession.totalCount})` : ''}</span>
+                    <span className="truncate">Reto</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeMinigame) {
+                        setPracticeMode('minigame');
+                      } else {
+                        handleStartMinigame('fever', activeNode);
+                      }
+                    }}
+                    className={`py-1.5 px-1 text-[10px] font-mono font-bold flex items-center justify-center gap-0.5 cursor-pointer border border-black transition-colors ${
+                      practiceMode === 'minigame'
+                        ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                        : 'bg-white text-black hover:bg-neutral-200'
+                    }`}
+                    title="Minijuego Arcade en Vivo"
+                  >
+                    <Gamepad2 className="w-3 h-3" />
+                    <span className="truncate">Arcade</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPracticeMode('record')}
-                    className={`py-1.5 px-1 text-[11px] font-mono font-bold flex items-center justify-center gap-1 cursor-pointer border border-black transition-colors relative ${
+                    className={`py-1.5 px-1 text-[10px] font-mono font-bold flex items-center justify-center gap-0.5 cursor-pointer border border-black transition-colors relative ${
                       practiceMode === 'record'
                         ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
                         : 'bg-white text-black hover:bg-neutral-200'
@@ -1683,6 +1723,18 @@ export function App() {
                     )}
                   </button>
                 </div>
+
+                {/* 1.5. SI MODO ES "MINIJUEGO": PANEL LATERAL DE MINIJUEGO */}
+                {practiceMode === 'minigame' && activeMinigame && (
+                  <MinigameSidebarPanel
+                    mode={activeMinigame.mode}
+                    lesson={activeMinigame.lesson}
+                    liveStats={minigameStats}
+                    onRestart={() => setMinigameSessionId((prev) => prev + 1)}
+                    onSwitchMinigame={() => setActiveTab('minigames')}
+                    onBackToPractice={() => setPracticeMode('camino')}
+                  />
+                )}
 
                 {/* 2. SI MODO ES "EL CAMINO": CONTEXTO Y PROGRESIÓN */}
                 {practiceMode === 'camino' && (
@@ -1825,7 +1877,47 @@ export function App() {
 
             {/* ÁREA CENTRAL: EL LIENZO OCUPA EL 100% DEL ESPACIO */}
             <div className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center">
-              {activeNode?.isCalisthenics ? (
+              {practiceMode === 'minigame' && activeMinigame ? (
+                ['blitz', 'fever', 'survival', 'sprint'].includes(activeMinigame.mode) ? (
+                  <CubeMinigamePractice
+                    key={`minigame-cube-${activeMinigame.mode}-${activeMinigame.lesson.id}-${minigameSessionId}`}
+                    gameMode={activeMinigame.mode as CubeGameMode}
+                    lesson={activeMinigame.lesson}
+                    onExit={() => setPracticeMode('camino')}
+                    onSwitchMinigame={() => setActiveTab('minigames')}
+                    onAwardXP={(amount) => setXp((prev) => prev + amount)}
+                    onAvatarMoodChange={(mood) => {
+                      setAvatarMood(mood);
+                      setTimeout(() => setAvatarMood('neutral'), 3000);
+                    }}
+                    onDrawingStateChange={setIsUserDrawing}
+                    onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
+                    onUpdateStats={setMinigameStats}
+                  />
+                ) : activeMinigame.mode === 'ghost' ? (
+                  <GhostLineMinigame
+                    onExit={() => setActiveTab('minigames')}
+                    onAwardXP={(amount) => setXp((prev) => prev + amount)}
+                    onAvatarMoodChange={(mood) => {
+                      setAvatarMood(mood);
+                      setTimeout(() => setAvatarMood('neutral'), 3000);
+                    }}
+                    onDrawingStateChange={setIsUserDrawing}
+                  />
+                ) : (
+                  <StrokeRushMinigame
+                    unlockedNodes={calisthenicsUnits.flatMap((u) => u.nodes)}
+                    activeNode={activeMinigame.lesson}
+                    onExit={() => setActiveTab('minigames')}
+                    onAwardXP={(amount) => setXp((prev) => prev + amount)}
+                    onAvatarMoodChange={(mood) => {
+                      setAvatarMood(mood);
+                      setTimeout(() => setAvatarMood('neutral'), 3000);
+                    }}
+                    onDrawingStateChange={setIsUserDrawing}
+                  />
+                )
+              ) : activeNode?.isCalisthenics ? (
                   <StrokePracticeCanvas
                     ref={strokeCanvasRef}
                     exerciseDef={currentExerciseDef}
@@ -1902,6 +1994,7 @@ export function App() {
               setTimeout(() => setAvatarMood('neutral'), 3500);
             }}
             onDrawingStateChange={setIsUserDrawing}
+            onStartMinigame={handleStartMinigame}
           />
         )}
 

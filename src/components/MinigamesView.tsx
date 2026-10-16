@@ -37,6 +37,7 @@ interface MinigamesViewProps {
   onAwardXP: (amount: number) => void;
   onAvatarMoodChange?: (mood: AvatarMood) => void;
   onDrawingStateChange?: (isDrawing: boolean) => void;
+  onStartMinigame?: (mode: GameMode, lesson: LessonNode) => void;
 }
 
 type GameMode = 'blitz' | 'fever' | 'survival' | 'sprint' | 'ghost' | 'rush';
@@ -85,6 +86,7 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
   onAwardXP,
   onAvatarMoodChange,
   onDrawingStateChange,
+  onStartMinigame,
 }) => {
   // Lección seleccionada para el filtro de dificultad
   const [selectedLessonId, setSelectedLessonId] = useState<string>(activeNode.id);
@@ -193,6 +195,10 @@ export const MinigamesView: React.FC<MinigamesViewProps> = ({
 
   // Iniciar partida
   const startGame = (mode: GameMode) => {
+    if (onStartMinigame) {
+      onStartMinigame(mode, currentLesson);
+      return;
+    }
     setGameMode(mode);
     setGameState('playing');
     if (mode === 'ghost' || mode === 'rush') {

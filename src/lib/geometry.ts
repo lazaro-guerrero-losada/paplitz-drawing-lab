@@ -110,29 +110,47 @@ export function generateCubeChallenge(
   const cx = isShadow ? (lightSide === 'left' ? 260 : 340) : canvasWidth / 2;
   const cy = isShadow ? 245 : canvasHeight / 2;
 
-  // Proporciones calibradas (en sombras un cubo ligeramente más compacto para holgura de sombra)
-  const height = isShadow ? 95 : 150 + rnd() * 18;
-  const leftWidth = isShadow ? 85 : 115 + rnd() * 20;
-  const rightWidth = isShadow ? 85 : 115 + rnd() * 20;
-
-  const slopeFactor = isShadow ? 0.17 : (mode === 'guided' || mode === 'gentle' ? 0.18 : mode === 'dynamic' ? 0.28 : 0.22);
-  const leftSlope = leftWidth * slopeFactor;
-  const rightSlope = rightWidth * slopeFactor;
+  // Proporciones calibradas para un cubo sólido y proporcionado en perspectiva 2-puntos
+  const height = isShadow ? 95 : 135 + rnd() * 16;
+  const leftWidth = isShadow ? 80 : 105 + rnd() * 16;
+  const rightWidth = isShadow ? 80 : 105 + rnd() * 16;
 
   const frontX = cx;
-  const frontYBottom = cy + height * 0.38;
+  const frontYBottom = cy + height * 0.35;
   const frontYTop = frontYBottom - height;
 
+  // Línea de horizonte técnica sobre el cubo (nivel de ojos del dibujante)
+  const horizonDist = height * (isShadow ? 0.75 : 0.70) + 18;
+  const horizonY = frontYTop - horizonDist;
+
+  // Distancia focal a los puntos de fuga VPL y VPR
+  // Modo guiado/gentle: fuga más lejana y suave; modo dinámico: fuga más pronunciada
+  const focalDist = mode === 'dynamic' ? 390 : mode === 'gentle' || mode === 'guided' ? 530 : 460;
+  const DL = focalDist + (rnd() - 0.5) * 36;
+  const DR = focalDist + (rnd() - 0.5) * 36;
+
+  const VPL: Point2D = { x: frontX - DL, y: horizonY };
+  const VPR: Point2D = { x: frontX + DR, y: horizonY };
+
+  // Vértices 2 y 3 (Arista vertical izquierda): convergen fielmente a VPL
+  const tL = leftWidth / DL;
   const leftX = frontX - leftWidth;
-  const leftYTop = frontYTop - leftSlope;
-  const leftYBottom = frontYBottom - leftSlope * 0.85;
+  const leftYBottom = frontYBottom - tL * (frontYBottom - horizonY);
+  const leftYTop = frontYTop - tL * (frontYTop - horizonY);
 
+  // Vértices 4 y 5 (Arista vertical derecha): convergen fielmente a VPR
+  const tR = rightWidth / DR;
   const rightX = frontX + rightWidth;
-  const rightYTop = frontYTop - rightSlope;
-  const rightYBottom = frontYBottom - rightSlope * 0.85;
+  const rightYBottom = frontYBottom - tR * (frontYBottom - horizonY);
+  const rightYTop = frontYTop - tR * (frontYTop - horizonY);
 
-  const backX = frontX - leftWidth + rightWidth;
-  const backYTop = leftYTop - rightSlope;
+  // Vértice 6 (Vértice trasero superior de la tapa):
+  // Intersección geométrica exacta de la recta (V3 -> VPR) y la recta (V5 -> VPL)
+  const m1 = (horizonY - leftYTop) / (VPR.x - leftX);
+  const m2 = (horizonY - rightYTop) / (VPL.x - rightX);
+  const denom = m1 - m2;
+  const backX = Math.abs(denom) > 1e-5 ? (rightYTop - leftYTop + m1 * leftX - m2 * rightX) / denom : frontX;
+  const backYTop = leftYTop + m1 * (backX - leftX);
 
   // Vértices:
   // 0: Frontal Abajo
@@ -372,8 +390,6 @@ export function generateCubeChallenge(
       targetVertices2D[idx] = p;
     }
   });
-
-  const horizonY = frontYTop - 45;
 
   return {
     id: `cube-${seed}`,

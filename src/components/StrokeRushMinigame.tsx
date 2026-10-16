@@ -572,17 +572,26 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
     return () => clearInterval(interval);
   }, [gameState, gameMode, finishGame, handleStageClear, STAGE_DURATION]);
 
-  // Renderizado del lienzo
+  // Renderizado del lienzo de alta definición (HiDPI / Retina responsive)
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
     const W = 600;
     const H = 540;
+    const targetW = Math.round(W * dpr);
+    const targetH = Math.round(H * dpr);
+
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
 
     ctx.save();
+    ctx.scale(dpr, dpr);
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, W, H);
 
@@ -713,6 +722,14 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
 
   useEffect(() => {
     renderCanvas();
+  }, [renderCanvas]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      renderCanvas();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [renderCanvas]);
 
   // Coordenadas normalizadas perfectamente al canvas 600x540
