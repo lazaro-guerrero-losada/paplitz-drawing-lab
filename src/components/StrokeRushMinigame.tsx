@@ -247,7 +247,27 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
     return baseInterval;
   }, []);
 
-  // Genera una nueva línea basada en un nodo de calistenia
+// Zona de juego segura 100% visible (sin solapamiento con HUD superior, nota cuadrada ni barra inferior)
+const RUSH_SAFE_ZONE = {
+  minX: 70,
+  maxX: 530,
+  minY: 155,
+  maxY: 415,
+};
+
+const RUSH_CANDIDATE_SECTORS = [
+  { x: 160, y: 200 },
+  { x: 300, y: 200 },
+  { x: 440, y: 200 },
+  { x: 160, y: 285 },
+  { x: 300, y: 285 },
+  { x: 440, y: 285 },
+  { x: 160, y: 370 },
+  { x: 300, y: 370 },
+  { x: 440, y: 370 },
+];
+
+  // Genera una nueva línea basada en un nodo de calistenia garantizando que quede en zona 100% visible
   const spawnLineForNode = useCallback(
     (node: LessonNode, existingLines: ActiveRushLine[]): ActiveRushLine => {
       const rng = new SeededRNG(Math.floor(Math.random() * 900000 + 10000));
@@ -262,7 +282,10 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
         if (challenge.idealPath && challenge.idealPath.length > 1) {
           rawPoints = challenge.idealPath;
         } else if (challenge.targetLines && challenge.targetLines.length > 0) {
-          const tLine = challenge.targetLines[0];
+          const tLine =
+            challenge.targetLines.length > 1
+              ? challenge.targetLines[rng.rangeInt(0, challenge.targetLines.length - 1)]
+              : challenge.targetLines[0];
           rawPoints = tLine.idealPath && tLine.idealPath.length > 1 ? tLine.idealPath : [tLine.start, tLine.end];
         } else if (challenge.keyPoints && challenge.keyPoints.length >= 2) {
           const k0 = challenge.keyPoints[0];
@@ -271,45 +294,53 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
         }
       }
 
-      // Si no hay puntos generados, fallback a línea horizontal
+      // Si no hay puntos generados, fallback a línea horizontal en la zona segura central
       if (rawPoints.length < 2) {
         rawPoints = [
-          { x: 120, y: 270 },
-          { x: 480, y: 270 },
+          { x: 180, y: 285 },
+          { x: 420, y: 285 },
         ];
       }
 
-      // Calcular centroide actual de los puntos
-      let cx = 0;
-      let cy = 0;
+      // Calcular bounding box y centroide del trazo original
+      let rMinX = Infinity;
+      let rMaxX = -Infinity;
+      let rMinY = Infinity;
+      let rMaxY = -Infinity;
       for (const p of rawPoints) {
-        cx += p.x;
-        cy += p.y;
+        if (p.x < rMinX) rMinX = p.x;
+        if (p.x > rMaxX) rMaxX = p.x;
+        if (p.y < rMinY) rMinY = p.y;
+        if (p.y > rMaxY) rMaxY = p.y;
       }
-      cx /= rawPoints.length;
-      cy /= rawPoints.length;
+      const rawW = Math.max(1, rMaxX - rMinX);
+      const rawH = Math.max(1, rMaxY - rMinY);
+      const cx = (rMinX + rMaxX) / 2;
+      const cy = (rMinY + rMaxY) / 2;
+
+      // Escalar si el ejercicio es demasiado grande para caber holgadamente en la zona de juego
+      const maxAllowedW = 320;
+      const maxAllowedH = 175;
+      const scale = Math.min(1, maxAllowedW / rawW, maxAllowedH / rawH);
+
+      const scaledPoints = rawPoints.map((p) => ({
+        x: cx + (p.x - cx) * scale,
+        y: cy + (p.y - cy) * scale,
+        pressure: p.pressure,
+      }));
 
       // Buscar un cuadrante / sector disponible para no colisionar totalmente con líneas previas
-      const candidateSectors = [
-        { x: 180, y: 150 },
-        { x: 420, y: 150 },
-        { x: 180, y: 270 },
-        { x: 420, y: 270 },
-        { x: 180, y: 390 },
-        { x: 420, y: 390 },
-        { x: 300, y: 220 },
-        { x: 300, y: 340 },
-      ];
-
-      // Orden aleatorio de sectores
-      const shuffled = [...candidateSectors].sort(() => Math.random() - 0.5);
+      const shuffled = [...RUSH_CANDIDATE_SECTORS].sort(() => Math.random() - 0.5);
       let bestTarget = shuffled[0];
       let maxMinDist = -1;
 
       for (const cand of shuffled) {
         let minDist = 9999;
         for (const exLine of existingLines) {
-          const d = Math.hypot(cand.x - exLine.startPoint.x, cand.y - exLine.startPoint.y);
+          const exMid = exLine.points[Math.floor(exLine.points.length / 2)] || exLine.startPoint;
+          const dMid = Math.hypot(cand.x - exMid.x, cand.y - exMid.y);
+          const dStart = Math.hypot(cand.x - exLine.startPoint.x, cand.y - exLine.startPoint.y);
+          const d = Math.min(dMid, dStart);
           if (d < minDist) minDist = d;
         }
         if (minDist > maxMinDist) {
@@ -318,13 +349,52 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
         }
       }
 
-      // Desplazar puntos al nuevo centro objetivo
-      const dx = bestTarget.x - cx + rng.range(-20, 20);
-      const dy = bestTarget.y - cy + rng.range(-20, 20);
+      // Desplazar puntos al nuevo centro objetivo con ligera variación controlada
+      const jitterX = rng.range(-12, 12);
+      const jitterY = rng.range(-12, 12);
+      const targetX = bestTarget.x + jitterX;
+      const targetY = bestTarget.y + jitterY;
+      const dx = targetX - cx;
+      const dy = targetY - cy;
 
-      const placedPoints: Point[] = rawPoints.map((p) => ({
-        x: Math.max(40, Math.min(560, Math.round(p.x + dx))),
-        y: Math.max(40, Math.min(500, Math.round(p.y + dy))),
+      const shiftedPoints = scaledPoints.map((p) => ({
+        x: p.x + dx,
+        y: p.y + dy,
+        pressure: p.pressure,
+      }));
+
+      // Calcular bounding box desplazado
+      let sMinX = Infinity;
+      let sMaxX = -Infinity;
+      let sMinY = Infinity;
+      let sMaxY = -Infinity;
+      for (const p of shiftedPoints) {
+        if (p.x < sMinX) sMinX = p.x;
+        if (p.x > sMaxX) sMaxX = p.x;
+        if (p.y < sMinY) sMinY = p.y;
+        if (p.y > sMaxY) sMaxY = p.y;
+      }
+
+      // Ajustar traslación para garantizar que NINGÚN punto quede bajo HUD, nota cuadrada o botones
+      let offsetDx = 0;
+      let offsetDy = 0;
+
+      if (sMinX < RUSH_SAFE_ZONE.minX) {
+        offsetDx = RUSH_SAFE_ZONE.minX - sMinX;
+      } else if (sMaxX > RUSH_SAFE_ZONE.maxX) {
+        offsetDx = RUSH_SAFE_ZONE.maxX - sMaxX;
+      }
+
+      if (sMinY < RUSH_SAFE_ZONE.minY) {
+        offsetDy = RUSH_SAFE_ZONE.minY - sMinY;
+      } else if (sMaxY > RUSH_SAFE_ZONE.maxY) {
+        offsetDy = RUSH_SAFE_ZONE.maxY - sMaxY;
+      }
+
+      const placedPoints: Point[] = shiftedPoints.map((p) => ({
+        x: Math.round(Math.max(RUSH_SAFE_ZONE.minX, Math.min(RUSH_SAFE_ZONE.maxX, p.x + offsetDx))),
+        y: Math.round(Math.max(RUSH_SAFE_ZONE.minY, Math.min(RUSH_SAFE_ZONE.maxY, p.y + offsetDy))),
+        pressure: p.pressure,
       }));
 
       return {

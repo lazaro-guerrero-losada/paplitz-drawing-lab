@@ -188,10 +188,10 @@ function generatePresetGhost(type: GhostPreset): Point[] {
       pts.push({ x, y, pressure: 0.5 });
     }
   } else if (type === 'diagonal') {
-    const startX = 130;
-    const startY = 410;
-    const endX = 470;
-    const endY = 130;
+    const startX = 150;
+    const startY = 390;
+    const endX = 450;
+    const endY = 160;
     for (let i = 0; i <= 40; i++) {
       const t = i / 40;
       pts.push({
