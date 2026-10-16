@@ -546,6 +546,8 @@ export function App() {
       setAvatarMood('speed-lightning');
       setTimeout(() => setAvatarMood('neutral'), 2200);
     }
+    setPracticeMode('daily');
+    setActiveMinigame(null);
     setActiveTab('practice');
   };
 
@@ -582,6 +584,8 @@ export function App() {
     setPlacementTestNode(targetNode);
     setActiveNode(targetNode);
     handleNewPracticeCube(targetNode);
+    setPracticeMode('camino');
+    setActiveMinigame(null);
     setActiveTab('practice');
     setAvatarMood('speed-lightning');
     setTimeout(() => setAvatarMood('neutral'), 2500);
@@ -606,6 +610,8 @@ export function App() {
     } else {
       setCalisthenicsSeed(Math.floor(Math.random() * 90000 + 10000));
     }
+    setPracticeMode('camino');
+    setActiveMinigame(null);
     setActiveTab('practice');
   };
 
@@ -858,6 +864,8 @@ export function App() {
     setShowSolution(false);
     setStrokes([]);
     setAvatarMood('neutral');
+    setPracticeMode('camino');
+    setActiveMinigame(null);
     setActiveTab('practice');
     setShowAnalogModal(false);
   };
@@ -1652,7 +1660,7 @@ export function App() {
                   </button>
                 </div>
 
-                {/* 1. SELECTOR DE MODO: [ EL CAMINO ] vs [ RETO DIARIO ] vs [ ARCADE ] vs [ MODO RÉCORD ] */}
+                {/* 1. SELECTOR DE MODO: [ EL CAMINO ] vs [ RETO DIARIO ] vs [ MINIJUEGO ] vs [ MODO RÉCORD ] */}
                 <div className="grid grid-cols-4 gap-1 p-1 border-2 border-black bg-neutral-100 shadow-[2px_2px_0px_#000000]">
                   <button
                     type="button"
@@ -1694,10 +1702,10 @@ export function App() {
                         ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
                         : 'bg-white text-black hover:bg-neutral-200'
                     }`}
-                    title="Minijuego Arcade en Vivo"
+                    title="Minijuego en Vivo"
                   >
                     <Gamepad2 className="w-3 h-3" />
-                    <span className="truncate">Arcade</span>
+                    <span className="truncate">Minijuego</span>
                   </button>
                   <button
                     type="button"
@@ -2095,6 +2103,8 @@ export function App() {
           onClose={() => setShowLevelGuide(false)}
           onGoToPractice={() => {
             setShowLevelGuide(false);
+            setPracticeMode('camino');
+            setActiveMinigame(null);
             setActiveTab('practice');
           }}
           onGoToMinigames={() => {
