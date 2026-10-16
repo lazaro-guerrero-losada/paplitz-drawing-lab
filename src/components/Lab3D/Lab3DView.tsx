@@ -683,15 +683,15 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       {/* 2. TARJETA CON EL MODELO 3D OBJETIVO Y CUADRADITO DE NOTA (SUPERIOR DERECHA, COMO EN PRÁCTICA) */}
       <div className="absolute top-3 right-4 sm:right-6 z-20 flex items-start gap-2 sm:gap-2.5 pointer-events-none">
         {evaluation && (
-          <div className="pointer-events-auto bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[68px] sm:min-w-[76px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
-            <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+          <div className="pointer-events-auto bg-white border-2 border-black p-2 sm:p-2.5 shadow-[4px_4px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[88px] sm:min-w-[100px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
+            <span className="text-[10px] sm:text-xs font-bold uppercase text-neutral-500 tracking-wider">
               Nota
             </span>
-            <span className="text-xl sm:text-2xl font-black leading-none my-0.5">
+            <span className="text-2xl sm:text-3xl font-black leading-none my-1">
               {Math.round(evaluation.score)}%
             </span>
             <span
-              className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
+              className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 border border-black ${
                 evaluation.passed
                   ? 'bg-black text-white'
                   : 'bg-neutral-200 text-black'

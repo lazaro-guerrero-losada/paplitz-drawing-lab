@@ -1232,15 +1232,15 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
 
           {/* A la derecha del dibujo: Cuadradito compacto con la nota (anclado arriba con self-start) */}
           {evaluation ? (
-            <div className="pointer-events-auto self-start bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
-              <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+            <div className="pointer-events-auto self-start bg-white border-2 border-black p-2 sm:p-2.5 shadow-[4px_4px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[88px] sm:min-w-[100px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+              <span className="text-[10px] sm:text-xs font-bold uppercase text-neutral-500 tracking-wider">
                 Nota
               </span>
-              <span className="text-xl sm:text-2xl font-black leading-none my-0.5">
+              <span className="text-2xl sm:text-3xl font-black leading-none my-1">
                 {Math.round(evaluation.overallScore)}%
               </span>
               <span
-                className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
+                className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 border border-black ${
                   isMasterySuccess
                     ? 'bg-black text-white'
                     : evaluation.passed
