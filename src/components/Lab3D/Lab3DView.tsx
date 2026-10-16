@@ -86,6 +86,11 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   const [redoStack, setRedoStack] = useState<UserStroke3D[]>([]);
   const [evaluation, setEvaluation] = useState<EvaluationResult3D | null>(null);
 
+  // Herramienta de trazo activa: 'ink' (tinta de forma) o 'construction' (línea guía fina gris discontinua)
+  const [strokeTool, setStrokeTool] = useState<'ink' | 'construction'>('ink');
+  // Visualización de la solución en modo corrección
+  const [showSolution, setShowSolution] = useState<boolean>(true);
+
   // Opciones de visualización y Ayudas 3D
   const [showGrid, setShowGrid] = useState<boolean>(true); // Activar / desactivar rejilla 3D
   const [aidMode, setAidMode] = useState<AidMode>('off'); // 3 Estados: off, line, vertices
@@ -122,6 +127,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       setRedoStack([]);
       setCurrentLiveStroke([]);
       setEvaluation(null);
+      setStrokeTool('ink');
+      setShowSolution(true);
       setCurrentRound(roundNum);
       setUserNote('');
       setShowReportModal(false);
@@ -379,76 +386,105 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
     // 4. TRAZOS DEL USUARIO
     if (evaluation) {
-      // SI YA FUE EVALUADO (Screenshots 3 y 5):
-      // Los trazos del usuario se muestran en azul cyan suave
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2.2;
+      // SI YA FUE EVALUADO:
+      // Trazos del usuario: si la solución está activa se muestran en cyan para contrastar con verde/rojo.
+      // Si la solución está oculta, los trazos de forma vuelven a su tinta negra sólida original.
+      // Los trazos de construcción se muestran siempre en gris técnico fino discontinuo.
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       strokes.forEach((stroke) => {
         if (stroke.points.length < 2) return;
         ctx.beginPath();
+        if (stroke.isConstruction) {
+          ctx.strokeStyle = '#94a3b8'; // Gris técnico fino
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([4, 4]); // Discontinua
+        } else {
+          ctx.strokeStyle = showSolution ? '#38bdf8' : '#0f172a';
+          ctx.lineWidth = showSolution ? 2.2 : 2.4;
+          ctx.setLineDash([]);
+        }
         stroke.points.forEach((pt, idx) => {
           if (idx === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);
         });
         ctx.stroke();
+        ctx.setLineDash([]);
       });
 
-      // SUPERPOSICIÓN DE EVALUACIÓN:
-      // Líneas Verdes (Acertadas)
-      ctx.strokeStyle = '#22c55e'; // Verde esmeralda vivo
-      ctx.lineWidth = 3.2;
-      evaluation.matchedSegments.forEach((seg) => {
-        if (seg.points.length < 2) return;
-        ctx.beginPath();
-        seg.points.forEach((pt, idx) => {
-          if (idx === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
+      // SUPERPOSICIÓN DE EVALUACIÓN (SOLUCIÓN):
+      if (showSolution) {
+        // Líneas Verdes (Acertadas)
+        ctx.strokeStyle = '#22c55e'; // Verde esmeralda vivo
+        ctx.lineWidth = 3.2;
+        evaluation.matchedSegments.forEach((seg) => {
+          if (seg.points.length < 2) return;
+          ctx.beginPath();
+          seg.points.forEach((pt, idx) => {
+            if (idx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
         });
-        ctx.stroke();
-      });
 
-      // Líneas Rojas (Faltantes o Desviadas, como en Screenshot 3 & 5)
-      ctx.strokeStyle = '#ef4444'; // Rojo carmesí
-      ctx.lineWidth = 3.2;
-      evaluation.missingSegments.forEach((seg) => {
-        if (seg.points.length < 2) return;
-        ctx.beginPath();
-        seg.points.forEach((pt, idx) => {
-          if (idx === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
+        // Líneas Rojas (Faltantes o Desviadas)
+        ctx.strokeStyle = '#ef4444'; // Rojo carmesí
+        ctx.lineWidth = 3.2;
+        evaluation.missingSegments.forEach((seg) => {
+          if (seg.points.length < 2) return;
+          ctx.beginPath();
+          seg.points.forEach((pt, idx) => {
+            if (idx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
         });
-        ctx.stroke();
-      });
+      }
     } else {
       // MIENTRAS EL USUARIO DIBUJA (Screenshot 1, 2, 4):
-      // Tinta negra técnica y precisa
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 2.4;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       strokes.forEach((stroke) => {
         if (stroke.points.length < 2) return;
         ctx.beginPath();
+        if (stroke.isConstruction) {
+          ctx.strokeStyle = '#94a3b8'; // Línea de construcción fina gris
+          ctx.lineWidth = 1.4;
+          ctx.setLineDash([4, 4]); // Discontinua
+        } else {
+          ctx.strokeStyle = '#0f172a'; // Tinta negra técnica y precisa
+          ctx.lineWidth = 2.4;
+          ctx.setLineDash([]);
+        }
         stroke.points.forEach((pt, idx) => {
           if (idx === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);
         });
         ctx.stroke();
+        ctx.setLineDash([]);
       });
 
       // Trazo en curso en tiempo real
       if (currentLiveStroke.length > 1) {
         ctx.beginPath();
+        if (strokeTool === 'construction') {
+          ctx.strokeStyle = '#94a3b8'; // Gris técnico fino
+          ctx.lineWidth = 1.4;
+          ctx.setLineDash([4, 4]); // Discontinua
+        } else {
+          ctx.strokeStyle = '#0f172a'; // Tinta negra de forma
+          ctx.lineWidth = 2.4;
+          ctx.setLineDash([]);
+        }
         currentLiveStroke.forEach((pt, idx) => {
           if (idx === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);
         });
         ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
-  }, [challenge, strokes, currentLiveStroke, evaluation, showGrid, aidMode, canvasDimensions]);
+  }, [challenge, strokes, currentLiveStroke, evaluation, showGrid, aidMode, canvasDimensions, strokeTool, showSolution]);
 
   // ==========================================
   // Manejadores de Eventos del Puntero (Stylus, Touch, Mouse) con Corrección de Escala
@@ -502,6 +538,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         id: `stroke-${Date.now()}-${Math.random()}`,
         points: pts,
         timestamp: Date.now(),
+        isConstruction: strokeTool === 'construction',
       };
       setStrokes((prev) => [...prev, newStroke]);
       setRedoStack([]);
@@ -701,39 +738,88 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       {/* 5. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (NEOBRUTALISTA PAPLITZ) */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
         <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
-          {/* Deshacer */}
-          <button
-            onClick={handleUndo}
-            disabled={strokes.length === 0 || !!evaluation}
-            className="btn-ink-outline p-2 text-xs disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
-            title="Deshacer trazo (Ctrl+Z)"
-          >
-            <Undo2 className="w-4 h-4 stroke-[2.2]" />
-          </button>
+          {/* BOTONES EXCLUSIVOS EN MODO DIBUJO (Desaparecen al corregir) */}
+          {!evaluation && (
+            <>
+              {/* Deshacer */}
+              <button
+                onClick={handleUndo}
+                disabled={strokes.length === 0}
+                className="btn-ink-outline p-2 text-xs disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
+                title="Deshacer trazo (Ctrl+Z)"
+              >
+                <Undo2 className="w-4 h-4 stroke-[2.2]" />
+              </button>
 
-          {/* Rehacer */}
-          <button
-            onClick={handleRedo}
-            disabled={redoStack.length === 0 || !!evaluation}
-            className="btn-ink-outline p-2 text-xs disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
-            title="Rehacer trazo"
-          >
-            <Redo2 className="w-4 h-4 stroke-[2.2]" />
-          </button>
+              {/* Rehacer */}
+              <button
+                onClick={handleRedo}
+                disabled={redoStack.length === 0}
+                className="btn-ink-outline p-2 text-xs disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
+                title="Rehacer trazo"
+              >
+                <Redo2 className="w-4 h-4 stroke-[2.2]" />
+              </button>
 
-          {/* Borrar Todo */}
-          <button
-            onClick={handleClear}
-            disabled={strokes.length === 0 || !!evaluation}
-            className="btn-ink-outline p-2 text-xs hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
-            title="Borrar todos los trazos"
-          >
-            <Trash2 className="w-4 h-4 stroke-[2.2]" />
-          </button>
+              {/* Borrar Todo */}
+              <button
+                onClick={handleClear}
+                disabled={strokes.length === 0}
+                className="btn-ink-outline p-2 text-xs hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-[1px_1px_0px_#000000]"
+                title="Borrar todos los trazos"
+              >
+                <Trash2 className="w-4 h-4 stroke-[2.2]" />
+              </button>
 
-          <div className="w-[2px] h-6 bg-black mx-0.5" />
+              <div className="w-[2px] h-6 bg-black mx-0.5" />
 
-          {/* Botón REC (Modo Récord) */}
+              {/* Herramienta: Tinta de Forma vs Línea de Construcción */}
+              <button
+                type="button"
+                onClick={() => setStrokeTool((prev) => (prev === 'ink' ? 'construction' : 'ink'))}
+                className={`p-2 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
+                  strokeTool === 'construction'
+                    ? 'bg-neutral-800 text-white'
+                    : 'bg-white text-neutral-800 hover:bg-neutral-100'
+                }`}
+                title={
+                  strokeTool === 'construction'
+                    ? 'Herramienta de Construcción activa (línea fina, gris y discontinua; no afecta a la corrección). Clic para volver a Tinta de Forma.'
+                    : 'Activar Línea de Construcción (trazo fino, gris y discontinuo para encajar perspectiva sin penalizaciones).'
+                }
+              >
+                <span className={`w-3.5 border-b-2 border-dashed ${strokeTool === 'construction' ? 'border-white' : 'border-neutral-800'}`} />
+                <span className="text-[10px] uppercase tracking-wider font-mono">
+                  {strokeTool === 'construction' ? 'Construcción' : 'Línea Guía'}
+                </span>
+              </button>
+
+              <div className="w-[2px] h-6 bg-black mx-0.5" />
+            </>
+          )}
+
+          {/* BOTÓN EXCLUSIVO EN MODO CORRECCIÓN: Ver / Ocultar Solución */}
+          {evaluation && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowSolution((prev) => !prev)}
+                className={`px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
+                  showSolution ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+                title={showSolution ? 'Ocultar solución (mostrar solo mi dibujo)' : 'Ver solución (superposición verde y roja)'}
+              >
+                {showSolution ? <EyeOff className="w-4 h-4 stroke-[2.2]" /> : <Eye className="w-4 h-4 stroke-[2.2]" />}
+                <span className="text-[10px] uppercase tracking-wider font-mono">
+                  {showSolution ? 'Ocultar Solución' : 'Ver Solución'}
+                </span>
+              </button>
+
+              <div className="w-[2px] h-6 bg-black mx-0.5" />
+            </>
+          )}
+
+          {/* Botón REC (Modo Récord) - Visible siempre */}
           <button
             type="button"
             onClick={isRecording ? onOpenRecordModal : onToggleRecording}
@@ -746,7 +832,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
           </button>
 
-          {/* Botón Reportar Ejercicio */}
+          {/* Botón Reportar Ejercicio - Visible siempre */}
           <button
             type="button"
             onClick={() => setShowReportModal(true)}
@@ -758,36 +844,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             <AlertTriangle className="w-4 h-4 stroke-[2.2]" />
           </button>
 
-          <div className="w-[2px] h-6 bg-black mx-0.5" />
-
-          {/* Botón de Ayudas 3D: 3 Fases (Off -> Línea gris punteada -> Vértices con dirección) */}
-          <button
-            onClick={() => {
-              setAidMode((prev) => {
-                if (prev === 'off') return 'line';
-                if (prev === 'line') return 'vertices';
-                return 'off';
-              });
-            }}
-            className={`p-2 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
-              aidMode === 'line'
-                ? 'bg-amber-300 text-black'
-                : aidMode === 'vertices'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-neutral-600 hover:bg-neutral-100'
-            }`}
-            title="Ciclar ayudas 3D: Apagado → Línea gris punteada → Vértices con dirección"
-          >
-            {aidMode === 'off' && <EyeOff className="w-4 h-4 stroke-[2.2]" />}
-            {aidMode === 'line' && <Eye className="w-4 h-4 stroke-[2.2]" />}
-            {aidMode === 'vertices' && <Crosshair className="w-4 h-4 stroke-[2.5]" />}
-
-            <span className="hidden sm:inline uppercase text-[10px] tracking-wider font-mono">
-              {aidMode === 'off' ? 'Ayuda: Off' : aidMode === 'line' ? 'Ayuda: Línea' : 'Ayuda: Vértices'}
-            </span>
-          </button>
-
-          {/* Rejilla 3D (Toggles 3D guidelines on/off) */}
+          {/* Rejilla 3D (Toggles 3D guidelines on/off) - Visible siempre */}
           <button
             onClick={() => setShowGrid((prev) => !prev)}
             className={`p-2 text-xs font-mono font-bold border-2 border-black transition-colors cursor-pointer shadow-[1px_1px_0px_#000000] ${
@@ -798,21 +855,55 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             <Grid className="w-4 h-4 stroke-[2.2]" />
           </button>
 
-          {/* Nuevo Ángulo */}
-          <button
-            onClick={() => loadNewChallenge(currentRound)}
-            className="btn-ink-outline p-2 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100"
-            title="Generar otro ángulo o perspectiva 3D"
-          >
-            <RotateCcw className="w-4 h-4 stroke-[2.2]" />
-            <span className="hidden md:inline uppercase text-[10px] tracking-wider font-mono">
-              Nuevo Ángulo
-            </span>
-          </button>
+          {/* BOTONES EXCLUSIVOS EN MODO DIBUJO: Ayudas 3D y Nuevo Ángulo (Desaparecen al corregir) */}
+          {!evaluation && (
+            <>
+              <div className="w-[2px] h-6 bg-black mx-0.5" />
+
+              {/* Botón de Ayudas 3D: 3 Fases (Off -> Línea gris punteada -> Vértices con dirección) */}
+              <button
+                onClick={() => {
+                  setAidMode((prev) => {
+                    if (prev === 'off') return 'line';
+                    if (prev === 'line') return 'vertices';
+                    return 'off';
+                  });
+                }}
+                className={`p-2 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
+                  aidMode === 'line'
+                    ? 'bg-amber-300 text-black'
+                    : aidMode === 'vertices'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-neutral-600 hover:bg-neutral-100'
+                }`}
+                title="Ciclar ayudas 3D: Apagado → Línea gris punteada → Vértices con dirección"
+              >
+                {aidMode === 'off' && <EyeOff className="w-4 h-4 stroke-[2.2]" />}
+                {aidMode === 'line' && <Eye className="w-4 h-4 stroke-[2.2]" />}
+                {aidMode === 'vertices' && <Crosshair className="w-4 h-4 stroke-[2.5]" />}
+
+                <span className="hidden sm:inline uppercase text-[10px] tracking-wider font-mono">
+                  {aidMode === 'off' ? 'Ayuda: Off' : aidMode === 'line' ? 'Ayuda: Línea' : 'Ayuda: Vértices'}
+                </span>
+              </button>
+
+              {/* Nuevo Ángulo */}
+              <button
+                onClick={() => loadNewChallenge(currentRound)}
+                className="btn-ink-outline p-2 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100"
+                title="Generar otro ángulo o perspectiva 3D"
+              >
+                <RotateCcw className="w-4 h-4 stroke-[2.2]" />
+                <span className="hidden md:inline uppercase text-[10px] tracking-wider font-mono">
+                  Nuevo Ángulo
+                </span>
+              </button>
+            </>
+          )}
 
           {/* Botón Principal: Submit (cuando se dibuja) o Next con porcentaje (tras evaluar, idéntico a Práctica) */}
           {evaluation ? (
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 ml-1">
               <div className="flex items-center gap-1 border-2 border-black bg-neutral-100 px-2.5 py-1.5 font-mono text-xs font-bold shadow-[1px_1px_0px_#000000] shrink-0">
                 {evaluation.passed ? (
                   <CheckCircle className="w-3.5 h-3.5 text-black stroke-[2.5]" />
@@ -834,7 +925,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
             <button
               onClick={handleSubmitOrNext}
               disabled={strokes.length === 0}
-              className="btn-ink px-3.5 sm:px-5 py-2 text-xs font-mono uppercase font-bold disabled:opacity-30 cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center gap-1.5 shrink-0"
+              className="btn-ink px-3.5 sm:px-5 py-2 text-xs font-mono uppercase font-bold disabled:opacity-30 cursor-pointer shadow-[2px_2px_0px_#000000] flex items-center gap-1.5 shrink-0 ml-1"
               title="Comprobar perspectiva (Enter)"
             >
               <span>Comprobar</span>

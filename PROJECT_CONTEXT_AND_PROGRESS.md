@@ -672,7 +672,15 @@ A continuación se resumen los avances implementados en la última fase de traba
       - Se calculó el baricentro de la cara triangular frontal $\vec{C}_{\text{frontal}} = \frac{1}{3}\sum \vec{P}_{\text{frontal}, i}$ y el baricentro de la cara posterior $\vec{C}_{\text{posterior}} = \frac{1}{3}\sum \vec{P}_{\text{posterior}, i}$.
       - Se añadió a `anchorCurves` un eje longitudinal de profundidad (`depth-axis`, `style: 'faint'`, `role: 'construction'`) trazado en línea discontinua tenue que va desde $\vec{C}_{\text{frontal}}$ hasta $\vec{C}_{\text{posterior}}$, rematado con un delimitador transversal posterior (`depth-tick`).
       - Se incorporó el eje en `previewModel3D.rings` para reflejarlo en la tarjeta de previsualización 3D rotatoria.
-      - Se actualizó el texto de ayuda (`tipText`) a: *"Sigue el eje de profundidad longitudinal para fugar las aristas hacia la cara posterior."*
+24. **Herramienta de Líneas de Construcción y Depuración de Interfaz en Modo Corrección (`Lab3DView.tsx` & `evaluator3d.ts`):**
+    - **Optimización de Interfaz en Modo Corrección:**
+      - Al pulsar "Comprobar" y entrar en la fase de evaluación, se ocultan automáticamente los botones que no tienen utilidad durante la revisión del ejercicio (deshacer, rehacer, borrar todo, ciclo de ayudas 3D y nuevo ángulo).
+      - Se introduce el botón **Ver / Ocultar Solución** (`Eye` / `EyeOff`): permite alternar entre visualizar la superposición de evaluación verde/roja y contemplar únicamente los trazos realizados por el alumno en tinta pura, eliminando el ruido visual cuando se desea autoevaluar la estética del trazo.
+    - **Herramienta de Línea de Construcción en Modo Dibujo:**
+      - Se añade en la barra inferior el selector de herramienta para alternar entre **Tinta de Forma** y **Línea de Construcción**.
+      - Los trazos de construcción se renderizan con estilo técnico fino (grosor $1.4\,\text{px}$, color gris Slate `#94a3b8` y patrón discontinuo `[4, 4]`).
+      - **Inmunidad Estricta en la Corrección (`evaluator3d.ts`):** Los trazos con `isConstruction: true` se filtran antes del aplanado de segmentos evaluables: no emparejan aristas objetivo, no alteran porcentajes de cobertura ni precisión, y no computan para la penalización por exceso de longitud. Permiten al dibujante construir cajas envolventes, diagonales y líneas de fuga previas con total libertad sin penalización.
+      - **Trazabilidad en Diagnóstico:** `DebugReport3DData` registra explícitamente el desglose de trazos con `constructionStrokeCount`.
 
 ---
 

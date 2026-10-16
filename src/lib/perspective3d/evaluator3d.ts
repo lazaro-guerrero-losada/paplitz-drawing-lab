@@ -121,8 +121,12 @@ export function evaluate3DSubmission(
   userStrokes: UserStroke3D[],
   targetCurves: CurveSegment2D[]
 ): EvaluationResult3D {
-  // Si no hay trazos del usuario
-  if (userStrokes.length === 0) {
+  // Filtrar exclusivamente los trazos evaluables de la forma:
+  // Las líneas de construcción auxiliares del usuario se ignoran en la evaluación
+  const evaluableStrokes = userStrokes.filter((s) => !s.isConstruction);
+
+  // Si no hay trazos evaluables de la forma
+  if (evaluableStrokes.length === 0) {
     const emptyCurveDetails: CurveEvaluationDetail[] = targetCurves.map((c) => ({
       id: c.id,
       label: c.label || c.id,
@@ -137,22 +141,25 @@ export function evaluate3DSubmission(
       score: 0,
       passed: false,
       grade: 'D',
-      feedbackMessage: 'No se han detectado trazos: dibuja los contornos de la forma en perspectiva.',
+      feedbackMessage:
+        userStrokes.length > 0
+          ? 'Solo se han detectado líneas de construcción. Traza los contornos de la forma con la herramienta de forma/tinta.'
+          : 'No se han detectado trazos: dibuja los contornos de la forma en perspectiva.',
       matchedSegments: [],
       missingSegments: targetCurves.map((c) => ({ points: c.points })),
-      userStrokes: [],
+      userStrokes,
       drawnCount: 0,
       targetCount: targetCurves.length,
       curveDetails: emptyCurveDetails,
     };
   }
 
-  // Pre-aplanar los segmentos de todos los trazos del usuario
+  // Pre-aplanar los segmentos de todos los trazos evaluables de la forma
   const userSegments: UserSegment[] = [];
   let totalUserPoints = 0;
   let totalUserDrawnLength = 0;
 
-  userStrokes.forEach((s) => {
+  evaluableStrokes.forEach((s) => {
     totalUserPoints += s.points.length;
     for (let i = 0; i < s.points.length - 1; i++) {
       const a = s.points[i];

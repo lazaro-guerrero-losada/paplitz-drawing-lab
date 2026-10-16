@@ -299,5 +299,11 @@ En dibujo técnico y croquis analítico existe una distinción fundamental entre
 - **Diagnóstico Transparente en Reportes:**
   - Se distingue con exactitud el estado de cada contorno: `✓ Completado`, `✗ Desviado de la fuga` (trazado completo pero con fuga errónea), `✗ Incompleto` o `✗ No Dibujado`.
 
-
-
+### 9.9 Líneas de Construcción del Usuario y Conmutación de Solución en Corrección (`Lab3DView.tsx` & `evaluator3d.ts`)
+- **Herramienta de Línea de Construcción:**
+  - En modo dibujo, el usuario puede alternar entre trazo de forma (`strokeTool: 'ink'`) y trazo de construcción (`strokeTool: 'construction'`).
+  - Las líneas de construcción se renderizan con estilo técnico fino (grosor $1.4\,\text{px}$, color gris Slate `#94a3b8` y patrón discontinuo `[4, 4]`).
+  - **Inmunidad en Evaluación:** Las líneas marcadas como construcción (`isConstruction: true`) se filtran de `evaluableStrokes` en `evaluator3d.ts`: no se emparejan con aristas objetivo, no computan en el cálculo de cobertura/precisión ni activan penalizaciones por exceso de longitud dibujada.
+- **Limpieza de Interfaz en Modo Corrección:**
+  - Al corregir (`evaluation !== null`), los botones innecesarios (deshacer, rehacer, borrar, selector de ayudas y nuevo ángulo) desaparecen automáticamente de la barra de herramientas flotante.
+  - Se incorpora el botón **Ver / Ocultar Solución** (`Eye` / `EyeOff`): permite alternar entre ver la superposición de evaluación verde/roja y observar los trazos propios del usuario en tinta pura sin interferencias visuales.

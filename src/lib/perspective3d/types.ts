@@ -89,6 +89,7 @@ export interface UserStroke3D {
   id: string;
   points: Point2D[];
   timestamp: number;
+  isConstruction?: boolean; // Trazo auxiliar de construcción (fino, gris y discontinuo; no evalúa ni penaliza)
 }
 
 export type GradeLevel = 'S' | 'A' | 'B' | 'C' | 'D';

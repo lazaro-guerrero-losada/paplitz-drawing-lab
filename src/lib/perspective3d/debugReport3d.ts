@@ -30,11 +30,13 @@ export interface DebugReport3DData {
   };
   userDrawing: {
     strokeCount: number;
+    constructionStrokeCount?: number;
     strokes: {
       pointCount: number;
       startPoint: { x: number; y: number };
       endPoint: { x: number; y: number };
       lengthPx: number;
+      isConstruction?: boolean;
     }[];
   };
   evaluation: {
@@ -86,6 +88,7 @@ export function build3DDebugReport(
       startPoint: { x: Math.round(pStart.x * 10) / 10, y: Math.round(pStart.y * 10) / 10 },
       endPoint: { x: Math.round(pEnd.x * 10) / 10, y: Math.round(pEnd.y * 10) / 10 },
       lengthPx,
+      isConstruction: s.isConstruction || false,
     };
   });
 
@@ -140,6 +143,7 @@ export function build3DDebugReport(
     },
     userDrawing: {
       strokeCount: strokes.length,
+      constructionStrokeCount: strokes.filter((s) => s.isConstruction).length,
       strokes: analyzedStrokes,
     },
     evaluation: {
