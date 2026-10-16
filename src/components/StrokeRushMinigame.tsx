@@ -27,6 +27,7 @@ export interface StrokeRushMinigameProps {
   onAwardXP: (amount: number) => void;
   onAvatarMoodChange?: (mood: AvatarMood) => void;
   onDrawingStateChange?: (isDrawing: boolean) => void;
+  onToggleSidebar?: () => void;
 }
 
 interface Point {
@@ -154,6 +155,7 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
   onAwardXP,
   onAvatarMoodChange,
   onDrawingStateChange,
+  onToggleSidebar,
 }) => {
   // Todos los nodos de calistenia para el modo aleatorio completo (18 niveles con 237 variantes)
   const allCalNodes = MODULE_CALISTHENICS.units.flatMap((u) => u.nodes);
@@ -592,25 +594,9 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
 
     ctx.save();
     ctx.scale(dpr, dpr);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, W, H);
 
-    // Trama milimétrica sutil
-    ctx.strokeStyle = '#F0F0F0';
-    ctx.lineWidth = 1;
-    const step = 20;
-    for (let x = 0; x < W; x += step) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, H);
-      ctx.stroke();
-    }
-    for (let y = 0; y < H; y += step) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(W, y);
-      ctx.stroke();
-    }
+    // Fondo transparente para dejar ver la cuadrícula continua técnica (pattern-grid-paper)
+    ctx.clearRect(0, 0, W, H);
 
     const now = Date.now();
 
@@ -887,45 +873,99 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
       : 0;
 
   return (
-    <div className="w-full flex-1 flex flex-col items-center justify-center overflow-hidden relative h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] bg-neutral-100 font-sans select-none">
-      {/* BOTÓN FLOTANTE TOGGLE DEL PANEL (COMO EN EL PANEL DE PRÁCTICA) */}
+    <div className="relative w-full h-full overflow-hidden flex items-center justify-center select-none bg-white pattern-grid-paper">
+      {/* 1. BOTÓN TOGGLE PANEL DEDICADO A LA IZQUIERDA DE LA PANTALLA */}
       <button
         type="button"
-        onClick={() => setIsSidebarOpen((prev) => !prev)}
-        className="absolute top-3 left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[2px_2px_0px_#000000] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-        title={isSidebarOpen ? "Ocultar panel" : "Abrir panel de opciones y estadísticas"}
+        onClick={() => (onToggleSidebar ? onToggleSidebar() : setIsSidebarOpen((prev) => !prev))}
+        className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[3px_3px_0px_#000000] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+        title="Abrir / cerrar panel de opciones y estadísticas"
       >
         <PanelLeft className="w-4 h-4 stroke-[2.5]" />
         <span>Panel</span>
       </button>
 
-      {/* BOTÓN RÁPIDO DE FINALIZAR DURANTE LA PARTIDA (DIRECTO EN EL LIENZO) */}
-      {gameState === 'playing' && (
-        <button
-          type="button"
-          onClick={() => finishGame('manual')}
-          className="absolute top-3 right-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[2px_2px_0px_#000000] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-          title="Finalizar partida y registrar tu progreso actual"
-        >
-          <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Finalizar</span>
-        </button>
-      )}
+      {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL ALINEADO CON EL LIENZO */}
+      <div
+        className="absolute top-2.5 sm:top-3 z-20 flex items-center justify-between pointer-events-none px-2 sm:px-0"
+        style={{
+          width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
+        }}
+      >
+        {/* Tira compacta a la izquierda */}
+        <div className="pointer-events-auto font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+          <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
+            {gameMode === 'survival' ? `ACTO ${currentStage}` : 'BLITZ 60s'}
+          </span>
+          <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5">
+            <Clock className="w-3 h-3 stroke-[2.5]" />
+            <span className="text-[11px] font-bold tabular-nums">
+              {gameMode === 'survival' ? `${stageSecondsLeft}s` : `${blitzTimer}s`}
+            </span>
+          </div>
+          {/* 6 cuadritos visuales de saturación */}
+          <div className="flex items-center gap-0.5 px-1 py-0.5 bg-neutral-100 border border-black" title={`Líneas en pantalla: ${activeLines.length}/${MAX_LINES_OVERFLOW}`}>
+            {[0, 1, 2, 3, 4, 5].map((idx) => (
+              <span
+                key={idx}
+                className={`w-2 h-2 border border-black transition-colors ${
+                  idx < activeLines.length
+                    ? idx >= 4
+                      ? 'bg-red-600'
+                      : 'bg-black'
+                    : 'bg-white'
+                }`}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5">
+            <Flame className="w-3 h-3 fill-black text-black" />
+            <span className="text-[11px] font-bold tabular-nums">{clearedScores.length} ({comboStreak}x)</span>
+          </div>
+          {averageGrade > 0 && (
+            <span className="text-[10px] font-mono font-bold text-neutral-600 hidden sm:inline">
+              Media: {averageGrade}%
+            </span>
+          )}
+        </div>
 
-      {/* BACKDROP FLOTANTE CUANDO EL PANEL ESTÁ ABIERTO */}
-      {isSidebarOpen && (
+        {/* A la derecha del dibujo: Cuadradito compacto con la nota (a la misma altura) */}
+        {lastEval && gameState === 'playing' ? (
+          <div className="pointer-events-auto bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+              Nota
+            </span>
+            <span className="text-xl sm:text-2xl font-black leading-none my-0.5">
+              {lastEval.score}%
+            </span>
+            <span
+              className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
+                lastEval.passed ? 'bg-black text-white' : 'bg-red-600 text-white'
+              }`}
+            >
+              {lastEval.passed ? 'Eliminada' : 'Fallo'}
+            </span>
+          </div>
+        ) : (
+          <div />
+        )}
+      </div>
+
+      {/* BACKDROP FLOTANTE CUANDO EL PANEL LOCAL ESTÁ ABIERTO */}
+      {!onToggleSidebar && isSidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* 1. BARRA LATERAL IZQUIERDA EN MODO OVERLAY (COMO EN PANEL DE PRÁCTICA) */}
-      <aside
-        className={`fixed md:absolute top-0 bottom-0 left-0 z-50 bg-white border-r-2 border-black shadow-[6px_0px_0px_#000000] flex flex-col select-none transition-transform duration-200 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
-        } w-full sm:w-85 md:w-80 h-full overflow-hidden`}
-      >
+      {/* 1. BARRA LATERAL IZQUIERDA EN MODO OVERLAY (SI NO SE USA EL SIDEBAR PRINCIPAL) */}
+      {!onToggleSidebar && (
+        <aside
+          className={`fixed md:absolute top-0 bottom-0 left-0 z-50 bg-white border-r-2 border-black shadow-[6px_0px_0px_#000000] flex flex-col select-none transition-transform duration-200 ease-in-out ${
+            isSidebarOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
+          } w-full sm:w-85 md:w-80 h-full overflow-hidden`}
+        >
         <div className="w-full flex flex-col h-full overflow-y-auto p-3.5 space-y-3 font-mono">
           {/* CABECERA CON BOTÓN CERRAR PANEL Y BOTÓN SALIR */}
           <div className="flex items-center justify-between pb-2 border-b-2 border-black">
@@ -1230,270 +1270,335 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
         </div>
         </div>
       </aside>
+      )}
 
-      {/* 2. ÁREA CENTRAL: LIENZO 100% CENTRADO Y SIN SCROLL */}
-      <div className="flex-1 w-full flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden min-h-0 relative z-10">
-        <div className="relative flex items-center justify-center select-none touch-none max-w-full">
-          {/* Banner de Feedback instantáneo */}
-          {flashBanner && (
-            <div
-              className={`absolute top-3 z-30 px-3 py-1.5 font-mono text-xs font-bold border-2 shadow-[3px_3px_0px_#000000] animate-bounce ${
-                flashBanner.positive ? 'bg-black text-white border-white' : 'bg-red-600 text-white border-black'
-              }`}
-            >
-              {flashBanner.text}
-            </div>
-          )}
+      {/* 3. ÁREA CENTRAL: LIENZO 100% INTEGRADO CON EL FONDO */}
+      <div
+        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        style={{
+          width: 'min(100%, 620px, calc((100vh - 120px) * (600 / 540)))',
+          height: 'auto',
+          aspectRatio: '600 / 540',
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={600}
+          height={540}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="block w-full h-full cursor-crosshair touch-none select-none z-10 pointer-events-auto"
+        />
 
-          {/* HUD de Acto en vivo en el lienzo */}
-          {gameState === 'playing' && gameMode === 'survival' && (
-            <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1 bg-white/95 border-2 border-black font-mono text-[10px] font-bold shadow-[2px_2px_0px_#000000] pointer-events-none">
-              <span className="bg-black text-white px-1.5 py-0.2">ACTO {currentStage}</span>
-              <span className="text-neutral-600">Descanso en: {stageSecondsLeft}s</span>
-            </div>
-          )}
+        {/* Banner de Feedback instantáneo */}
+        {flashBanner && (
+          <div
+            className={`absolute top-3 z-30 px-3 py-1.5 font-mono text-xs font-bold border-2 shadow-[3px_3px_0px_#000000] animate-bounce pointer-events-none ${
+              flashBanner.positive ? 'bg-black text-white border-white' : 'bg-red-600 text-white border-black'
+            }`}
+          >
+            {flashBanner.text}
+          </div>
+        )}
 
-          {/* Pantalla de inicio previa sobre el lienzo */}
-          {gameState === 'idle' && (
-            <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-20 text-center font-mono">
-              <Zap className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
-              <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
-                Avalancha de Trazos
-              </h3>
-              <p className="text-xs text-neutral-600 mt-1 max-w-md">
-                {isRandomMode ? (
-                  <>Modo Aleatorio activado: traza cada línea diferente de <strong>① a ②</strong> con nota <strong>≥70%</strong> para eliminarla.</>
-                ) : (
-                  <>Las líneas aparecen según <strong>{selectedNode.code} · {selectedNode.title}</strong>. Traza de <strong>① a ②</strong> con nota <strong>≥70%</strong>.</>
-                )}
-                <br />
-                {gameMode === 'survival' ? (
-                  <><strong>Supervivencia por Actos:</strong> Resiste oleadas de {STAGE_DURATION}s. Entre actos tendrás pausas de descanso con estadísticas y cada vez mayor dificultad.</>
-                ) : (
-                  <><strong>Blitz 60s:</strong> Elimina todas las líneas posibles antes de que termine el tiempo.</>
-                )}
-              </p>
+        {/* Pantalla de inicio previa sobre el lienzo */}
+        {gameState === 'idle' && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-20 text-center font-mono pointer-events-auto select-none">
+            <Zap className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
+            <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
+              Avalancha de Trazos
+            </h3>
+            <p className="text-xs text-neutral-600 mt-1 max-w-md">
+              {isRandomMode ? (
+                <>Modo Aleatorio activado: traza cada línea diferente de <strong>① a ②</strong> con nota <strong>≥70%</strong> para eliminarla.</>
+              ) : (
+                <>Las líneas aparecen según <strong>{selectedNode.code} · {selectedNode.title}</strong>. Traza de <strong>① a ②</strong> con nota <strong>≥70%</strong>.</>
+              )}
+              <br />
+              {gameMode === 'survival' ? (
+                <><strong>Supervivencia por Actos:</strong> Resiste oleadas de {STAGE_DURATION}s. Entre actos tendrás pausas de descanso con estadísticas y cada vez mayor dificultad.</>
+              ) : (
+                <><strong>Blitz 60s:</strong> Elimina todas las líneas posibles antes de que termine el tiempo.</>
+              )}
+            </p>
 
-              <div className="my-4 p-3 border-2 border-black bg-neutral-50 text-xs w-64 space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Récord Supervivencia:</span>
-                  <span className="font-bold">{highScores.survival} líneas</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Mejor Acto Alcanzado:</span>
-                  <span className="font-bold">Acto {bestStage}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Récord Blitz (60s):</span>
-                  <span className="font-bold">{highScores.blitz} líneas</span>
-                </div>
+            <div className="my-4 p-3 border-2 border-black bg-neutral-50 text-xs w-64 space-y-1 shadow-[3px_3px_0px_#000000]">
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Récord Supervivencia:</span>
+                <span className="font-bold">{highScores.survival} líneas</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Mejor Acto Alcanzado:</span>
+                <span className="font-bold">Acto {bestStage}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Récord Blitz (60s):</span>
+                <span className="font-bold">{highScores.blitz} líneas</span>
+              </div>
+            </div>
 
+            <button
+              type="button"
+              onClick={() => startGame(gameMode)}
+              className="btn-ink px-6 py-2.5 text-xs uppercase font-bold flex items-center gap-2 cursor-pointer shadow-[3px_3px_0px_#000000] hover:bg-neutral-900"
+            >
+              <Sparkles className="w-4 h-4 fill-white stroke-none" />
+              <span>Empezar Partida ({gameMode === 'survival' ? 'Supervivencia por Actos' : 'Blitz 60s'})</span>
+            </button>
+          </div>
+        )}
+
+        {/* Modal de Descanso entre Actos / Stages */}
+        {gameState === 'stage_break' && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-4 sm:p-6 border-2 border-black z-20 text-center font-mono animate-fade-in select-none pointer-events-auto">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black text-white text-[11px] font-bold uppercase tracking-wider mb-2 border border-black shadow-[2px_2px_0px_#000000]">
+              <Check className="w-3.5 h-3.5 stroke-[3]" />
+              <span>¡ACTO {currentStage} SUPERADO!</span>
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+
+            <h3 className="text-2xl font-black font-display uppercase tracking-tight text-black">
+              DESCANSO ENTRE ACTOS
+            </h3>
+            <p className="text-xs text-neutral-600 mt-0.5 max-w-sm">
+              ¡Lienzo despejado! Has resistido los {STAGE_DURATION}s del Acto {currentStage} sin saturar la pantalla.
+            </p>
+
+            {/* Resumen de estadísticas del Acto */}
+            <div className="my-3 p-3.5 border-2 border-black bg-neutral-50 w-full max-w-xs space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Trazos en Acto {currentStage}:</span>
+                <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
+                  {stageClearedCount} líneas
+                </span>
+              </div>
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Precisión Media del Acto:</span>
+                <span className="font-bold text-sm">
+                  {stageScores.length > 0 ? Math.round(stageScores.reduce((a, b) => a + b, 0) / stageScores.length) : 0}%
+                </span>
+              </div>
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Racha en este Acto:</span>
+                <span className="font-bold text-sm">{stageBestCombo} seguidas</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Total Acumulado:</span>
+                <span className="font-bold text-sm">{clearedScores.length} líneas ({stagesCompleted} actos)</span>
+              </div>
+            </div>
+
+            {/* Previa técnica del siguiente Acto */}
+            <div className="mb-3.5 p-2 bg-neutral-100 border border-black text-left w-full max-w-xs text-[11px] space-y-1">
+              <div className="font-bold text-black flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-black stroke-[2.5]" />
+                <span>Próximo Reto: Acto {currentStage + 1}</span>
+              </div>
+              <p className="text-neutral-600 text-[10px] leading-snug">
+                La avalancha acelera su cadencia a <strong>{(getStageSpawnInterval(currentStage + 1, 2) / 1000).toFixed(1)}s</strong> por trazo
+                {currentStage + 1 >= 2 ? ' con posibles ráfagas continuas' : ''}. Mantén la fluidez y velocidad sin dudar.
+              </p>
+            </div>
+
+            {/* Botones de acción */}
+            <div className="flex flex-col sm:flex-row gap-2 w-full max-w-xs">
+              <button
+                type="button"
+                onClick={handleNextStage}
+                className="flex-1 btn-ink py-2.5 px-3 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000] hover:bg-neutral-900"
+              >
+                <Play className="w-3.5 h-3.5 fill-white stroke-none" />
+                <span>Comenzar Acto {currentStage + 1}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => finishGame('manual')}
+                className="btn-ink-outline py-2.5 px-3 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] hover:bg-neutral-100"
+              >
+                <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Finalizar y Guardar</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Fin de Partida */}
+        {gameState === 'gameover' && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-20 text-center font-mono animate-fade-in pointer-events-auto select-none">
+            <Trophy className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
+            <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
+              {gameOverReason === 'manual'
+                ? '¡Partida Guardada!'
+                : gameOverReason === 'overflow'
+                ? '¡Desbordamiento de Pantalla!'
+                : '¡Tiempo Finalizado!'}
+            </h3>
+            <p className="text-xs text-neutral-600 mt-1 max-w-sm">
+              {gameOverReason === 'manual'
+                ? 'Has finalizado la partida voluntariamente y tu progreso ha quedado guardado.'
+                : gameOverReason === 'overflow'
+                ? 'Las líneas se acumularon hasta saturar el lienzo (6 líneas).'
+                : 'Completaste los 60 segundos de alta velocidad.'}
+            </p>
+
+            {/* TABLA DE RESULTADOS */}
+            <div className="my-4 p-3.5 border-2 border-black bg-neutral-50 w-72 space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
+              {gameMode === 'survival' && (
+                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Actos Superados:</span>
+                  <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
+                    {stagesCompleted} {stagesCompleted === 1 ? 'acto' : 'actos'} (Acto {currentStage})
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Líneas Eliminadas:</span>
+                <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
+                  {clearedScores.length} líneas
+                </span>
+              </div>
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Nota Media:</span>
+                <span className="font-bold text-sm">
+                  {averageGrade}%
+                </span>
+              </div>
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Mejor Precisión:</span>
+                <span className="font-bold text-sm">
+                  {clearedScores.length > 0 ? `${Math.max(...clearedScores)}%` : '0%'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Racha Máxima:</span>
+                <span className="font-bold text-sm">{bestCombo} seguidas</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Modo:</span>
+                <span className="font-bold truncate max-w-[140px] text-right">
+                  {isRandomMode ? 'Aleatorio' : selectedNode.code}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => startGame(gameMode)}
-                className="btn-ink px-6 py-2.5 text-xs uppercase font-bold flex items-center gap-2 cursor-pointer shadow-[3px_3px_0px_#000000] hover:bg-neutral-900"
+                className="btn-ink px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000]"
               >
-                <Sparkles className="w-4 h-4 fill-white stroke-none" />
-                <span>Empezar Partida ({gameMode === 'survival' ? 'Supervivencia por Actos' : 'Blitz 60s'})</span>
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Jugar de Nuevo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setGameState('idle')}
+                className="btn-ink-outline px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+              >
+                <span>Configuración</span>
               </button>
             </div>
-          )}
-
-          {/* Modal de Descanso entre Actos / Stages */}
-          {gameState === 'stage_break' && (
-            <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-4 sm:p-6 border-2 border-black z-20 text-center font-mono animate-fade-in select-none">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black text-white text-[11px] font-bold uppercase tracking-wider mb-2 border border-black shadow-[2px_2px_0px_#000000]">
-                <Check className="w-3.5 h-3.5 stroke-[3]" />
-                <span>¡ACTO {currentStage} SUPERADO!</span>
-                <Sparkles className="w-3.5 h-3.5" />
-              </div>
-
-              <h3 className="text-2xl font-black font-display uppercase tracking-tight text-black">
-                DESCANSO ENTRE ACTOS
-              </h3>
-              <p className="text-xs text-neutral-600 mt-0.5 max-w-sm">
-                ¡Lienzo despejado! Has resistido los {STAGE_DURATION}s del Acto {currentStage} sin saturar la pantalla.
-              </p>
-
-              {/* Resumen de estadísticas del Acto */}
-              <div className="my-3 p-3.5 border-2 border-black bg-neutral-50 w-full max-w-xs space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Trazos en Acto {currentStage}:</span>
-                  <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
-                    {stageClearedCount} líneas
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Precisión Media del Acto:</span>
-                  <span className="font-bold text-sm">
-                    {stageScores.length > 0 ? Math.round(stageScores.reduce((a, b) => a + b, 0) / stageScores.length) : 0}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Racha en este Acto:</span>
-                  <span className="font-bold text-sm">{stageBestCombo} seguidas</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Total Acumulado:</span>
-                  <span className="font-bold text-sm">{clearedScores.length} líneas ({stagesCompleted} actos)</span>
-                </div>
-              </div>
-
-              {/* Previa técnica del siguiente Acto */}
-              <div className="mb-3.5 p-2 bg-neutral-100 border border-black text-left w-full max-w-xs text-[11px] space-y-1">
-                <div className="font-bold text-black flex items-center gap-1">
-                  <Zap className="w-3.5 h-3.5 text-black stroke-[2.5]" />
-                  <span>Próximo Reto: Acto {currentStage + 1}</span>
-                </div>
-                <p className="text-neutral-600 text-[10px] leading-snug">
-                  La avalancha acelera su cadencia a <strong>{(getStageSpawnInterval(currentStage + 1, 2) / 1000).toFixed(1)}s</strong> por trazo
-                  {currentStage + 1 >= 2 ? ' con posibles ráfagas continuas' : ''}. Mantén la fluidez y velocidad sin dudar.
-                </p>
-              </div>
-
-              {/* Botones de acción */}
-              <div className="flex flex-col sm:flex-row gap-2 w-full max-w-xs">
-                <button
-                  type="button"
-                  onClick={handleNextStage}
-                  className="flex-1 btn-ink py-2.5 px-3 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000] hover:bg-neutral-900"
-                >
-                  <Play className="w-3.5 h-3.5 fill-white stroke-none" />
-                  <span>Comenzar Acto {currentStage + 1}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => finishGame('manual')}
-                  className="btn-ink-outline py-2.5 px-3 text-xs uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] hover:bg-neutral-100"
-                >
-                  <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Finalizar y Guardar</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Modal de Fin de Partida */}
-          {gameState === 'gameover' && (
-            <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-20 text-center font-mono animate-fade-in">
-              <Trophy className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
-              <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
-                {gameOverReason === 'manual'
-                  ? '¡Partida Guardada!'
-                  : gameOverReason === 'overflow'
-                  ? '¡Desbordamiento de Pantalla!'
-                  : '¡Tiempo Finalizado!'}
-              </h3>
-              <p className="text-xs text-neutral-600 mt-1 max-w-sm">
-                {gameOverReason === 'manual'
-                  ? 'Has finalizado la partida voluntariamente y tu progreso ha quedado guardado.'
-                  : gameOverReason === 'overflow'
-                  ? 'Las líneas se acumularon hasta saturar el lienzo (6 líneas).'
-                  : 'Completaste los 60 segundos de alta velocidad.'}
-              </p>
-
-              {/* TABLA DE RESULTADOS */}
-              <div className="my-4 p-3.5 border-2 border-black bg-neutral-50 w-72 space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
-                {gameMode === 'survival' && (
-                  <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                    <span className="text-neutral-500 font-bold uppercase text-[10px]">Actos Superados:</span>
-                    <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
-                      {stagesCompleted} {stagesCompleted === 1 ? 'acto' : 'actos'} (Acto {currentStage})
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Líneas Eliminadas:</span>
-                  <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
-                    {clearedScores.length} líneas
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Nota Media:</span>
-                  <span className="font-bold text-sm">
-                    {averageGrade}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Mejor Precisión:</span>
-                  <span className="font-bold text-sm">
-                    {clearedScores.length > 0 ? `${Math.max(...clearedScores)}%` : '0%'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Racha Máxima:</span>
-                  <span className="font-bold text-sm">{bestCombo} seguidas</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Modo:</span>
-                  <span className="font-bold truncate max-w-[140px] text-right">
-                    {isRandomMode ? 'Aleatorio' : selectedNode.code}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => startGame(gameMode)}
-                  className="btn-ink px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000]"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Jugar de Nuevo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGameState('idle')}
-                  className="btn-ink-outline px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
-                >
-                  <span>Configuración</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* LIENZO: PROPORCIÓN EXACTA 600x540 (NUNCA ESTIRADO) */}
-          <canvas
-            ref={canvasRef}
-            width={600}
-            height={540}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className="border-2 border-black bg-white shadow-[4px_4px_0px_#000000] cursor-crosshair touch-none select-none max-w-full"
-            style={{
-              width: 'min(100%, min(600px, calc((100vh - 165px) * (600 / 540))))',
-              height: 'auto',
-              aspectRatio: '600 / 540',
-            }}
-          />
-        </div>
-
-        {/* FEEDBACK DEL ÚLTIMO INTENTO AL PIE DEL LIENZO */}
-        {lastEval && gameState === 'playing' && (
-          <div className="mt-2 w-full max-w-xl p-2 border-2 border-black bg-white shadow-[2px_2px_0px_#000000] font-mono text-xs flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span
-                className={`px-2 py-0.5 font-bold border border-black ${
-                  lastEval.passed ? 'bg-black text-white' : 'bg-red-100 text-red-800'
-                }`}
-              >
-                {lastEval.passed ? '✓' : '✗'} {lastEval.score}%
-              </span>
-              <span className="text-[11px] text-neutral-600 font-sans">
-                {lastEval.passed
-                  ? '¡Línea eliminada!'
-                  : `Precisión insuficiente (${lastEval.avgDistPx}px). Requiere ≥70%.`}
-              </span>
-            </div>
-
-            <span className="text-[10px] text-neutral-500 font-mono">
-              Objetivo: ≥70%
-            </span>
           </div>
         )}
+      </div>
+
+      {/* 4. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (NEOBRUTALISTA PAPLITZ) */}
+      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
+        <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-24px)] overflow-x-auto">
+          {/* Modalidad toggle */}
+          <div className="flex items-center gap-1 border-r border-neutral-300 pr-1.5 sm:pr-2">
+            <button
+              type="button"
+              onClick={() => {
+                setGameMode('survival');
+                if (gameState === 'playing') startGame('survival');
+              }}
+              className={`px-2 py-1 text-[10px] font-bold border border-black cursor-pointer transition-colors whitespace-nowrap ${
+                gameMode === 'survival'
+                  ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                  : 'bg-white text-black hover:bg-neutral-100'
+              }`}
+            >
+              Supervivencia
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGameMode('blitz');
+                if (gameState === 'playing') startGame('blitz');
+              }}
+              className={`px-2 py-1 text-[10px] font-bold border border-black cursor-pointer transition-colors whitespace-nowrap ${
+                gameMode === 'blitz'
+                  ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                  : 'bg-white text-black hover:bg-neutral-100'
+              }`}
+            >
+              Blitz 60s
+            </button>
+          </div>
+
+          {/* Aleatorio toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsRandomMode((prev) => !prev);
+              if (gameState === 'playing') startGame(gameMode);
+            }}
+            className={`px-2 py-1 text-[10px] font-bold border border-black cursor-pointer transition-colors flex items-center gap-1 whitespace-nowrap ${
+              isRandomMode
+                ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                : 'bg-neutral-100 text-neutral-800 hover:bg-neutral-200'
+            }`}
+            title={isRandomMode ? "Modo Dinámico Aleatorio" : `Nivel ${selectedNode.code}`}
+          >
+            <Shuffle className="w-3 h-3" />
+            <span>{isRandomMode ? 'Aleatorio' : selectedNode.code}</span>
+          </button>
+
+          {/* Controles de partida */}
+          {gameState === 'playing' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => startGame(gameMode)}
+                className="btn-ink-outline px-2 py-1 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000] whitespace-nowrap"
+                title="Reiniciar partida"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline text-[11px]">Reiniciar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => finishGame('manual')}
+                className="btn-ink px-3 py-1 text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] whitespace-nowrap"
+                title="Finalizar partida y registrar tu progreso actual"
+              >
+                <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Finalizar</span>
+              </button>
+            </>
+          ) : gameState === 'idle' ? (
+            <button
+              type="button"
+              onClick={() => startGame(gameMode)}
+              className="btn-ink px-3 py-1 text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] whitespace-nowrap"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-white stroke-none" />
+              <span>Empezar</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => startGame(gameMode)}
+              className="btn-ink px-3 py-1 text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] whitespace-nowrap"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reiniciar</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

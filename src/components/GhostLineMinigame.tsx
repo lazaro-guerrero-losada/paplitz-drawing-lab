@@ -18,6 +18,7 @@ export interface GhostLineMinigameProps {
   onAwardXP: (amount: number) => void;
   onAvatarMoodChange?: (mood: AvatarMood) => void;
   onDrawingStateChange?: (isDrawing: boolean) => void;
+  onToggleSidebar?: () => void;
 }
 
 interface Point {
@@ -241,6 +242,7 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
   onAwardXP,
   onAvatarMoodChange,
   onDrawingStateChange,
+  onToggleSidebar,
 }) => {
   // Estado general de la partida
   const [gameState, setGameState] = useState<'playing' | 'gameover'>('playing');
@@ -405,26 +407,8 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
     ctx.save();
     ctx.scale(dpr, dpr);
 
-    // 1. Fondo blanco técnico
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, W, H);
-
-    // 2. Trama milimétrica sutil Paplitz
-    ctx.strokeStyle = '#F0F0F0';
-    ctx.lineWidth = 1;
-    const gridStep = 20;
-    for (let x = 0; x < W; x += gridStep) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, H);
-      ctx.stroke();
-    }
-    for (let y = 0; y < H; y += gridStep) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(W, y);
-      ctx.stroke();
-    }
+    // Fondo transparente para dejar ver la cuadrícula continua técnica (pattern-grid-paper)
+    ctx.clearRect(0, 0, W, H);
 
     // 3. RENDERIZADO DEL FANTASMA EN "GRIS CLARITO" (#D4D4D8 / #E4E4E7)
     if (ghostStroke && ghostStroke.length > 1) {
@@ -674,318 +658,389 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
   };
 
   return (
-    <div className="w-full flex-1 flex flex-col items-center justify-center overflow-hidden relative h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] bg-neutral-100 font-sans select-none">
-      {/* BOTÓN FLOTANTE TOGGLE DEL PANEL (COMO EN EL PANEL DE PRÁCTICA) */}
+    <div className="relative w-full h-full overflow-hidden flex items-center justify-center select-none bg-white pattern-grid-paper">
+      {/* 1. BOTÓN TOGGLE PANEL DEDICADO A LA IZQUIERDA DE LA PANTALLA */}
       <button
         type="button"
-        onClick={() => setIsSidebarOpen((prev) => !prev)}
-        className="absolute top-3 left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[2px_2px_0px_#000000] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-        title={isSidebarOpen ? "Ocultar panel" : "Abrir panel de opciones y estadísticas"}
+        onClick={() => (onToggleSidebar ? onToggleSidebar() : setIsSidebarOpen((prev) => !prev))}
+        className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[3px_3px_0px_#000000] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+        title="Abrir / cerrar panel de opciones y estadísticas"
       >
         <PanelLeft className="w-4 h-4 stroke-[2.5]" />
         <span>Panel</span>
       </button>
 
-      {/* BOTÓN RÁPIDO DE FINALIZAR DURANTE LA PARTIDA (DIRECTO EN EL LIENZO) */}
-      {gameState === 'playing' && (
-        <button
-          type="button"
-          onClick={finishGame}
-          className="absolute top-3 right-3 z-30 bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 border-2 border-black shadow-[2px_2px_0px_#000000] text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-          title="Finalizar partida y ver el resumen de estadísticas"
-        >
-          <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Finalizar</span>
-        </button>
-      )}
+      {/* 2. HUD SUPERIOR: A LA MISMA ALTURA QUE EL BOTÓN PANEL ALINEADO CON EL LIENZO */}
+      <div
+        className="absolute top-2.5 sm:top-3 z-20 flex items-center justify-between pointer-events-none px-2 sm:px-0"
+        style={{
+          width: 'min(calc(100% - 130px), 620px, calc((100vh - 120px) * (600 / 540)))',
+        }}
+      >
+        {/* Tira compacta a la izquierda */}
+        <div className="pointer-events-auto font-mono text-xs select-none bg-white border-2 border-black p-1 sm:p-1.5 shadow-[3px_3px_0px_#000000] flex items-center gap-1.5 sm:gap-2">
+          <span className="text-[10px] font-mono bg-black text-white px-1.5 py-0.5 font-bold uppercase shrink-0 shadow-[1px_1px_0px_#000]">
+            FANTASMA
+          </span>
+          <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5">
+            <Check className="w-3 h-3 stroke-[3]" />
+            <span className="text-[11px] font-bold tabular-nums">{scores.length} calcos</span>
+          </div>
+          <div className="flex items-center gap-1 bg-neutral-100 border border-black px-1.5 py-0.5">
+            <Flame className="w-3 h-3 fill-black text-black" />
+            <span className="text-[11px] font-bold tabular-nums">{comboStreak} racha</span>
+          </div>
+          {averageScore > 0 && (
+            <span className="text-[10px] font-mono font-bold text-neutral-600 hidden sm:inline">
+              Media: {averageScore}%
+            </span>
+          )}
+        </div>
 
-      {/* BACKDROP FLOTANTE CUANDO EL PANEL ESTÁ ABIERTO */}
-      {isSidebarOpen && (
+        {/* A la derecha del dibujo: Cuadradito compacto con la nota (a la misma altura) */}
+        {lastEval ? (
+          <div className="pointer-events-auto bg-white border-2 border-black p-1.5 sm:p-2 shadow-[3px_3px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[64px] sm:min-w-[74px] aspect-square animate-in fade-in zoom-in-95 duration-150">
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase text-neutral-500 tracking-wider">
+              Nota
+            </span>
+            <span className="text-xl sm:text-2xl font-black leading-none my-0.5">
+              {lastEval.score}%
+            </span>
+            <span
+              className={`text-[8px] font-bold uppercase px-1 py-0.2 border border-black ${
+                lastEval.perfect
+                  ? 'bg-black text-white'
+                  : lastEval.passed
+                  ? 'bg-neutral-200 text-black'
+                  : 'bg-white text-neutral-700'
+              }`}
+            >
+              {lastEval.perfect ? 'Perfecto' : lastEval.passed ? 'Aprobado' : 'Reintentar'}
+            </span>
+          </div>
+        ) : (
+          <div />
+        )}
+      </div>
+
+      {/* BACKDROP FLOTANTE CUANDO EL PANEL LOCAL ESTÁ ABIERTO */}
+      {!onToggleSidebar && isSidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* 1. BARRA LATERAL IZQUIERDA EN MODO OVERLAY */}
-      <aside
-        className={`fixed md:absolute top-0 bottom-0 left-0 z-50 bg-white border-r-2 border-black shadow-[6px_0px_0px_#000000] flex flex-col select-none transition-transform duration-200 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
-        } w-full sm:w-85 md:w-80 h-full overflow-hidden`}
-      >
-        <div className="w-full flex flex-col h-full overflow-y-auto p-3.5 space-y-3 font-mono">
-          {/* CABECERA CON BOTÓN CERRAR PANEL Y BOTÓN SALIR */}
-          <div className="flex items-center justify-between pb-2 border-b-2 border-black">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-black text-white flex items-center justify-center shadow-[1px_1px_0px_#000000]">
-                <Ghost className="w-4 h-4 stroke-[2.5]" />
+      {/* 1. BARRA LATERAL IZQUIERDA EN MODO OVERLAY (SI NO SE USA EL SIDEBAR PRINCIPAL) */}
+      {!onToggleSidebar && (
+        <aside
+          className={`fixed md:absolute top-0 bottom-0 left-0 z-50 bg-white border-r-2 border-black shadow-[6px_0px_0px_#000000] flex flex-col select-none transition-transform duration-200 ease-in-out ${
+            isSidebarOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
+          } w-full sm:w-85 md:w-80 h-full overflow-hidden`}
+        >
+          <div className="w-full flex flex-col h-full overflow-y-auto p-3.5 space-y-3 font-mono">
+            {/* CABECERA CON BOTÓN CERRAR PANEL Y BOTÓN SALIR */}
+            <div className="flex items-center justify-between pb-2 border-b-2 border-black">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-black text-white flex items-center justify-center shadow-[1px_1px_0px_#000000]">
+                  <Ghost className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-neutral-500 uppercase block leading-none">
+                    Minijuego
+                  </span>
+                  <span className="text-xs font-bold font-display uppercase tracking-wider text-black">
+                    Línea Fantasma
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-neutral-500 uppercase block leading-none">
-                  Minijuego
-                </span>
-                <span className="text-xs font-bold font-display uppercase tracking-wider text-black">
-                  Línea Fantasma
-                </span>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={onExit}
+                  className="btn-ink-outline px-2 py-1 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000]"
+                  title="Volver al menú de minijuegos"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                  <span>Salir</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="p-1 border border-black hover:bg-neutral-100 cursor-pointer shadow-[1px_1px_0px_#000000]"
+                  title="Cerrar panel y volver al lienzo"
+                >
+                  <X className="w-4 h-4 stroke-[2.5]" />
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            {/* SELECTOR DE PLANTILLA FANTASMA INICIAL */}
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase font-bold text-neutral-500">Fantasma Inicial:</span>
+              <div className="grid grid-cols-2 gap-1 p-1 border-2 border-black bg-neutral-100 shadow-[2px_2px_0px_#000000]">
+                {[
+                  { id: 'horizontal' as const, label: 'Horizontal' },
+                  { id: 'diagonal' as const, label: 'Diagonal' },
+                  { id: 'arc_c' as const, label: 'Arco C' },
+                  { id: 'wave_s' as const, label: 'Onda S' },
+                  { id: 'chevron' as const, label: 'Quiebro V' },
+                  { id: 'custom' as const, label: 'Dibujar Libre' },
+                ].map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleSelectPreset(p.id)}
+                    className={`py-1 px-1.5 text-[10px] font-bold border border-black cursor-pointer transition-colors ${
+                      selectedPreset === p.id && !isSettingCustomGhost
+                        ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                        : selectedPreset === p.id && isSettingCustomGhost
+                        ? 'bg-neutral-800 text-white animate-pulse'
+                        : 'bg-white text-black hover:bg-neutral-200'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* PANEL DE ESTADÍSTICAS EN VIVO */}
+            <div className="space-y-2 pt-1 border-t-2 border-black">
+              {/* Calcos Realizados & Nota Media */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="border-2 border-black p-2 bg-neutral-50 shadow-[1px_1px_0px_#000000]">
+                  <div className="text-[9px] uppercase font-bold text-neutral-500">Calcos Hechos</div>
+                  <div className="text-base font-black tabular-nums flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    {scores.length}
+                  </div>
+                </div>
+                <div className="border-2 border-black p-2 bg-neutral-50 shadow-[1px_1px_0px_#000000]">
+                  <div className="text-[9px] uppercase font-bold text-neutral-500">Nota Media</div>
+                  <div className="text-base font-black tabular-nums">
+                    {averageScore > 0 ? `${averageScore}%` : '-'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Racha & Desviación Media */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="border-2 border-black p-2 bg-neutral-50 shadow-[1px_1px_0px_#000000]">
+                  <div className="text-[9px] uppercase font-bold text-neutral-500 flex items-center gap-0.5">
+                    <Flame className="w-3 h-3 text-black fill-black" />
+                    <span>Racha (≥75%)</span>
+                  </div>
+                  <div className="text-base font-black tabular-nums">{comboStreak}</div>
+                </div>
+                <div className="border-2 border-black p-2 bg-neutral-50 shadow-[1px_1px_0px_#000000]">
+                  <div className="text-[9px] uppercase font-bold text-neutral-500">Desv. Media</div>
+                  <div className="text-base font-black tabular-nums">
+                    {averageDeviation > 0 ? `${averageDeviation}px` : '-'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* RÉCORDS HISTÓRICOS */}
+            <div className="border-2 border-black p-2 bg-neutral-50 text-[10px] space-y-1 shadow-[1px_1px_0px_#000000]">
+              <div className="font-bold text-neutral-700 uppercase pb-0.5 border-b border-neutral-200">
+                Mejores Récords:
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Mejor Racha:</span>
+                <span className="font-bold">{Math.max(savedRecords.bestStreak, bestStreak)} seguidos</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Mejor Calco:</span>
+                <span className="font-bold">{Math.max(savedRecords.bestScore, maxScore)}%</span>
+              </div>
+            </div>
+
+            {/* INSTRUCCIÓN DEL BUCLE RÁPIDO */}
+            <div className="p-2 bg-neutral-50 border border-black text-[10px] text-neutral-600 leading-snug space-y-1">
+              <div className="font-bold text-black uppercase flex items-center gap-1">
+                <Zap className="w-3 h-3 text-black stroke-[2.5]" />
+                <span>Mecánica de Mutación:</span>
+              </div>
+              <p>
+                Traza sobre la línea fantasma. Tu calco se evalúa de inmediato y <strong>se convierte en el nuevo fantasma</strong> para trazar de nuevo sin pausas.
+              </p>
+            </div>
+
+            {/* BOTONES DE ACCIÓN: FINALIZAR Y REINICIAR */}
+            <div className="pt-2 mt-auto space-y-1.5">
               <button
                 type="button"
-                onClick={onExit}
-                className="btn-ink-outline px-2 py-1 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000]"
-                title="Volver al menú de minijuegos"
+                onClick={finishGame}
+                className="w-full btn-ink py-2 px-3 text-xs font-bold uppercase flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] hover:bg-neutral-900"
+                title="Finalizar partida y ver el resumen completo de estadísticas"
               >
-                <Undo2 className="w-3.5 h-3.5" />
-                <span>Salir</span>
+                <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Finalizar Partida</span>
               </button>
+
               <button
                 type="button"
-                onClick={() => setIsSidebarOpen(false)}
-                className="p-1 border border-black hover:bg-neutral-100 cursor-pointer shadow-[1px_1px_0px_#000000]"
-                title="Cerrar panel y volver al lienzo"
+                onClick={() => restartGame(selectedPreset)}
+                className="w-full btn-ink-outline py-1.5 px-3 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100"
+                title="Reiniciar y comenzar de nuevo el fantasma"
               >
-                <X className="w-4 h-4 stroke-[2.5]" />
+                <RotateCcw className="w-3 h-3" />
+                <span>Reiniciar Fantasma</span>
               </button>
             </div>
           </div>
+        </aside>
+      )}
 
-        {/* SELECTOR DE PLANTILLA FANTASMA INICIAL */}
-        <div className="space-y-1">
-          <span className="text-[10px] uppercase font-bold text-neutral-500">Fantasma Inicial:</span>
-          <div className="grid grid-cols-2 gap-1 p-1 border-2 border-black bg-neutral-100 shadow-[2px_2px_0px_#000000]">
+      {/* 3. ÁREA CENTRAL: LIENZO 100% INTEGRADO CON EL FONDO */}
+      <div
+        className="relative aspect-[600/540] max-w-full max-h-full flex items-center justify-center pointer-events-none"
+        style={{
+          width: 'min(100%, 620px, calc((100vh - 120px) * (600 / 540)))',
+          height: 'auto',
+          aspectRatio: '600 / 540',
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={600}
+          height={540}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="block w-full h-full cursor-crosshair touch-none select-none z-10 pointer-events-auto"
+        />
+
+        {/* Banner de Feedback instantáneo */}
+        {flashMessage && (
+          <div
+            className={`absolute top-3 z-30 px-3 py-1.5 font-mono text-xs font-bold border-2 shadow-[3px_3px_0px_#000000] animate-bounce pointer-events-none ${
+              flashMessage.positive
+                ? 'bg-black text-white border-white'
+                : 'bg-neutral-800 text-white border-white'
+            }`}
+          >
+            {flashMessage.text}
+          </div>
+        )}
+
+        {/* Modal de Fin de Partida */}
+        {gameState === 'gameover' && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-30 text-center font-mono animate-fade-in select-none pointer-events-auto">
+            <Trophy className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
+            <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
+              ¡Partida Finalizada!
+            </h3>
+            <p className="text-xs text-neutral-600 mt-1 max-w-sm">
+              Has completado tu sesión de entrenamiento de memoria muscular y sincronía motriz.
+            </p>
+
+            {/* TABLA DE RESULTADOS */}
+            <div className="my-4 p-3.5 border-2 border-black bg-neutral-50 w-72 space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Calcos Realizados:</span>
+                <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
+                  {scores.length} trazos
+                </span>
+              </div>
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Nota Media:</span>
+                <span className="font-bold text-sm">{averageScore}%</span>
+              </div>
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Mejor Calco:</span>
+                <span className="font-bold text-sm">{maxScore}%</span>
+              </div>
+              <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Racha Máxima:</span>
+                <span className="font-bold text-sm">{Math.max(bestStreak, comboStreak)} seguidos</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-bold uppercase text-[10px]">Desviación Media:</span>
+                <span className="font-bold text-sm">{averageDeviation}px</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => restartGame(selectedPreset)}
+                className="btn-ink px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000]"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Jugar de Nuevo</span>
+              </button>
+              <button
+                type="button"
+                onClick={onExit}
+                className="btn-ink-outline px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span>Volver a Minijuegos</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4. BARRA DE HERRAMIENTAS FLOTANTE INFERIOR (NEOBRUTALISTA PAPLITZ) */}
+      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto font-mono text-xs">
+        <div className="bg-white border-2 border-black p-1.5 sm:p-2 shadow-[4px_4px_0px_#000000] flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-24px)] overflow-x-auto">
+          {/* Selector de Presets */}
+          <div className="flex items-center gap-1 border-r border-neutral-300 pr-1.5 sm:pr-2">
             {[
               { id: 'horizontal' as const, label: 'Horizontal' },
               { id: 'diagonal' as const, label: 'Diagonal' },
-              { id: 'arc_c' as const, label: 'Arco C' },
-              { id: 'wave_s' as const, label: 'Onda S' },
-              { id: 'chevron' as const, label: 'Quiebro V' },
-              { id: 'custom' as const, label: 'Dibujar Libre' },
+              { id: 'arc_c' as const, label: 'Arco' },
+              { id: 'wave_s' as const, label: 'Onda' },
+              { id: 'chevron' as const, label: 'Quiebro' },
+              { id: 'custom' as const, label: 'Libre' },
             ].map((p) => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => handleSelectPreset(p.id)}
-                className={`py-1 px-1.5 text-[10px] font-bold border border-black cursor-pointer transition-colors ${
+                className={`px-1.5 sm:px-2 py-1 text-[10px] font-bold border border-black cursor-pointer transition-colors whitespace-nowrap ${
                   selectedPreset === p.id && !isSettingCustomGhost
                     ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
                     : selectedPreset === p.id && isSettingCustomGhost
                     ? 'bg-neutral-800 text-white animate-pulse'
-                    : 'bg-white text-black hover:bg-neutral-200'
+                    : 'bg-white text-black hover:bg-neutral-100'
                 }`}
               >
                 {p.label}
               </button>
             ))}
           </div>
-        </div>
 
-        {/* PANEL DE ESTADÍSTICAS EN VIVO */}
-        <div className="space-y-2 pt-1 border-t-2 border-black">
-          {/* Calcos Realizados & Nota Media */}
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="border-2 border-black p-2 bg-neutral-50 shadow-[1px_1px_0px_#000000]">
-              <div className="text-[9px] uppercase font-bold text-neutral-500">Calcos Hechos</div>
-              <div className="text-base font-black tabular-nums flex items-center gap-1">
-                <Check className="w-3.5 h-3.5 stroke-[3]" />
-                {scores.length}
-              </div>
-            </div>
-            <div className="border-2 border-black p-2 bg-neutral-50 shadow-[1px_1px_0px_#000000]">
-              <div className="text-[9px] uppercase font-bold text-neutral-500">Nota Media</div>
-              <div className="text-base font-black tabular-nums">
-                {averageScore > 0 ? `${averageScore}%` : '-'}
-              </div>
-            </div>
-          </div>
-
-          {/* Racha & Desviación Media */}
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="border-2 border-black p-2 bg-neutral-50 shadow-[1px_1px_0px_#000000]">
-              <div className="text-[9px] uppercase font-bold text-neutral-500 flex items-center gap-0.5">
-                <Flame className="w-3 h-3 text-black fill-black" />
-                <span>Racha (≥75%)</span>
-              </div>
-              <div className="text-base font-black tabular-nums">{comboStreak}</div>
-            </div>
-            <div className="border-2 border-black p-2 bg-neutral-50 shadow-[1px_1px_0px_#000000]">
-              <div className="text-[9px] uppercase font-bold text-neutral-500">Desv. Media</div>
-              <div className="text-base font-black tabular-nums">
-                {averageDeviation > 0 ? `${averageDeviation}px` : '-'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* RÉCORDS HISTÓRICOS */}
-        <div className="border-2 border-black p-2 bg-neutral-50 text-[10px] space-y-1 shadow-[1px_1px_0px_#000000]">
-          <div className="font-bold text-neutral-700 uppercase pb-0.5 border-b border-neutral-200">
-            Mejores Récords:
-          </div>
-          <div className="flex justify-between">
-            <span className="text-neutral-500">Mejor Racha:</span>
-            <span className="font-bold">{Math.max(savedRecords.bestStreak, bestStreak)} seguidos</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-neutral-500">Mejor Calco:</span>
-            <span className="font-bold">{Math.max(savedRecords.bestScore, maxScore)}%</span>
-          </div>
-        </div>
-
-        {/* INSTRUCCIÓN DEL BUCLE RÁPIDO */}
-        <div className="p-2 bg-neutral-50 border border-black text-[10px] text-neutral-600 leading-snug space-y-1">
-          <div className="font-bold text-black uppercase flex items-center gap-1">
-            <Zap className="w-3 h-3 text-black stroke-[2.5]" />
-            <span>Mecánica de Mutación:</span>
-          </div>
-          <p>
-            Traza sobre la línea fantasma. Tu calco se evalúa de inmediato y <strong>se convierte en el nuevo fantasma</strong> para trazar de nuevo sin pausas.
-          </p>
-        </div>
-
-        {/* BOTONES DE ACCIÓN: FINALIZAR Y REINICIAR */}
-        <div className="pt-2 mt-auto space-y-1.5">
-          <button
-            type="button"
-            onClick={finishGame}
-            className="w-full btn-ink py-2 px-3 text-xs font-bold uppercase flex items-center justify-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] hover:bg-neutral-900"
-            title="Finalizar partida y ver el resumen completo de estadísticas"
-          >
-            <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Finalizar Partida</span>
-          </button>
-
+          {/* Reiniciar */}
           <button
             type="button"
             onClick={() => restartGame(selectedPreset)}
-            className="w-full btn-ink-outline py-1.5 px-3 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100"
+            className="btn-ink-outline px-2 py-1 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-[1px_1px_0px_#000000] whitespace-nowrap"
             title="Reiniciar y comenzar de nuevo el fantasma"
           >
-            <RotateCcw className="w-3 h-3" />
-            <span>Reiniciar Fantasma</span>
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline text-[11px]">Reiniciar</span>
           </button>
-        </div>
-        </div>
-      </aside>
 
-      {/* 2. ÁREA CENTRAL: LIENZO 100% CENTRADO Y SIN SCROLL */}
-      <div className="flex-1 w-full flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden min-h-0 relative z-10">
-        <div className="relative flex items-center justify-center select-none touch-none max-w-full">
-          {/* Banner de Feedback instantáneo */}
-          {flashMessage && (
-            <div
-              className={`absolute top-3 z-30 px-3 py-1.5 font-mono text-xs font-bold border-2 shadow-[3px_3px_0px_#000000] animate-bounce ${
-                flashMessage.positive
-                  ? 'bg-black text-white border-white'
-                  : 'bg-neutral-800 text-white border-white'
-              }`}
+          {/* Finalizar Partida */}
+          {gameState === 'playing' && (
+            <button
+              type="button"
+              onClick={finishGame}
+              className="btn-ink px-3 py-1 text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000] whitespace-nowrap"
+              title="Finalizar partida y ver el resumen de estadísticas"
             >
-              {flashMessage.text}
-            </div>
+              <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Finalizar</span>
+            </button>
           )}
-
-          {/* Modal de Fin de Partida */}
-          {gameState === 'gameover' && (
-            <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 border-2 border-black z-30 text-center font-mono animate-fade-in select-none">
-              <Trophy className="w-12 h-12 text-black mb-2 animate-bounce stroke-[2.5]" />
-              <h3 className="text-2xl font-bold font-display uppercase tracking-tight">
-                ¡Partida Finalizada!
-              </h3>
-              <p className="text-xs text-neutral-600 mt-1 max-w-sm">
-                Has completado tu sesión de entrenamiento de memoria muscular y sincronía motriz.
-              </p>
-
-              {/* TABLA DE RESULTADOS */}
-              <div className="my-4 p-3.5 border-2 border-black bg-neutral-50 w-72 space-y-2 text-xs shadow-[3px_3px_0px_#000000]">
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Calcos Realizados:</span>
-                  <span className="font-bold text-sm bg-black text-white px-1.5 py-0.2">
-                    {scores.length} trazos
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Nota Media:</span>
-                  <span className="font-bold text-sm">{averageScore}%</span>
-                </div>
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Mejor Calco:</span>
-                  <span className="font-bold text-sm">{maxScore}%</span>
-                </div>
-                <div className="flex justify-between items-center pb-1 border-b border-neutral-300">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Racha Máxima:</span>
-                  <span className="font-bold text-sm">{Math.max(bestStreak, comboStreak)} seguidos</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-neutral-500 font-bold uppercase text-[10px]">Desviación Media:</span>
-                  <span className="font-bold text-sm">{averageDeviation}px</span>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => restartGame(selectedPreset)}
-                  className="btn-ink px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000]"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Jugar de Nuevo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onExit}
-                  className="btn-ink-outline px-4 py-2 text-xs uppercase font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
-                >
-                  <Undo2 className="w-3.5 h-3.5" />
-                  <span>Volver a Minijuegos</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* LIENZO: PROPORCIÓN EXACTA 600x540 */}
-          <canvas
-            ref={canvasRef}
-            width={600}
-            height={540}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className="border-2 border-black bg-white shadow-[4px_4px_0px_#000000] cursor-crosshair touch-none select-none max-w-full"
-            style={{
-              width: 'min(100%, min(600px, calc((100vh - 165px) * (600 / 540))))',
-              height: 'auto',
-              aspectRatio: '600 / 540',
-            }}
-          />
         </div>
-
-        {/* FEEDBACK DEL ÚLTIMO CALCO AL PIE DEL LIENZO */}
-        {lastEval && gameState === 'playing' && (
-          <div className="mt-2 w-full max-w-xl p-2 border-2 border-black bg-white shadow-[2px_2px_0px_#000000] font-mono text-xs flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span
-                className={`px-2 py-0.5 font-bold border border-black ${
-                  lastEval.perfect
-                    ? 'bg-black text-white'
-                    : lastEval.passed
-                    ? 'bg-neutral-100 text-black'
-                    : 'bg-neutral-200 text-black'
-                }`}
-              >
-                {lastEval.passed ? '✓' : '✗'} {lastEval.score}%
-              </span>
-              <span className="text-[11px] text-neutral-600 font-sans">
-                Desviación: <strong>{lastEval.avgDistPx}px</strong> · Longitud: <strong>{lastEval.lengthScore}%</strong>
-              </span>
-            </div>
-
-            <span className="text-[10px] text-neutral-500 font-mono">
-              {lastEval.title}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );

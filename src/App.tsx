@@ -1903,6 +1903,7 @@ export function App() {
                       setTimeout(() => setAvatarMood('neutral'), 3000);
                     }}
                     onDrawingStateChange={setIsUserDrawing}
+                    onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
                   />
                 ) : (
                   <StrokeRushMinigame
@@ -1915,6 +1916,7 @@ export function App() {
                       setTimeout(() => setAvatarMood('neutral'), 3000);
                     }}
                     onDrawingStateChange={setIsUserDrawing}
+                    onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
                   />
                 )
               ) : activeNode?.isCalisthenics ? (
