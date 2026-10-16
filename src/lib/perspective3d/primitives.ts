@@ -97,9 +97,11 @@ export function isTangentCurve(curve: { id: string; label: string; isTangent?: b
     id.includes('tangent') ||
     id.includes('silhouette') ||
     id.includes('envelope') ||
+    id.includes('dome') ||
     label.includes('tangente') ||
     label.includes('tangencial') ||
-    label.includes('contorno lateral')
+    label.includes('contorno lateral') ||
+    label.includes('cúpula')
   );
 }
 
@@ -713,14 +715,42 @@ export function createCapsulePrimitive(
     upperRing.push(v3(R * Math.cos(th), halfCyl, R * Math.sin(th)));
   }
 
-  // Cúpula semiesférica superior: arco de silueta sobre el polo norte
+  // Cúpula semiesférica superior: silueta tangencial exacta de la esfera en perspectiva
+  // El contorno visual de la semiesfera coincide exactamente con el círculo de contacto tangente
+  // desde el punto de vista de la cámara, conectando suavemente tLeft y tRight en Y = +halfCyl.
+  const C = v3(0, halfCyl, 0);
+  const D = vSub(camera.eye, C);
+  const d = Math.max(0.001, vLen(D));
+  const dNorm = vNorm(D);
+  const h = (R * R) / d;
+  const rContact = R * Math.sqrt(Math.max(0, 1 - (R * R) / (d * d)));
+  const contactCenter = vAdd(C, vScale(dNorm, h));
+
+  const uAxis = vNorm(vSub(tLeft, contactCenter));
+  const vAxis = vNorm(vCross(dNorm, uAxis));
+
+  const rRight = vSub(tRight, contactCenter);
+  const cosA = Math.max(-1, Math.min(1, vDot(rRight, uAxis) / Math.max(0.0001, rContact)));
+  const sinA = Math.max(-1, Math.min(1, vDot(rRight, vAxis) / Math.max(0.0001, rContact)));
+  const alphaRight = Math.atan2(sinA, cosA);
+
+  const midAlpha1 = alphaRight / 2;
+  const midAlpha2 = alphaRight > 0 ? (alphaRight - 2 * Math.PI) / 2 : (alphaRight + 2 * Math.PI) / 2;
+
+  const ptMid1 = vAdd(contactCenter, vAdd(vScale(uAxis, rContact * Math.cos(midAlpha1)), vScale(vAxis, rContact * Math.sin(midAlpha1))));
+  const ptMid2 = vAdd(contactCenter, vAdd(vScale(uAxis, rContact * Math.cos(midAlpha2)), vScale(vAxis, rContact * Math.sin(midAlpha2))));
+
+  // Elegir el arco que pasa por la cima (polo superior, mayor Y en el espacio 3D)
+  const useArc1 = ptMid1.y > ptMid2.y;
+  const targetAlpha = useArc1 ? alphaRight : (alphaRight > 0 ? alphaRight - 2 * Math.PI : alphaRight + 2 * Math.PI);
+
   const upperDomeArc: Vector3D[] = [];
-  const domeSegs = 24;
+  const domeSegs = 36;
   for (let i = 0; i <= domeSegs; i++) {
     const t = i / domeSegs;
-    const arcX = tLeft.x * (1 - t) + tRight.x * t;
-    const arcZ = tLeft.z * (1 - t) + tRight.z * t;
-    upperDomeArc.push(v3(arcX, halfCyl + R * Math.sin(t * Math.PI), arcZ));
+    const a = t * targetAlpha;
+    const pt = vAdd(contactCenter, vAdd(vScale(uAxis, rContact * Math.cos(a)), vScale(vAxis, rContact * Math.sin(a))));
+    upperDomeArc.push(pt);
   }
 
   const anchorCurves: CurveSegment2D[] = [
@@ -731,7 +761,7 @@ export function createCapsulePrimitive(
 
   const targetCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(upperRing, viewProj, W, H, 'capsule-upper-ring', 'Anillo Divisor de Construcción', false, 'solid', 'construction'),
-    sample3DCurveTo2D(upperDomeArc, viewProj, W, H, 'capsule-upper-dome', 'Cúpula Semiesférica Superior', false, 'solid', 'form'),
+    sample3DCurveTo2D(upperDomeArc, viewProj, W, H, 'capsule-upper-dome', 'Silueta Tangencial de la Cúpula', false, 'solid', 'form', true),
     sample3DCurveTo2D(leftSide, viewProj, W, H, 'capsule-left', 'Lateral Tangente Izquierdo', false, 'solid', 'form', true),
     sample3DCurveTo2D(rightSide, viewProj, W, H, 'capsule-right', 'Lateral Tangente Derecho', false, 'solid', 'form', true),
   ];
@@ -739,8 +769,8 @@ export function createCapsulePrimitive(
   const previewModel3D: WireframeModel3D = {
     vertices: [bLeft, bRight, tLeft, tRight],
     edges: [],
-    rings: [lowerRing, upperRing, upperDomeArc, heightAxis],
-    tangentRings: [leftSide, rightSide],
+    rings: [lowerRing, upperRing, heightAxis],
+    tangentRings: [leftSide, rightSide, upperDomeArc],
   };
 
   return { anchorCurves, targetCurves, previewModel3D };
