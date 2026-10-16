@@ -242,7 +242,7 @@ export function createSpherePrimitive(
   }
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(silhouette3D, viewProj, W, H, 'silhouette', 'Silueta Exterior Tangencial', false, 'solid', 'form'),
+    sample3DCurveTo2D(silhouette3D, viewProj, W, H, 'silhouette', 'Silueta Exterior Tangencial', false, 'solid', 'form', true),
     sample3DCurveTo2D(frontMeridianXY.length > 1 ? frontMeridianXY : fullMeridianXY, viewProj, W, H, 'meridian-1', 'Meridiano de Construcción XY', false, 'solid', 'construction'),
     sample3DCurveTo2D(frontMeridianYZ.length > 1 ? frontMeridianYZ : fullMeridianYZ, viewProj, W, H, 'meridian-2', 'Meridiano de Construcción YZ', false, 'solid', 'construction'),
   ];
@@ -341,8 +341,8 @@ export function createRingPrimitive(
   });
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(upperEnvelope3D, viewProj, W, H, 'envelope-upper', 'Silueta Tangencial Superior', false, 'solid', 'form'),
-    sample3DCurveTo2D(lowerEnvelope3D, viewProj, W, H, 'envelope-lower', 'Silueta Tangencial Inferior', false, 'solid', 'form'),
+    sample3DCurveTo2D(upperEnvelope3D, viewProj, W, H, 'envelope-upper', 'Silueta Tangencial Superior', false, 'solid', 'form', true),
+    sample3DCurveTo2D(lowerEnvelope3D, viewProj, W, H, 'envelope-lower', 'Silueta Tangencial Inferior', false, 'solid', 'form', true),
     ...crossSections.map((cs, idx) =>
       sample3DCurveTo2D(cs, viewProj, W, H, `cross-${idx}`, `Sección de Construcción ${idx + 1}`, false, 'solid', 'construction')
     ),
@@ -494,8 +494,8 @@ export function createCylinderPrimitive(
 
   const targetCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(topRing, viewProj, W, H, 'top-ellipse', 'Elipse Superior', false, 'solid', 'form'),
-    sample3DCurveTo2D(leftSide, viewProj, W, H, 'left-side', 'Contorno Lateral Izquierdo', false, 'solid', 'form'),
-    sample3DCurveTo2D(rightSide, viewProj, W, H, 'right-side', 'Contorno Lateral Derecho', false, 'solid', 'form'),
+    sample3DCurveTo2D(leftSide, viewProj, W, H, 'left-side', 'Contorno Lateral Tangente Izquierdo', false, 'solid', 'form', true),
+    sample3DCurveTo2D(rightSide, viewProj, W, H, 'right-side', 'Contorno Lateral Tangente Derecho', false, 'solid', 'form', true),
   ];
 
   const previewModel3D: WireframeModel3D = {
@@ -575,8 +575,8 @@ export function createConePrimitive(
   ];
 
   const targetCurves: CurveSegment2D[] = [
-    sample3DCurveTo2D(leftSlant3D, viewProj, W, H, 'left-slant', 'Arista Tangente Izquierda', false, 'solid', 'form'),
-    sample3DCurveTo2D(rightSlant3D, viewProj, W, H, 'right-slant', 'Arista Tangente Derecha', false, 'solid', 'form'),
+    sample3DCurveTo2D(leftSlant3D, viewProj, W, H, 'left-slant', 'Arista Tangente Izquierda', false, 'solid', 'form', true),
+    sample3DCurveTo2D(rightSlant3D, viewProj, W, H, 'right-slant', 'Arista Tangente Derecha', false, 'solid', 'form', true),
   ];
 
   const previewModel3D: WireframeModel3D = {
@@ -732,8 +732,8 @@ export function createCapsulePrimitive(
   const targetCurves: CurveSegment2D[] = [
     sample3DCurveTo2D(upperRing, viewProj, W, H, 'capsule-upper-ring', 'Anillo Divisor de Construcción', false, 'solid', 'construction'),
     sample3DCurveTo2D(upperDomeArc, viewProj, W, H, 'capsule-upper-dome', 'Cúpula Semiesférica Superior', false, 'solid', 'form'),
-    sample3DCurveTo2D(leftSide, viewProj, W, H, 'capsule-left', 'Lateral Tangente Izquierdo', false, 'solid', 'form'),
-    sample3DCurveTo2D(rightSide, viewProj, W, H, 'capsule-right', 'Lateral Tangente Derecho', false, 'solid', 'form'),
+    sample3DCurveTo2D(leftSide, viewProj, W, H, 'capsule-left', 'Lateral Tangente Izquierdo', false, 'solid', 'form', true),
+    sample3DCurveTo2D(rightSide, viewProj, W, H, 'capsule-right', 'Lateral Tangente Derecho', false, 'solid', 'form', true),
   ];
 
   const previewModel3D: WireframeModel3D = {

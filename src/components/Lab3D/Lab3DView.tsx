@@ -240,9 +240,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
       const isTangent = isTangentCurve(curve);
       if (isTangent) {
-        ctx.strokeStyle = '#64748b'; // Gris pizarra técnico para tangentes
-        ctx.lineWidth = 2.0;
-        ctx.setLineDash([8, 3, 2, 3]); // Trazo cadena técnico
+        ctx.strokeStyle = '#94a3b8'; // Visiblemente gris (Slate-400)
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([16, 5, 2.5, 5]); // Trazo cadena largo diferenciado: 16px guión, 5px hueco, 2.5px punto, 5px hueco
       } else if (curve.style === 'faint') {
         ctx.strokeStyle = '#94a3b8'; // Mitad posterior tenue
         ctx.lineWidth = 1.4;
@@ -270,13 +270,13 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           const isTangent = isTangentCurve(tc);
           ctx.beginPath();
           if (isTangent) {
-            // Líneas tangentes: diferenciadas con trazo cadena y color más gris
-            ctx.strokeStyle = '#64748b'; // Gris pizarra técnico
+            // Líneas tangentes: diferenciadas con trazo cadena largo y color gris pizarra
+            ctx.strokeStyle = '#94a3b8'; // Visiblemente gris (Slate-400)
             ctx.lineWidth = 1.8;
-            ctx.setLineDash([8, 3, 2, 3]); // Trazo cadena: guión largo (8px), hueco (3px), punto (2px), hueco (3px)
+            ctx.setLineDash([16, 5, 2.5, 5]); // Trazo cadena largo diferenciado
           } else {
-            // Curvas y aristas estándar: línea de puntos gris
-            ctx.strokeStyle = '#94a3b8'; // Slate 400
+            // Curvas y aristas estándar: trazo de puntos más oscuro
+            ctx.strokeStyle = '#475569'; // Slate 600 más oscuro para contrastar con las tangentes
             ctx.lineWidth = 1.8;
             ctx.setLineDash([3, 5]);
           }
@@ -304,9 +304,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           if (tc.points.length < 2) return;
           const pts = tc.points;
           const isTangent = isTangentCurve(tc);
-          ctx.strokeStyle = isTangent ? '#64748b' : '#000000';
+          ctx.strokeStyle = isTangent ? '#94a3b8' : '#000000';
           ctx.lineWidth = isTangent ? 1.8 : 1.6;
-          ctx.setLineDash(isTangent ? [5, 2] : []);
+          ctx.setLineDash(isTangent ? [12, 4, 2, 4] : []);
 
           if (pts.length === 2) {
             // Segmento recto entre 2 vértices
@@ -449,10 +449,10 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
           ctx.beginPath();
           if (isTangent) {
-            // Líneas tangentes: trazo cadena (dash-dot) y visiblemente más gris (#64748b)
-            ctx.strokeStyle = '#64748b'; // Gris pizarra técnico claramente visible
-            ctx.lineWidth = 2.0;
-            ctx.setLineDash([8, 3, 2, 3]); // Trazo cadena: guión largo (8px) + hueco (3px) + punto (2px) + hueco (3px)
+            // Líneas tangentes: trazo cadena largo (dash-dot) y visiblemente más gris (#94a3b8)
+            ctx.strokeStyle = '#94a3b8'; // Slate-400 claramente gris técnico
+            ctx.lineWidth = 1.8;
+            ctx.setLineDash([16, 5, 2.5, 5]); // Trazo cadena largo diferenciado: 16px guión, 5px hueco, 2.5px punto, 5px hueco
           } else {
             // Curvas y aristas estándar de la forma: negro técnico discontinuo
             ctx.strokeStyle = '#000000';
@@ -858,9 +858,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                     : 'Activar Línea de Construcción (trazo fino, gris y discontinuo para encajar perspectiva sin penalizaciones).'
                 }
               >
-                <span className={`w-3.5 border-b-2 border-dashed ${strokeTool === 'construction' ? 'border-white' : 'border-neutral-800'}`} />
+                <span className={`w-3.5 border-b-2 ${strokeTool === 'construction' ? 'border-dashed border-white' : 'border-neutral-800'}`} />
                 <span className="text-[10px] uppercase tracking-wider font-mono">
-                  {strokeTool === 'construction' ? 'Construcción' : 'Línea Guía'}
+                  {strokeTool === 'construction' ? 'Construcción' : 'Tinta'}
                 </span>
               </button>
 
