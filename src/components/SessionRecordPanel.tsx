@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   SessionRecordItem,
+  MAX_SESSION_RECORDS,
   updateSessionRecordComment,
   deleteSessionRecord,
   clearSessionRecords,
@@ -21,6 +22,7 @@ import {
   Edit2,
   Radio,
   Info,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface SessionRecordPanelProps {
@@ -132,7 +134,7 @@ export const SessionRecordPanel: React.FC<SessionRecordPanelProps> = ({
                       isRecording ? 'bg-red-500 animate-pulse' : 'bg-neutral-400'
                     }`}
                   />
-                  {isRecording ? `REC (${totalExercises})` : 'PAUSADO'}
+                  {isRecording ? (totalExercises >= MAX_SESSION_RECORDS ? `REC (${totalExercises}/${MAX_SESSION_RECORDS} MÁX)` : `REC (${totalExercises})`) : 'PAUSADO'}
                 </span>
               </div>
               <span className="text-[10px] text-neutral-500 font-mono block">
@@ -213,11 +215,27 @@ export const SessionRecordPanel: React.FC<SessionRecordPanelProps> = ({
           </div>
         )}
 
-        {/* Nota informativa de no-persistencia al reiniciar */}
-        <div className="mt-2 text-[9px] font-mono text-neutral-500 flex items-center gap-1">
-          <Info className="w-3 h-3 shrink-0" />
-          <span>La sesión se limpia automáticamente si recargas la web sin exportar.</span>
+        {/* Nota informativa de límite y no-persistencia al reiniciar */}
+        <div className="mt-2 text-[9px] font-mono text-neutral-500 flex items-center justify-between gap-1 flex-wrap">
+          <div className="flex items-center gap-1">
+            <Info className="w-3 h-3 shrink-0" />
+            <span>La sesión se limpia automáticamente si recargas la web sin exportar.</span>
+          </div>
+          <span className="font-bold text-neutral-700 shrink-0">
+            {totalExercises}/{MAX_SESSION_RECORDS} máx
+          </span>
         </div>
+
+        {/* Banner de advertencia si se alcanza el máximo */}
+        {totalExercises >= MAX_SESSION_RECORDS && (
+          <div className="mt-2 bg-amber-50 border border-amber-600 text-amber-950 p-2 font-mono text-[10px] flex items-start gap-1.5 shadow-[1px_1px_0px_#b45309]">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold block">¡Límite máximo alcanzado ({MAX_SESSION_RECORDS} ejercicios)!</span>
+              <span>Los nuevos ejercicios reemplazarán a los más antiguos. Te recomendamos copiar o descargar tu sesión ahora.</span>
+            </div>
+          </div>
+        )}
 
         {/* Botones de Exportación Consolidada */}
         {totalExercises > 0 && (

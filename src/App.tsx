@@ -70,9 +70,11 @@ import {
 } from './lib/dailyChallenge';
 import {
   SessionRecordItem,
+  MAX_SESSION_RECORDS,
   addSessionRecord,
   updateSessionRecordComment,
 } from './lib/sessionRecorder';
+import { SessionRecordLimitModal } from './components/SessionRecordLimitModal';
 import { buildDebugReport } from './lib/debugReport';
 
 function GithubIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
@@ -250,10 +252,24 @@ export function App() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   // Visibilidad del modal flotante de Modo Récord
   const [isRecordModalOpen, setIsRecordModalOpen] = useState<boolean>(false);
+  // Visibilidad del modal de advertencia de límite de ejercicios alcanzado
+  const [isRecordLimitModalOpen, setIsRecordLimitModalOpen] = useState<boolean>(false);
+  const hasNotifiedRecordLimitRef = useRef<boolean>(false);
   // Registro de ejercicios de la sesión (Modo Récord) - 100% volátil en memoria
   const [sessionRecords, setSessionRecords] = useState<SessionRecordItem[]>([]);
   // Referencia al último ejercicio evaluado para poder guardarlo con comentario si el usuario activa REC a posteriori
   const lastEvaluatedRecordRef = useRef<SessionRecordItem | null>(null);
+
+  const recordExerciseItem = (record: SessionRecordItem) => {
+    setSessionRecords((prev) => {
+      const updated = addSessionRecord(record, prev);
+      if (updated.length >= MAX_SESSION_RECORDS && !hasNotifiedRecordLimitRef.current) {
+        hasNotifiedRecordLimitRef.current = true;
+        setIsRecordLimitModalOpen(true);
+      }
+      return updated;
+    });
+  };
 
   const handleUpdateLatestRecordComment = (comment: string) => {
     setSessionRecords((prev) => {
@@ -263,7 +279,7 @@ export function App() {
   };
 
   const handleRecordExercise = (record: SessionRecordItem) => {
-    setSessionRecords((prev) => addSessionRecord(record, prev));
+    recordExerciseItem(record);
   };
 
   const handleStartRecordingAndAddCurrent = (comment: string = '') => {
@@ -277,7 +293,7 @@ export function App() {
           ? `### NOTA DEL USUARIO:\n> ${trimmed}\n\n${lastEvaluatedRecordRef.current.reportMarkdown}`
           : lastEvaluatedRecordRef.current.reportMarkdown,
       };
-      setSessionRecords((prev) => addSessionRecord(recordToAdd, prev));
+      recordExerciseItem(recordToAdd);
     }
   };
 
@@ -704,7 +720,7 @@ export function App() {
     lastEvaluatedRecordRef.current = newRecord;
 
     if (isRecording) {
-      setSessionRecords((prev) => addSessionRecord(newRecord, prev));
+      recordExerciseItem(newRecord);
     }
 
     // 2. Si hay un reto diario activo, registrar la nota de esta línea
@@ -899,7 +915,7 @@ export function App() {
     lastEvaluatedRecordRef.current = newRecord;
 
     if (isRecording) {
-      setSessionRecords((prev) => addSessionRecord(newRecord, prev));
+      recordExerciseItem(newRecord);
     }
 
     // 2. Registrar puntuación en el reto diario activo si existe
@@ -2196,8 +2212,16 @@ export function App() {
             <div className="overflow-y-auto flex-1 p-2 sm:p-3">
               <SessionRecordPanel
                 records={sessionRecords}
-                onRecordsChange={setSessionRecords}
-                onClearRecords={() => setSessionRecords([])}
+                onRecordsChange={(newRecords) => {
+                  setSessionRecords(newRecords);
+                  if (newRecords.length < MAX_SESSION_RECORDS) {
+                    hasNotifiedRecordLimitRef.current = false;
+                  }
+                }}
+                onClearRecords={() => {
+                  setSessionRecords([]);
+                  hasNotifiedRecordLimitRef.current = false;
+                }}
                 isRecording={isRecording}
                 onToggleRecording={() => setIsRecording((prev) => !prev)}
                 onClose={() => setIsRecordModalOpen(false)}
@@ -2206,6 +2230,15 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* Modal de Advertencia de Límite de Grabación (Modo Récord) */}
+      <SessionRecordLimitModal
+        isOpen={isRecordLimitModalOpen}
+        onClose={() => setIsRecordLimitModalOpen(false)}
+        maxLimit={MAX_SESSION_RECORDS}
+        records={sessionRecords}
+        onOpenRecordPanel={() => setIsRecordModalOpen(true)}
+      />
     </div>
   );
 }

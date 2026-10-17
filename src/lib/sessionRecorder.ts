@@ -38,14 +38,16 @@ export function loadSessionRecords(): SessionRecordItem[] {
   return [];
 }
 
+export const MAX_SESSION_RECORDS = 500;
+
 /**
- * Añade un nuevo ejercicio al registro de la sesión en memoria (máximo 100 ejercicios recientes)
+ * Añade un nuevo ejercicio al registro de la sesión en memoria (máximo MAX_SESSION_RECORDS ejercicios recientes)
  */
 export function addSessionRecord(
   newRecord: SessionRecordItem,
   currentRecords: SessionRecordItem[]
 ): SessionRecordItem[] {
-  return [newRecord, ...currentRecords].slice(0, 100);
+  return [newRecord, ...currentRecords].slice(0, MAX_SESSION_RECORDS);
 }
 
 /**
