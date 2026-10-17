@@ -1968,8 +1968,6 @@ export function App() {
                     feedback={feedback}
                     onStrokesChange={setStrokes}
                     showSolution={showSolution}
-                    showUserDrawing={showUserStrokes}
-                    showParametricSolution={showSolution}
                     onValidate={handleValidate}
                     onNextCube={handleNextCubeOrProblem}
                     onDrawingStateChange={setIsUserDrawing}

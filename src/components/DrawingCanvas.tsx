@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { CubeChallenge, Point2D } from '../lib/geometry';
 import { UserStroke, ValidationFeedback, countDetectedAristas } from '../lib/validation';
-import { Undo2, Trash2, Check, ArrowRight, AlertTriangle, Clock, Copy, Download, X, Pen, Hand, Eye, EyeOff, FileText, PanelLeft, MessageSquare } from 'lucide-react';
+import { Undo2, Trash2, Check, ArrowRight, AlertTriangle, Clock, Copy, Download, X, Pen, Hand, Eye, FileText, PanelLeft, MessageSquare, Sparkles, PenTool } from 'lucide-react';
 import { buildDebugReport, copyReportToClipboard, downloadReportJson } from '../lib/debugReport';
 import { QuickCommentModal } from './QuickCommentModal';
 
@@ -195,19 +195,23 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
   const activePointerIdRef = useRef<number | null>(null);
   const activePointerTypeRef = useRef<string | null>(null);
 
-  // Visibilidad de trazos del usuario y solución paramétrica tras resolver el problema
-  const [internalShowUserDrawing, setInternalShowUserDrawing] = useState<boolean>(true);
-  const [internalShowParametricSolution, setInternalShowParametricSolution] = useState<boolean>(true);
+  // Modo de visión tras la evaluación: 'all' (ambos) | 'solution' (solo solución) | 'drawing' (solo mi dibujo)
+  const [visionMode, setVisionMode] = useState<'all' | 'solution' | 'drawing'>('all');
 
-  const showUserDrawing = externalShowUserDrawing !== undefined ? externalShowUserDrawing : internalShowUserDrawing;
-  const showParametricSolution = externalShowParametricSolution !== undefined ? externalShowParametricSolution : internalShowParametricSolution;
+  const showUserDrawing = externalShowUserDrawing !== undefined
+    ? externalShowUserDrawing
+    : (visionMode === 'all' || visionMode === 'drawing');
+  const showParametricSolution = externalShowParametricSolution !== undefined
+    ? externalShowParametricSolution
+    : (visionMode === 'all' || visionMode === 'solution');
 
-  const setShowUserDrawing = (val: boolean | ((prev: boolean) => boolean)) => {
-    setInternalShowUserDrawing(val);
-  };
-  const setShowParametricSolution = (val: boolean | ((prev: boolean) => boolean)) => {
-    setInternalShowParametricSolution(val);
-  };
+  const cycleVisionMode = useCallback(() => {
+    setVisionMode((prev) => {
+      if (prev === 'all') return 'solution';
+      if (prev === 'solution') return 'drawing';
+      return 'all';
+    });
+  }, []);
 
 
   // Estados para el reporte y diagnóstico del cubo con notas del usuario
@@ -248,8 +252,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
   useEffect(() => {
     if (feedback) {
       setTouchMode('scroll');
+      setVisionMode('all');
     } else {
       setTouchMode('draw');
+      setVisionMode('all');
     }
   }, [feedback]);
 
@@ -261,8 +267,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
     activePointerTypeRef.current = null;
     currentStrokeRef.current = [];
     setIsDrawing(false);
-    setShowUserDrawing(true);
-    setShowParametricSolution(true);
+    setVisionMode('all');
     setUserNote('');
     setCopiedReport(false);
     setDownloadedReport(false);
@@ -830,18 +835,21 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undoLastStroke();
-      } else if (feedback && e.key.toLowerCase() === 'd') {
+      } else if (feedback && e.key.toLowerCase() === 'v') {
         e.preventDefault();
-        setShowUserDrawing((prev) => !prev);
+        cycleVisionMode();
       } else if (feedback && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        setShowParametricSolution((prev) => !prev);
+        setVisionMode((prev) => (prev === 'solution' ? 'all' : 'solution'));
+      } else if (feedback && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setVisionMode((prev) => (prev === 'drawing' ? 'all' : 'drawing'));
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [feedback, onNextCube, onValidate, strokes]);
+  }, [feedback, onNextCube, onValidate, strokes, cycleVisionMode]);
 
   const getNormalizedCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -1175,29 +1183,30 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
                 {countDetectedAristas(strokes)}/{challenge.targetEdges.length} aristas
               </span>
 
-              {/* Ver/Ocultar Mi dibujo */}
+              {/* Botón único de 3 estados de visión: Ambos -> Solución -> Dibujo -> Ambos */}
               <button
                 type="button"
-                onClick={() => setShowUserDrawing((prev) => !prev)}
-                className={`p-1.5 text-xs font-bold border border-black cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
-                  showUserDrawing ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-400 line-through'
-                }`}
-                title={showUserDrawing ? 'Ocultar mi dibujo (D)' : 'Mostrar mi dibujo (D)'}
+                onClick={cycleVisionMode}
+                className="px-2.5 py-1 text-xs font-mono font-bold border border-black flex items-center gap-1.5 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] whitespace-nowrap bg-black text-white hover:bg-neutral-800"
+                title={
+                  visionMode === 'all'
+                    ? 'Visión: Ambos (Solución + Mi dibujo). Clic para ver solo solución (V)'
+                    : visionMode === 'solution'
+                    ? 'Visión: Solución (Mi dibujo oculto). Clic para ver solo mi dibujo (V)'
+                    : 'Visión: Mi Dibujo (Solución oculta). Clic para ver ambos (V)'
+                }
               >
-                {showUserDrawing ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              </button>
-
-              {/* Ver/Ocultar Solución */}
-              <button
-                type="button"
-                onClick={() => setShowParametricSolution((prev) => !prev)}
-                className={`px-2 py-1 text-xs font-bold border border-black flex items-center gap-1 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000] ${
-                  showParametricSolution ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                }`}
-                title={showParametricSolution ? 'Ocultar solución paramétrica (S)' : 'Mostrar solución paramétrica (S)'}
-              >
-                {showParametricSolution ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                <span className="hidden md:inline text-[10px]">Solución</span>
+                {visionMode === 'all' && <Eye className="w-3.5 h-3.5 stroke-[2.2]" />}
+                {visionMode === 'solution' && <Sparkles className="w-3.5 h-3.5 stroke-[2.2]" />}
+                {visionMode === 'drawing' && <PenTool className="w-3.5 h-3.5 stroke-[2.2]" />}
+                <span className="text-[10px] uppercase font-mono tracking-wider">
+                  <span className="hidden sm:inline">Visión: </span>
+                  {visionMode === 'all'
+                    ? 'Ambos'
+                    : visionMode === 'solution'
+                    ? 'Solución'
+                    : 'Dibujo'}
+                </span>
               </button>
 
               {/* Modo Récord */}
