@@ -239,6 +239,20 @@ export function generateCubeChallenge(
 
   // Vértices 3D del prisma rotado:
   const theta = (thetaDeg * Math.PI) / 180;
+
+  // Calibración de distancia focal (f) y distancia de cámara (D):
+  // Si tiene guía de horizonte (Bloque 2 en adelante) o es perspectiva cónica a 2 puntos,
+  // calibramos f analíticamente para que ambos puntos de fuga (VPL y VPR) caigan 100% VISIBLES
+  // dentro del lienzo con un margen técnico seguro sobre la línea de horizonte.
+  if (options.hasHorizonGuide || (mode !== 'gentle' && mode !== 'guided')) {
+    const marginVp = 45;
+    const maxFL = (cx - marginVp) * Math.tan(theta);
+    const maxFR = (canvasWidth - marginVp - cx) / Math.tan(theta);
+    f = Math.min(maxFL, maxFR) * 0.95;
+    // Calibramos la distancia de cámara D para mantener una escala óptima y cómoda de dibujo
+    D = 0.45 + f / 125;
+  }
+
   const Z0 = -0.45;
 
   const pFront = { x: 0, z: Z0 };

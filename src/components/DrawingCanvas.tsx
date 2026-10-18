@@ -144,7 +144,6 @@ function renderHorizonAndVanishingPoints(
   const hy = challenge.horizonY;
   const vpl = challenge.vanishingPointLeft;
   const vpr = challenge.vanishingPointRight;
-  const v = challenge.vertices2D;
 
   ctx.save();
 
@@ -165,44 +164,7 @@ function renderHorizonAndVanishingPoints(
   ctx.textBaseline = 'bottom';
   ctx.fillText('L.H. (HORIZONTE)', width / 2, hy - 4);
 
-  // 2. Líneas de fuga sutiles desde los puntos de fuga hacia las aristas clave del cubo
-  if (v && v[0] && v[1]) {
-    ctx.strokeStyle = '#E2E8F0'; // Slate-200 / gris muy tenue
-    ctx.lineWidth = 0.8;
-    ctx.setLineDash([3, 4]);
-
-    // Rayos hacia VPL
-    if (vpl) {
-      // Rayo a base frontal (v0)
-      ctx.beginPath();
-      ctx.moveTo(vpl.x, hy);
-      ctx.lineTo(v[0].x, v[0].y);
-      ctx.stroke();
-
-      // Rayo a coronación frontal (v1)
-      ctx.beginPath();
-      ctx.moveTo(vpl.x, hy);
-      ctx.lineTo(v[1].x, v[1].y);
-      ctx.stroke();
-    }
-
-    // Rayos hacia VPR
-    if (vpr) {
-      // Rayo a base frontal (v0)
-      ctx.beginPath();
-      ctx.moveTo(vpr.x, hy);
-      ctx.lineTo(v[0].x, v[0].y);
-      ctx.stroke();
-
-      // Rayo a coronación frontal (v1)
-      ctx.beginPath();
-      ctx.moveTo(vpr.x, hy);
-      ctx.lineTo(v[1].x, v[1].y);
-      ctx.stroke();
-    }
-  }
-
-  // 3. Puntos de Fuga (VPL y VPR)
+  // 2. Puntos de Fuga visibles sobre el horizonte (VPL y VPR)
   const drawVpMarker = (vp: Point2D, label: string, isLeft: boolean) => {
     const margin = 12;
     const isOnScreen = vp.x >= margin && vp.x <= width - margin;
@@ -214,24 +176,24 @@ function renderHorizonAndVanishingPoints(
       ctx.fillStyle = '#FFFFFF';
       ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.arc(vp.x, hy, 3.5, 0, Math.PI * 2);
+      ctx.arc(vp.x, hy, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
       // Pequeña cruz centrada
       ctx.beginPath();
-      ctx.moveTo(vp.x - 6, hy);
-      ctx.lineTo(vp.x + 6, hy);
-      ctx.moveTo(vp.x, hy - 6);
-      ctx.lineTo(vp.x, hy + 6);
+      ctx.moveTo(vp.x - 7, hy);
+      ctx.lineTo(vp.x + 7, hy);
+      ctx.moveTo(vp.x, hy - 7);
+      ctx.lineTo(vp.x, hy + 7);
       ctx.stroke();
 
       // Etiqueta encima del punto
       ctx.fillStyle = '#334155';
-      ctx.font = 'bold 9px monospace';
+      ctx.font = 'bold 9.5px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(label, vp.x, hy - 8);
+      ctx.fillText(label, vp.x, hy - 9);
     } else {
       // Indicador de borde si el punto de fuga cae fuera del marco del canvas
       const edgeX = isLeft ? 10 : width - 10;
