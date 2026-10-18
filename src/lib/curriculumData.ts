@@ -22,6 +22,7 @@ export interface LessonNode {
   boxType?: BoxType;
   viewpoint?: ViewpointMode;
   rotationAngle?: RotationAngleMode;
+  hasHeightGuide?: boolean;
 }
 
 export interface Unit {
@@ -531,15 +532,16 @@ export const MODULE_PARALLELEPIPEDS: ModuleTrack = {
     {
       id: 'unit-3',
       number: 3,
-      title: 'Tipologías & Proporciones (Monolitos & Losas)',
-      description: 'Domina cajas volumétricas con proporciones arquitectónicas y de diseño de producto.',
+      title: 'Tipologías, Alturas & Bloques Compuestos',
+      description: 'Domina torres con eje de cota, losas bajas, cierre de tapas y bloques compuestos con cubo adyacente.',
       bookChapter: 'Koos Eissen — Capítulo 6: Fast and Fearless & Proportion Control',
       guidebookContent: {
-        title: 'Proporciones Volumétricas en el Espacio',
+        title: 'Proporciones Volumétricas & Bloques Compuestos',
         axioms: [
-          'Un monolito o torre vertical (1:1:3) exige mantener el paralelismo y la verticalidad en alturas prolongadas.',
+          'Un monolito o torre vertical (1:1:3) incluye un eje de cota H para delimitar con exactitud su coronación.',
           'Una losa o plataforma horizontal (3:3:1) entrena el control de planos de apoyo amplios y escorzo horizontal.',
-          'Adapta mentalmente la escala antes del primer trazo para no deformar la caja.',
+          'En el cierre de tapa, une los 4 vértices superiores manteniendo la convergencia estricta hacia VPL y VPR.',
+          'En bloques compuestos (escalonados), el cubo secundario comparte el plano de suelo y la pared de unión del volumen principal.',
         ],
         diagramNotes: 'En cajas esbeltas, alinea la vertical central antes de proyectar las aristas de profundidad.',
       },
@@ -547,13 +549,14 @@ export const MODULE_PARALLELEPIPEDS: ModuleTrack = {
         {
           id: 'u3-n1',
           code: '3.1',
-          title: 'Torre Monolítica Vertical',
-          subtitle: 'Proporción esbelta 1:1:3 (Aristas verticales prominentes)',
+          title: 'Torre con Eje de Altura (H)',
+          subtitle: 'Proporción esbelta 1:1:3 guiada por eje de cota vertical',
           type: 'standard',
           difficulty: 'medium',
           perspectiveMode: 'normal',
           boxType: 'tower',
-          axesMode: 'none',
+          hasHeightGuide: true,
+          axesMode: 'height_axis',
           status: 'locked',
           xpReward: 45,
         },
@@ -573,19 +576,32 @@ export const MODULE_PARALLELEPIPEDS: ModuleTrack = {
         {
           id: 'u3-n3',
           code: '3.3',
-          title: 'Cajas Libres en Perspectiva Dinámica',
-          subtitle: 'Alternancia de proporciones y fugas aceleradas',
-          type: 'rush',
-          difficulty: 'hard',
-          perspectiveMode: 'dynamic',
-          boxType: 'dynamic',
+          title: 'Cierre de Tapa Superior',
+          subtitle: 'Estructura vertical dada: completa el techo en fuga exacta',
+          type: 'standard',
+          difficulty: 'medium',
+          perspectiveMode: 'normal',
+          boxType: 'missing_lid',
           axesMode: 'none',
           status: 'locked',
-          xpReward: 65,
+          xpReward: 55,
         },
         {
           id: 'u3-n4',
           code: '3.4',
+          title: 'Bloque Escalonado (Cubo Doble)',
+          subtitle: 'Cubo principal con cubo chico acoplado en el suelo lateral',
+          type: 'rush',
+          difficulty: 'hard',
+          perspectiveMode: 'normal',
+          boxType: 'step_block',
+          axesMode: 'none',
+          status: 'locked',
+          xpReward: 70,
+        },
+        {
+          id: 'u3-n5',
+          code: '3.5',
           title: 'Examen de Proporción Espacial',
           subtitle: 'Supera el reto de monolitos, losas y cajas libres con >70%',
           type: 'exam',

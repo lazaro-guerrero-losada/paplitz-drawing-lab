@@ -748,6 +748,7 @@ export async function processScannedSheet(
           isShadowLevel: lesson.isShadowLevel,
           hasGroundGrid: lesson.hasGroundGrid,
           boxType: lesson.boxType,
+          hasHeightGuide: lesson.hasHeightGuide,
           viewpoint: lesson.viewpoint,
           rotationAngle: lesson.rotationAngle,
         });

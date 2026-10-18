@@ -59,28 +59,36 @@ function renderGroundGrid(
   v0: Point2D,
   v2: Point2D,
   v4: Point2D,
-  horizonY: number
+  horizonY: number,
+  exactVPL?: Point2D,
+  exactVPR?: Point2D
 ) {
   ctx.save();
   // Limitar el suelo al área por debajo del horizonte
   ctx.beginPath();
-  ctx.rect(0, horizonY + 25, width, height - (horizonY + 25));
+  ctx.rect(0, horizonY + 8, width, height - (horizonY + 8));
   ctx.clip();
 
-  ctx.strokeStyle = '#E2E2E2';
-  ctx.lineWidth = 0.8;
+  ctx.strokeStyle = '#ECECEC'; // Gris papel tenue y elegante
+  ctx.lineWidth = 0.75;
   ctx.setLineDash([]);
 
   // Puntos de fuga en el horizonte
-  const dyL = v2.y - v0.y;
-  const dxL = v2.x - v0.x;
-  const tL = (horizonY - v0.y) / (dyL || -0.001);
-  const VPL = { x: v0.x + tL * dxL, y: horizonY };
+  let VPL = exactVPL;
+  if (!VPL) {
+    const dyL = v2.y - v0.y;
+    const dxL = v2.x - v0.x;
+    const tL = (horizonY - v0.y) / (dyL || -0.001);
+    VPL = { x: v0.x + tL * dxL, y: horizonY };
+  }
 
-  const dyR = v4.y - v0.y;
-  const dxR = v4.x - v0.x;
-  const tR = (horizonY - v0.y) / (dyR || -0.001);
-  const VPR = { x: v0.x + tR * dxR, y: horizonY };
+  let VPR = exactVPR;
+  if (!VPR) {
+    const dyR = v4.y - v0.y;
+    const dxR = v4.x - v0.x;
+    const tR = (horizonY - v0.y) / (dyR || -0.001);
+    VPR = { x: v0.x + tR * dxR, y: horizonY };
+  }
 
   const distR_to_V4 = Math.hypot(v4.x - v0.x, v4.y - v0.y);
   const totalDistR = Math.hypot(VPR.x - v0.x, VPR.y - v0.y) || 1;
@@ -340,7 +348,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
         challenge.vertices2D[0],
         challenge.vertices2D[2],
         challenge.vertices2D[4],
-        challenge.horizonY
+        challenge.horizonY,
+        challenge.vanishingPointLeft,
+        challenge.vanishingPointRight
       );
     }
 
@@ -662,6 +672,35 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
           ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
           ctx.fill();
         });
+      } else {
+        // Estructuras compuestas o abiertas (ej: missing_lid, step_block)
+        ctx.save();
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        challenge.givenEdges.forEach((edge) => {
+          const p1 = challenge.vertices2D[edge.start];
+          const p2 = challenge.vertices2D[edge.end];
+          if (p1 && p2) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        });
+
+        // Marcar vértices dados
+        challenge.givenFace.vertices.forEach((idx) => {
+          const p = challenge.vertices2D[idx];
+          if (p) {
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+        ctx.restore();
       }
 
       // 1.5. EJES DE AYUDA TÉCNICOS X, Y, Z (Finos, largos y rayados / discontinuos)
@@ -719,6 +758,49 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
         ctx.beginPath();
         ctx.arc(origin.x, origin.y, 3, 0, Math.PI * 2);
         ctx.fill();
+
+        ctx.restore();
+      }
+
+      // 1.6. GUÍA DE COTA DE ALTURA (Para torres y variaciones de altura)
+      if (challenge.heightGuide) {
+        const hg = challenge.heightGuide;
+        ctx.save();
+        ctx.strokeStyle = '#4B5563'; // gris técnico grafito
+        ctx.lineWidth = 1.0;
+        ctx.setLineDash([3, 3]);
+
+        const offsetSide = challenge.givenSide === 'left' ? 28 : -28;
+        const guideX = hg.x + offsetSide;
+
+        // Línea de cota vertical paralela
+        ctx.beginPath();
+        ctx.moveTo(guideX, hg.yBottom);
+        ctx.lineTo(guideX, hg.yTop);
+        ctx.stroke();
+
+        // Líneas auxiliares de referencia horizontales desde el cubo hasta la cota
+        ctx.beginPath();
+        ctx.moveTo(hg.x, hg.yTop);
+        ctx.lineTo(guideX + (offsetSide > 0 ? 6 : -6), hg.yTop);
+        ctx.moveTo(hg.x, hg.yBottom);
+        ctx.lineTo(guideX + (offsetSide > 0 ? 6 : -6), hg.yBottom);
+        ctx.stroke();
+
+        // Remates en los extremos de la cota
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(guideX, hg.yTop, 2.5, 0, Math.PI * 2);
+        ctx.arc(guideX, hg.yBottom, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Etiqueta técnica con cota
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = offsetSide > 0 ? 'left' : 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(hg.label, guideX + (offsetSide > 0 ? 7 : -7), (hg.yTop + hg.yBottom) / 2);
 
         ctx.restore();
       }

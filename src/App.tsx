@@ -347,6 +347,7 @@ export function App() {
     boxType: node.boxType,
     viewpoint: node.viewpoint,
     rotationAngle: node.rotationAngle,
+    hasHeightGuide: node.hasHeightGuide,
   });
 
   // Desafío de Cubo 3D actual
