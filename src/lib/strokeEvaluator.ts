@@ -286,11 +286,11 @@ export function calculateOpticalDensity(
 /**
  * Obtiene el umbral numérico de aprobación según la fase de motricidad activa:
  * Fase 1 (Precisión con guía): ≥80%
- * Fase 2 (Fluidez y ritmo): ≥83%
- * Fase 3 (Velocidad sin guía visual): ≥85%
+ * Fase 2 (Fluidez y ritmo): ≥80%
+ * Fase 3 (Velocidad sin guía visual): ≥82%
  */
 export function getPhasePassingThreshold(phase: 1 | 2 | 3 = 1): number {
-  return phase === 1 ? 80 : phase === 2 ? 83 : 85;
+  return phase === 1 ? 80 : phase === 2 ? 80 : 82;
 }
 
 /**

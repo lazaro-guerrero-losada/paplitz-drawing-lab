@@ -78,7 +78,19 @@ function createGroupedCalisthenicsNode(
 }
 
 function isCoreGuidedVariant(e: LabExerciseDef): boolean {
-  return e.singleStrokeConfig?.guideType !== 'points_only';
+  if (e.singleStrokeConfig?.guideType === 'points_only') return false;
+  // En direcciones horizontales y verticales puras (D5, D6, D7, D8),
+  // la versión 5 (total_random) es matemáticamente idéntica a la 4 (position_length)
+  // porque la rotación angular está bloqueada a 0°/90°.
+  // La excluimos para eliminar la repetición redundante.
+  const id = e.id || '';
+  if (
+    (id.startsWith('d5_') || id.startsWith('d6_') || id.startsWith('d7_') || id.startsWith('d8_')) &&
+    id.endsWith('_05')
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -103,7 +115,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'Mantén una presión constante de pluma durante todo el recorrido.',
           'Ajusta la postura antes de cada trazo para alinearte con la dirección solicitada.',
         ],
-        diagramNotes: 'Primero domina la dirección natural de izquierda a derecha antes de pasar a la inversa.',
+        diagramNotes: 'Domina los ejes ortogonales naturales (→ y ↑) antes de abordar los recorridos inversos (↓ y ←).',
       },
       nodes: [
         createGroupedCalisthenicsNode(
@@ -117,31 +129,31 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           25
         ),
         createGroupedCalisthenicsNode(
-          'cal_u1_d6',
+          'cal_u1_d7',
           'C1.2',
-          'Horizontales Inversas (←)',
-          'Recogida de derecha a izquierda con frenado seco en diana',
-          all.filter((e) => e.id?.startsWith('d6_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          'Verticales Ascendentes (↑)',
+          'Empuje vertical de abajo a arriba con alineación del antebrazo',
+          all.filter((e) => e.id?.startsWith('d7_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'easy',
           25
         ),
         createGroupedCalisthenicsNode(
-          'cal_u1_d7',
+          'cal_u1_d8',
           'C1.3',
-          'Verticales Ascendentes (↑)',
-          'Empuje vertical de abajo a arriba con alineación del antebrazo',
-          all.filter((e) => e.id?.startsWith('d7_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          'Verticales Descendentes (↓)',
+          'Tirón vertical hacia el cuerpo con parada milimétrica',
+          all.filter((e) => e.id?.startsWith('d8_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'medium',
           30
         ),
         createGroupedCalisthenicsNode(
-          'cal_u1_d8',
+          'cal_u1_d6',
           'C1.4',
-          'Verticales Descendentes (↓)',
-          'Tirón vertical hacia el cuerpo con parada milimétrica',
-          all.filter((e) => e.id?.startsWith('d8_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          'Horizontales Inversas (←)',
+          'Recogida de derecha a izquierda con frenado seco en diana',
+          all.filter((e) => e.id?.startsWith('d6_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'medium',
           30
