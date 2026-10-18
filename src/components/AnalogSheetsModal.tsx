@@ -39,6 +39,7 @@ const PreviewCell: React.FC<{ cellIdx: number; seed: number; lesson: LessonNode 
       hasGroundGrid: lesson.hasGroundGrid,
       boxType: lesson.boxType,
       hasHeightGuide: lesson.hasHeightGuide,
+      hasHorizonGuide: lesson.hasHorizonGuide,
       viewpoint: lesson.viewpoint,
       rotationAngle: lesson.rotationAngle,
     });
@@ -122,6 +123,19 @@ const PreviewCell: React.FC<{ cellIdx: number; seed: number; lesson: LessonNode 
                 </g>
               );
             })}
+
+          {/* Línea de horizonte técnica sutil */}
+          {challenge.hasHorizonGuide && (
+            <line
+              x1="10"
+              y1={cy + (challenge.horizonY - 150) * scale}
+              x2="290"
+              y2={cy + (challenge.horizonY - 150) * scale}
+              stroke="#CBD5E1"
+              strokeWidth="0.8"
+              strokeDasharray="4 3"
+            />
+          )}
 
           {/* Cara dada entintada o aristas dadas */}
           {challenge.givenFace.vertices.length === 4 ? (

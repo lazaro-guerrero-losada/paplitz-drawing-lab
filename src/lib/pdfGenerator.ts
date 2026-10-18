@@ -196,6 +196,7 @@ export function generateA4PracticeSheet(config: SheetConfig): void {
         hasGroundGrid: config.lesson?.hasGroundGrid,
         boxType: config.lesson?.boxType,
         hasHeightGuide: config.lesson?.hasHeightGuide,
+        hasHorizonGuide: config.lesson?.hasHorizonGuide,
         viewpoint: config.lesson?.viewpoint,
         rotationAngle: config.lesson?.rotationAngle,
       });
@@ -261,6 +262,16 @@ export function generateA4PracticeSheet(config: SheetConfig): void {
           doc.setLineDashPattern([1.4, 1.0], 0);
         });
 
+        doc.setLineDashPattern([], 0);
+      }
+
+      // Línea de horizonte técnica sutil (Bloque 2 en adelante)
+      if (challenge.hasHorizonGuide) {
+        const hy = centerY + (challenge.horizonY - 150) * scale;
+        doc.setLineWidth(0.2);
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineDashPattern([1.0, 1.0], 0);
+        doc.line(cellX + pad, hy, cellX + cellWidth - pad, hy);
         doc.setLineDashPattern([], 0);
       }
 
@@ -659,6 +670,7 @@ export async function generateCorrectionReportPDF(config: CorrectionPDFConfig): 
       hasGroundGrid: lesson.hasGroundGrid,
       boxType: lesson.boxType,
       hasHeightGuide: lesson.hasHeightGuide,
+      hasHorizonGuide: lesson.hasHorizonGuide,
       viewpoint: lesson.viewpoint,
       rotationAngle: lesson.rotationAngle,
     });

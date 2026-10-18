@@ -41,6 +41,7 @@ export interface CubeChallengeOptions {
   viewpoint?: ViewpointMode;
   rotationAngle?: RotationAngleMode;
   hasHeightGuide?: boolean;
+  hasHorizonGuide?: boolean;
 }
 
 export interface CoordinateAxis {
@@ -98,6 +99,7 @@ export interface CubeChallenge {
   viewpoint?: ViewpointMode;
   rotationAngle?: RotationAngleMode;
   heightGuide?: HeightGuide;
+  hasHorizonGuide?: boolean;
 }
 
 function pseudoRandom(seed: number): () => number {
@@ -650,6 +652,7 @@ export function generateCubeChallenge(
     viewpoint: rawViewpoint,
     rotationAngle: rawRotation,
     heightGuide,
+    hasHorizonGuide: options.hasHorizonGuide !== undefined ? options.hasHorizonGuide : false,
   };
 }
 

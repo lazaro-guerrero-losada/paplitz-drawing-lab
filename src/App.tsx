@@ -338,17 +338,22 @@ export function App() {
   const [guidebookUnit, setGuidebookUnit] = useState<Unit | null>(null);
   const [showAnalogModal, setShowAnalogModal] = useState(false);
 
-  const buildCubeOptions = (node: LessonNode): CubeChallengeOptions => ({
-    mode: node.perspectiveMode,
-    axesMode: node.axesMode,
-    forceSide: node.forceSide,
-    isShadowLevel: node.isShadowLevel,
-    hasGroundGrid: node.hasGroundGrid,
-    boxType: node.boxType,
-    viewpoint: node.viewpoint,
-    rotationAngle: node.rotationAngle,
-    hasHeightGuide: node.hasHeightGuide,
-  });
+  const buildCubeOptions = (node: LessonNode): CubeChallengeOptions => {
+    const unitNumber = parseInt(node.code.split('.')[0], 10) || 1;
+    const hasHorizonGuide = node.hasHorizonGuide !== undefined ? node.hasHorizonGuide : unitNumber >= 2;
+    return {
+      mode: node.perspectiveMode,
+      axesMode: node.axesMode,
+      forceSide: node.forceSide,
+      isShadowLevel: node.isShadowLevel,
+      hasGroundGrid: node.hasGroundGrid,
+      boxType: node.boxType,
+      viewpoint: node.viewpoint,
+      rotationAngle: node.rotationAngle,
+      hasHeightGuide: node.hasHeightGuide,
+      hasHorizonGuide,
+    };
+  };
 
   // Desafío de Cubo 3D actual
   const [challenge, setChallenge] = useState<CubeChallenge>(() => {

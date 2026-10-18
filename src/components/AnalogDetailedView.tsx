@@ -64,6 +64,7 @@ const DetailedMatrixCell: React.FC<{
       hasGroundGrid: lesson.hasGroundGrid,
       boxType: lesson.boxType,
       hasHeightGuide: lesson.hasHeightGuide,
+      hasHorizonGuide: lesson.hasHorizonGuide,
       viewpoint: lesson.viewpoint,
       rotationAngle: lesson.rotationAngle,
     });

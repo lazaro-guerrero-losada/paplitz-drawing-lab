@@ -131,6 +131,140 @@ function renderGroundGrid(
   ctx.restore();
 }
 
+/**
+ * Dibuja la línea de horizonte y los puntos de fuga con líneas sutiles
+ * (Activado a partir del Bloque 2 en adelante para guiar el dibujo del cubo)
+ */
+function renderHorizonAndVanishingPoints(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  _height: number,
+  challenge: CubeChallenge
+) {
+  const hy = challenge.horizonY;
+  const vpl = challenge.vanishingPointLeft;
+  const vpr = challenge.vanishingPointRight;
+  const v = challenge.vertices2D;
+
+  ctx.save();
+
+  // 1. Línea de horizonte técnica continua y sutil de borde a borde
+  ctx.strokeStyle = '#CBD5E1'; // Slate-300: sutil, técnico y limpio sobre papel
+  ctx.lineWidth = 1.0;
+  ctx.setLineDash([7, 5]);
+  ctx.beginPath();
+  ctx.moveTo(0, hy);
+  ctx.lineTo(width, hy);
+  ctx.stroke();
+
+  // Etiqueta sutil central de la Línea de Horizonte
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#94A3B8'; // Slate-400
+  ctx.font = 'bold 8.5px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('L.H. (HORIZONTE)', width / 2, hy - 4);
+
+  // 2. Líneas de fuga sutiles desde los puntos de fuga hacia las aristas clave del cubo
+  if (v && v[0] && v[1]) {
+    ctx.strokeStyle = '#E2E8F0'; // Slate-200 / gris muy tenue
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([3, 4]);
+
+    // Rayos hacia VPL
+    if (vpl) {
+      // Rayo a base frontal (v0)
+      ctx.beginPath();
+      ctx.moveTo(vpl.x, hy);
+      ctx.lineTo(v[0].x, v[0].y);
+      ctx.stroke();
+
+      // Rayo a coronación frontal (v1)
+      ctx.beginPath();
+      ctx.moveTo(vpl.x, hy);
+      ctx.lineTo(v[1].x, v[1].y);
+      ctx.stroke();
+    }
+
+    // Rayos hacia VPR
+    if (vpr) {
+      // Rayo a base frontal (v0)
+      ctx.beginPath();
+      ctx.moveTo(vpr.x, hy);
+      ctx.lineTo(v[0].x, v[0].y);
+      ctx.stroke();
+
+      // Rayo a coronación frontal (v1)
+      ctx.beginPath();
+      ctx.moveTo(vpr.x, hy);
+      ctx.lineTo(v[1].x, v[1].y);
+      ctx.stroke();
+    }
+  }
+
+  // 3. Puntos de Fuga (VPL y VPR)
+  const drawVpMarker = (vp: Point2D, label: string, isLeft: boolean) => {
+    const margin = 12;
+    const isOnScreen = vp.x >= margin && vp.x <= width - margin;
+
+    if (isOnScreen) {
+      // Marcador técnico visible dentro de la pantalla
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#475569';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(vp.x, hy, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Pequeña cruz centrada
+      ctx.beginPath();
+      ctx.moveTo(vp.x - 6, hy);
+      ctx.lineTo(vp.x + 6, hy);
+      ctx.moveTo(vp.x, hy - 6);
+      ctx.lineTo(vp.x, hy + 6);
+      ctx.stroke();
+
+      // Etiqueta encima del punto
+      ctx.fillStyle = '#334155';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(label, vp.x, hy - 8);
+    } else {
+      // Indicador de borde si el punto de fuga cae fuera del marco del canvas
+      const edgeX = isLeft ? 10 : width - 10;
+      const arrowDir = isLeft ? -1 : 1;
+
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#64748B';
+      ctx.beginPath();
+      ctx.moveTo(edgeX + arrowDir * 6, hy);
+      ctx.lineTo(edgeX - arrowDir * 4, hy - 4);
+      ctx.lineTo(edgeX - arrowDir * 4, hy + 4);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#64748B';
+      ctx.font = 'bold 8.5px monospace';
+      ctx.textAlign = isLeft ? 'left' : 'right';
+      ctx.textBaseline = 'bottom';
+      const textOffset = isLeft ? 15 : -15;
+      ctx.fillText(`${label} (${vp.x}px)`, edgeX + textOffset, hy - 3);
+    }
+  };
+
+  if (vpl) {
+    drawVpMarker(vpl, 'PF-I', true);
+  }
+  if (vpr) {
+    drawVpMarker(vpr, 'PF-D', false);
+  }
+
+  ctx.restore();
+}
+
 export interface DrawingCanvasRef {
   undo: () => void;
   clear: () => void;
@@ -354,22 +488,34 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
       );
     }
 
+    // Línea de horizonte y Puntos de Fuga técnicos sutiles (A partir del Bloque 2 en adelante)
+    if (challenge.hasHorizonGuide) {
+      renderHorizonAndVanishingPoints(
+        ctx,
+        width,
+        height,
+        challenge
+      );
+    }
+
     if (challenge.isShadowLevel && challenge.shadowData) {
       const { shadowPolygon, constructionRays, shadowVertices2D, light } = challenge.shadowData;
       const v = challenge.vertices2D;
 
       // 1. Si la solución está activa, dibujar en el suelo la proyección de sombra y los rayos
       if (showSolution && showParametricSolution) {
-        // Línea de horizonte técnica
-        ctx.save();
-        ctx.strokeStyle = '#D6D6D6';
-        ctx.setLineDash([4, 4]);
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, challenge.horizonY);
-        ctx.lineTo(width, challenge.horizonY);
-        ctx.stroke();
-        ctx.restore();
+        // Línea de horizonte técnica (solo si no se ha dibujado ya con la guía)
+        if (!challenge.hasHorizonGuide) {
+          ctx.save();
+          ctx.strokeStyle = '#D6D6D6';
+          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(0, challenge.horizonY);
+          ctx.lineTo(width, challenge.horizonY);
+          ctx.stroke();
+          ctx.restore();
+        }
 
         // Rayos de proyección proyectivos
         ctx.save();
