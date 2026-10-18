@@ -226,25 +226,57 @@ function renderHorizonAndVanishingPoints(
       ctx.textBaseline = 'middle';
       ctx.fillText(text, vp.x, badgeY + badgeH / 2 + 0.5);
     } else {
-      // Indicador de borde si el punto de fuga cae fuera del marco del canvas
-      const edgeX = isLeft ? 10 : width - 10;
+      // Indicador y punto de referencia en el borde si el punto de fuga cae fuera del marco
+      const edgeX = isLeft ? 12 : width - 12;
       const arrowDir = isLeft ? -1 : 1;
 
       ctx.setLineDash([]);
-      ctx.fillStyle = '#64748B';
+
+      // 1. Diana técnica de borde a la altura exacta del horizonte
+      ctx.strokeStyle = '#0F172A';
+      ctx.lineWidth = 1.4;
+      ctx.fillStyle = '#0F172A';
       ctx.beginPath();
-      ctx.moveTo(edgeX + arrowDir * 6, hy);
-      ctx.lineTo(edgeX - arrowDir * 4, hy - 4);
-      ctx.lineTo(edgeX - arrowDir * 4, hy + 4);
+      ctx.arc(edgeX, hy, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Centro blanco para definición
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(edgeX, hy, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Flecha de dirección hacia la fuga
+      ctx.fillStyle = '#0F172A';
+      ctx.beginPath();
+      ctx.moveTo(edgeX + arrowDir * 9, hy);
+      ctx.lineTo(edgeX + arrowDir * 2, hy - 4);
+      ctx.lineTo(edgeX + arrowDir * 2, hy + 4);
       ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = '#64748B';
-      ctx.font = 'bold 8.5px monospace';
-      ctx.textAlign = isLeft ? 'left' : 'right';
-      ctx.textBaseline = 'bottom';
-      const textOffset = isLeft ? 15 : -15;
-      ctx.fillText(`${label} (${vp.x}px)`, edgeX + textOffset, hy - 3);
+      // Placa / Badge técnico en el borde
+      const badgeText = isLeft ? `← ${label}` : `${label} →`;
+      ctx.font = 'bold 9px monospace';
+      const bWidth = ctx.measureText(badgeText).width;
+      const bPad = 4;
+      const bH = 13;
+      const bX = isLeft ? edgeX + 10 : edgeX - 10 - bWidth - bPad * 2;
+      let bY = hy - bH / 2;
+
+      ctx.fillStyle = '#0F172A';
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(bX, bY, bWidth + bPad * 2, bH, 2.5);
+      } else {
+        ctx.rect(bX, bY, bWidth + bPad * 2, bH);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(badgeText, bX + (bWidth + bPad * 2) / 2, bY + bH / 2 + 0.5);
     }
   };
 
@@ -1222,7 +1254,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
       <div
         className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
         style={{
-          width: 'min(calc(100% - 130px), 600px, calc((100dvh - 180px) * (600 / 540)))',
+          width: 'min(calc(100% - 130px), 760px, calc((100dvh - 170px) * (600 / 540)))',
         }}
       >
         {/* A la izquierda del cubo (por donde está ahora): NIVEL, SEMILLA Y MODO TÁCTIL EN UNA SOLA TIRA */}
@@ -1306,11 +1338,11 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>((p
         )}
       </div>
 
-      {/* CONTENEDOR ANCLADO AL DIBUJO (Mantiene aspecto exacto 600x540 sin elementos flotantes en medio) */}
+      {/* CONTENEDOR ANCLADO AL DIBUJO (Mantiene aspecto exacto 600x540 con escala adaptada) */}
       <div
-        className="relative aspect-[600/540] max-w-[min(calc(100%-24px),600px)] max-h-[calc(100%-125px)] flex items-center justify-center pointer-events-none"
+        className="relative aspect-[600/540] max-w-[min(calc(100%-24px),760px)] max-h-[calc(100%-125px)] flex items-center justify-center pointer-events-none"
         style={{
-          width: 'min(calc(100% - 24px), 600px, calc((100dvh - 180px) * (600 / 540)))',
+          width: 'min(calc(100% - 24px), 760px, calc((100dvh - 170px) * (600 / 540)))',
           height: 'auto',
           aspectRatio: '600 / 540',
         }}

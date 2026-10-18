@@ -249,8 +249,8 @@ export function generateCubeChallenge(
     const maxFL = (cx - marginVp) * Math.tan(theta);
     const maxFR = (canvasWidth - marginVp - cx) / Math.tan(theta);
     f = Math.min(maxFL, maxFR) * 0.95;
-    // Calibramos la distancia de cámara D para mantener una escala óptima y cómoda de dibujo
-    D = 0.45 + f / 125;
+    // Calibramos la distancia de cámara D para mantener una escala generosa y cómoda de dibujo
+    D = 0.45 + f / 200;
   }
 
   const Z0 = -0.45;
@@ -284,10 +284,10 @@ export function generateCubeChallenge(
   // Confinamiento seguro en lienzo: garantiza que todos los vértices y elementos visibles
   // se mantengan con márgenes confortables
   const safeBox: BoundingBox2D = {
-    left: 65,
-    right: canvasWidth - 65,
-    top: 45,
-    bottom: canvasHeight - 65,
+    left: 40,
+    right: canvasWidth - 40,
+    top: 35,
+    bottom: canvasHeight - 45,
   };
 
   const isHorizonVisible = options.hasHorizonGuide !== undefined ? options.hasHorizonGuide : false;
