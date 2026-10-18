@@ -285,12 +285,12 @@ export function calculateOpticalDensity(
 
 /**
  * Obtiene el umbral numérico de aprobación según la fase de motricidad activa:
- * Fase 1 (Precisión): ≥80%
- * Fase 2 (Fluidez): ≥85%
- * Fase 3 (Velocidad): ≥90%
+ * Fase 1 (Precisión con guía): ≥80%
+ * Fase 2 (Fluidez y ritmo): ≥83%
+ * Fase 3 (Velocidad sin guía visual): ≥85%
  */
 export function getPhasePassingThreshold(phase: 1 | 2 | 3 = 1): number {
-  return phase === 1 ? 80 : phase === 2 ? 85 : 90;
+  return phase === 1 ? 80 : phase === 2 ? 83 : 85;
 }
 
 /**
@@ -453,10 +453,10 @@ export function evaluateSingleStrokeSubmission(
     // Fase 1: Precisión pura de puntería y rectitud (umbral ≥80%)
     overallScore = geometricScore;
   } else if (activePhase === 2) {
-    // Fase 2: Fluidez (75% Geometría + 25% Fluidez cinemática, umbral ≥85%)
+    // Fase 2: Fluidez (75% Geometría + 25% Fluidez cinemática, umbral ≥83%)
     overallScore = Math.round(geometricScore * 0.75 + kinematics.fluencyScore * 0.25);
   } else {
-    // Fase 3: Velocidad Balística (80% Geometría + 20% Velocidad Balística, umbral ≥90%)
+    // Fase 3: Velocidad Balística Sin Guía Visual (80% Geometría + 20% Velocidad Balística, umbral ≥85%)
     const targetFastSpeed = Math.min(520, Math.max(340, Math.round(kinematics.userBaselineSpeedPxPerSec * 0.85)));
     const speedRatio = kinematics.avgSpeedPxPerSec / targetFastSpeed;
     const speedScore = Math.min(100, Math.round(Math.max(0, speedRatio * 100)));
@@ -464,18 +464,18 @@ export function evaluateSingleStrokeSubmission(
     overallScore = Math.round(geometricScore * 0.80 + speedScore * 0.20);
 
     // La velocidad no puede rescatar una geometría insuficiente para la Fase 3
-    if (geometricScore < 86) {
-      overallScore = Math.min(overallScore, 87);
+    if (geometricScore < 80) {
+      overallScore = Math.min(overallScore, 82);
     }
   }
 
   // Tolerancias máximas de anclaje según fase:
   // La diana visual tiene un centro de r=3.5px y un anillo exterior de R=7px.
-  // En Fase 1 (Precisión): tolerancia máxima de 14px (área de contacto directo con la diana).
+  // En Fase 1 (Precisión con guía): tolerancia máxima de 14px (área de contacto directo con la diana).
   // En Fase 2 (Fluidez): tolerancia máxima de 15px.
-  // En Fase 3 (Velocidad): tolerancia máxima de 17px (ligero margen por inercia balística rápida).
-  const maxStartErrAllowed = activePhase === 1 ? 14 : activePhase === 2 ? 15 : 17;
-  const maxEndErrAllowed = activePhase === 1 ? 14 : activePhase === 2 ? 15 : 17;
+  // En Fase 3 (Velocidad sin guía visual): tolerancia máxima de 19px (margen adaptativo por inercia balística rápida a ciegas).
+  const maxStartErrAllowed = activePhase === 1 ? 14 : activePhase === 2 ? 15 : 19;
+  const maxEndErrAllowed = activePhase === 1 ? 14 : activePhase === 2 ? 15 : 19;
 
   let failedGateReason: string | null = null;
   if (isReversed) {
@@ -560,12 +560,12 @@ export function evaluateSingleStrokeSubmission(
     } else if (activePhase === 2) {
       feedbackTitle = '¡Fase 2 Superada: Ritmo & Fluidez! 〰️';
       feedbackMessage = `Trazo continuo sin titubeos (Fluidez: ${kinematics.fluencyScore}%, ${kinematics.avgSpeedPxPerSec} px/s). Nota: ${overallScore}% (≥${targetThreshold}%).`;
-      tipMessage = '¡Gran soltura! Listo para la Fase 3: Disparo balístico a máxima velocidad.';
+      tipMessage = '¡Gran soltura! Listo para la Fase 3: Disparo balístico a ciegas sin guía visual.';
       avatarMood = 'success-stars';
     } else {
-      feedbackTitle = '¡Fase 3 Dominada: Velocidad Pura! ⚡';
-      feedbackMessage = `Trazo balístico magistral (${kinematics.avgSpeedPxPerSec} px/s, ${kinematics.durationMs}ms) con ${straightnessScore}% de rectitud. Nota: ${overallScore}% (≥${targetThreshold}%).`;
-      tipMessage = '¡Memoria muscular forjada! Tienes este ángulo dominado en todos los registros.';
+      feedbackTitle = '¡Fase 3 Dominada: Velocidad Sin Guía! ⚡';
+      feedbackMessage = `Trazo balístico magistral sin guía (${kinematics.avgSpeedPxPerSec} px/s, ${kinematics.durationMs}ms) con ${straightnessScore}% de rectitud. Nota: ${overallScore}% (≥${targetThreshold}%).`;
+      tipMessage = '¡Memoria muscular forjada! Dominas la trayectoria sin necesidad de línea de apoyo.';
       avatarMood = 'success-stars';
     }
   }

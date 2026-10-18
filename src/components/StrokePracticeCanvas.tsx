@@ -763,12 +763,14 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
         ctx.restore();
       }
 
-      // D. Líneas guía punteadas
-      if (!challenge.spacingTrackParams && challenge.guideLines && challenge.guideMode !== 'points_only') {
+      // D. Líneas guía punteadas (Andamiaje pedagógico: en Fase 3 se retira la guía completamente para el test sin guía)
+      const isGuideHiddenByPhase = currentPhase === 3;
+      if (!challenge.spacingTrackParams && challenge.guideLines && challenge.guideMode !== 'points_only' && !isGuideHiddenByPhase) {
         for (const line of challenge.guideLines) {
-          ctx.strokeStyle = line.dashed ? '#888888' : '#CCCCCC';
-          ctx.lineWidth = 1.5;
-          if (line.dashed) ctx.setLineDash([5, 5]);
+          // En Fase 2 la guía se atenúa para fomentar la anticipación mental
+          ctx.strokeStyle = currentPhase === 2 ? '#D8D8D8' : (line.dashed ? '#888888' : '#CCCCCC');
+          ctx.lineWidth = currentPhase === 2 ? 1.0 : 1.5;
+          if (line.dashed || currentPhase === 2) ctx.setLineDash([5, 5]);
           else ctx.setLineDash([]);
 
           ctx.beginPath();
@@ -779,11 +781,11 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
         }
       }
 
-      // E. SOLUCIÓN FANTASMA (Antes de empezar a dibujar)
-      if (challenge.guideMode !== 'points_only' && strokes.length === 0 && !isDrawing && challenge.ghostSolutionStrokes) {
+      // E. SOLUCIÓN FANTASMA (Visible antes de empezar a dibujar si no estamos en Fase 3 sin guía)
+      if (challenge.guideMode !== 'points_only' && !isGuideHiddenByPhase && strokes.length === 0 && !isDrawing && challenge.ghostSolutionStrokes) {
         ctx.save();
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+        ctx.strokeStyle = currentPhase === 2 ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.22)';
+        ctx.fillStyle = currentPhase === 2 ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.22)';
         ctx.lineWidth = 2.0;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -1103,7 +1105,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
       renderCanvas();
     };
 
-    const targetMasteryScore = currentPhase === 1 ? 80 : currentPhase === 2 ? 85 : 90;
+    const targetMasteryScore = currentPhase === 1 ? 80 : currentPhase === 2 ? 83 : 85;
     const isMasterySuccess = Boolean(
       evaluation && evaluation.passed && evaluation.phasePassed !== false && evaluation.overallScore >= targetMasteryScore
     );
@@ -1213,7 +1215,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                           ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
                           : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
                       }`}
-                      title={`Fase ${ph}: ${ph === 1 ? 'Precisión (extremos, ≥80%)' : ph === 2 ? 'Fluidez (velocidad constante, ≥85%)' : 'Velocidad (inercia ágil, ≥90%)'}`}
+                      title={`Fase ${ph}: ${ph === 1 ? 'Precisión (con guía, ≥80%)' : ph === 2 ? 'Fluidez (ritmo constante, ≥83%)' : 'Velocidad (sin guía visual, ≥85%)'}`}
                     >
                       {ph}
                     </button>
@@ -1294,12 +1296,14 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                   <h3 className="text-base sm:text-lg font-black font-display text-white tracking-tight uppercase">
                     {phaseTransitionNotice.isVersionAdvance
                       ? `VERSIÓN ${phaseTransitionNotice.toVersion}: FASE 1`
-                      : `FASE ${phaseTransitionNotice.toPhase}: ${phaseTransitionNotice.toPhase === 2 ? 'FLUIDEZ' : 'VELOCIDAD'}`}
+                      : `FASE ${phaseTransitionNotice.toPhase}: ${phaseTransitionNotice.toPhase === 2 ? 'FLUIDEZ' : 'VELOCIDAD (SIN GUÍA)'}`}
                   </h3>
                   <div className="text-[10px] sm:text-[11px] text-neutral-300 font-bold">
                     {phaseTransitionNotice.isVersionAdvance
                       ? `¡Versión ${phaseTransitionNotice.fromVersion}/${phaseTransitionNotice.totalVersions} dominada! Iniciando versión ${phaseTransitionNotice.toVersion}...`
-                      : `¡3/3 aciertos completados! Avanzando automáticamente...`}
+                      : phaseTransitionNotice.toPhase === 3
+                        ? '¡Retirada de guía visual! 3 aciertos balísticos (≥85%) para dominar.'
+                        : '¡3/3 aciertos completados! Avanzando a Fase 2 (Fluidez)...'}
                   </div>
                 </div>
 
@@ -1637,7 +1641,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
                         {evaluation.phasePassed ? 'Cumplida' : 'No alcanzada'}
                       </span>
                       <span className="text-[10px] text-neutral-400 block">
-                        {currentPhase === 1 ? 'Ritmo libre (≥80%)' : currentPhase === 2 ? 'Fluidez continua (≥85%)' : 'Velocidad ágil (≥90%)'}
+                        {currentPhase === 1 ? 'Ritmo libre con guía (≥80%)' : currentPhase === 2 ? 'Fluidez continua (≥83%)' : 'Velocidad sin guía (≥85%)'}
                       </span>
                     </div>
                   </div>

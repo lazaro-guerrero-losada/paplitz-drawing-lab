@@ -72,8 +72,12 @@ function createGroupedCalisthenicsNode(
   };
 }
 
+function isCoreGuidedVariant(e: LabExerciseDef): boolean {
+  return e.singleStrokeConfig?.guideType !== 'points_only';
+}
+
 /**
- * Construye las 5 Unidades Pedagógicas de Calistenia Agrupadas (18 Niveles con 237 Variantes Dinámicas)
+ * Construye las 5 Unidades Pedagógicas de Calistenia Agrupadas (Fading Scaffolding: Fase 3 es el test sin guía)
  */
 function buildCalisthenicsModuleUnits(): Unit[] {
   const all = ALL_SINGLE_STROKE_EXERCISES;
@@ -102,7 +106,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C1.1',
           'Horizontales Naturales (→)',
           'Deslizamiento de izquierda a derecha con control de inercia y longitud',
-          all.filter((e) => e.id?.startsWith('d5_')),
+          all.filter((e) => e.id?.startsWith('d5_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'easy',
           25
@@ -112,7 +116,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C1.2',
           'Horizontales Inversas (←)',
           'Recogida de derecha a izquierda con frenado seco en diana',
-          all.filter((e) => e.id?.startsWith('d6_')),
+          all.filter((e) => e.id?.startsWith('d6_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'easy',
           25
@@ -122,7 +126,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C1.3',
           'Verticales Ascendentes (↑)',
           'Empuje vertical de abajo a arriba con alineación del antebrazo',
-          all.filter((e) => e.id?.startsWith('d7_')),
+          all.filter((e) => e.id?.startsWith('d7_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'medium',
           30
@@ -132,7 +136,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C1.4',
           'Verticales Descendentes (↓)',
           'Tirón vertical hacia el cuerpo con parada milimétrica',
-          all.filter((e) => e.id?.startsWith('d8_')),
+          all.filter((e) => e.id?.startsWith('d8_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'medium',
           30
@@ -160,7 +164,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C2.1',
           'Diagonal Ascendente Natural (↗)',
           'Lanzamiento a 45°-60° de abajo-izquierda a arriba-derecha',
-          all.filter((e) => e.id?.startsWith('d1_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          all.filter((e) => e.id?.startsWith('d1_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'easy',
           30
@@ -170,7 +174,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C2.2',
           'Diagonal Inversa al Pecho (↙)',
           'Flexión de arriba-derecha a abajo-izquierda con muñeca libre',
-          all.filter((e) => e.id?.startsWith('d2_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          all.filter((e) => e.id?.startsWith('d2_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'medium',
           30
@@ -180,7 +184,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C2.3',
           'Diagonal Descendente Externa (↘)',
           'Empuje diagonal hacia afuera de arriba-izquierda a abajo-derecha',
-          all.filter((e) => e.id?.startsWith('d3_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          all.filter((e) => e.id?.startsWith('d3_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'medium',
           30
@@ -190,7 +194,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C2.4',
           'Diagonal de Empuje Superior (↖)',
           'Ascenso hacia la esquina superior izquierda de abajo-derecha',
-          all.filter((e) => e.id?.startsWith('d4_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          all.filter((e) => e.id?.startsWith('d4_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'medium',
           35
@@ -200,7 +204,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C2.5',
           'Aristas en Fuga Suave Derecha (↗ ~18°)',
           'Pendiente baja de perspectiva cónica hacia el punto de fuga derecho',
-          all.filter((e) => e.id?.startsWith('d9_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          all.filter((e) => e.id?.startsWith('d9_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'hard',
           40
@@ -210,7 +214,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C2.6',
           'Aristas en Fuga Suave Izquierda (↖ ~18°)',
           'Pendiente baja de perspectiva cónica hacia el punto de fuga izquierdo',
-          all.filter((e) => e.id?.startsWith('d10_') && e.singleStrokeConfig?.variationType !== 'multi_line'),
+          all.filter((e) => e.id?.startsWith('d10_') && isCoreGuidedVariant(e) && e.singleStrokeConfig?.variationType !== 'multi_line'),
           globalIndex++,
           'hard',
           40
@@ -238,7 +242,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C3.1',
           'Roseta Radial Divergente 360° (☼)',
           'Disparo de 8 y 12 radios regulares desde el centro hacia las dianas exteriores',
-          all.filter((e) => e.id?.startsWith('d11_')),
+          all.filter((e) => e.id?.startsWith('d11_') && isCoreGuidedVariant(e)),
           globalIndex++,
           'medium',
           40
@@ -248,7 +252,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C3.2',
           'Roseta Radial Convergente 360° (❂)',
           'Recogida de radios perimetrales hacia el núcleo central común',
-          all.filter((e) => e.id?.startsWith('d12_')),
+          all.filter((e) => e.id?.startsWith('d12_') && isCoreGuidedVariant(e)),
           globalIndex++,
           'medium',
           40
@@ -348,7 +352,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C5.1',
           'Control de Curvatura: Arcos en C (⌒)',
           'Arcos cóncavos y convexos de flecha suave, media y pronunciada',
-          all.filter((e) => e.id?.startsWith('cc_')),
+          all.filter((e) => e.id?.startsWith('cc_') && isCoreGuidedVariant(e)),
           globalIndex++,
           'medium',
           35
@@ -358,7 +362,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'C5.2',
           'Puntos de Inflexión: Ondas en S (∿)',
           'Transición de doble curvatura continua sin aristas vivas ni saltos',
-          all.filter((e) => e.id?.startsWith('cs_')),
+          all.filter((e) => e.id?.startsWith('cs_') && isCoreGuidedVariant(e)),
           globalIndex++,
           'hard',
           45
@@ -371,7 +375,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
 export const MODULE_CALISTHENICS: ModuleTrack = {
   id: 'module-calisthenics',
   name: 'Líneas, Trazos & Calistenia',
-  subtitle: '237 retos dinámicos de biomecánica: precisión, fluidez, velocidad y ritmo',
+  subtitle: 'Retos dinámicos de biomecánica: precisión, fluidez, velocidad y andamiaje sin guía',
   icon: 'pen-tool',
   units: buildCalisthenicsModuleUnits(),
 };

@@ -765,7 +765,7 @@ export function App() {
       return;
     }
 
-    const targetThreshold = currentPhase === 1 ? 80 : currentPhase === 2 ? 85 : 90;
+    const targetThreshold = currentPhase === 1 ? 80 : currentPhase === 2 ? 83 : 85;
 
     if (evalResult.passed && evalResult.phasePassed !== false && recordedScore >= targetThreshold) {
       setAvatarMood('success-stars');
@@ -858,8 +858,16 @@ export function App() {
       setAvatarMood('fail-spiral');
       setTimeout(() => setAvatarMood('neutral'), 3000);
 
-      // Reiniciar racha al fallar (sin toast intrusivo)
-      setMasteryStreaks((prev) => ({ ...prev, [activeNode.id]: 0 }));
+      // Racha resiliente: Si el tiro fue decente (nota respetable ≥65% o cerca del umbral, sin invertir dirección),
+      // solo se decrementa 1 punto de racha (ej. 2/3 pasa a 1/3) en lugar de un reset fulminante a 0/3.
+      // Si la nota fue muy baja (<65%) o trazo invertido, sí se resetea a 0.
+      setMasteryStreaks((prev) => {
+        const current = prev[activeNode.id] || 0;
+        if (current <= 0) return prev;
+        const isNearMiss = recordedScore >= Math.max(65, targetThreshold - 15) && !evalResult.directionWarning;
+        const nextStreak = isNearMiss ? Math.max(0, current - 1) : 0;
+        return { ...prev, [activeNode.id]: nextStreak };
+      });
     }
   };
 

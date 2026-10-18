@@ -798,12 +798,13 @@ export const StrokeLabView: React.FC<StrokeLabViewProps> = ({ onAwardXP }) => {
       ctx.restore();
     }
 
-    // F. Líneas de cota y carriles guía
-    if (!challenge.spacingTrackParams && showSolution && challenge.guideLines) {
+    // F. Líneas de cota y carriles guía (Andamiaje: en Fase 3 se retira la guía completamente)
+    const isGuideHiddenByPhase = currentPhase === 3;
+    if (!challenge.spacingTrackParams && showSolution && !isGuideHiddenByPhase && challenge.guideLines) {
       for (const line of challenge.guideLines) {
-        ctx.strokeStyle = line.dashed ? '#888888' : '#cccccc';
-        ctx.lineWidth = 1.5;
-        if (line.dashed) ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = currentPhase === 2 ? '#d8d8d8' : (line.dashed ? '#888888' : '#cccccc');
+        ctx.lineWidth = currentPhase === 2 ? 1.0 : 1.5;
+        if (line.dashed || currentPhase === 2) ctx.setLineDash([5, 5]);
         else ctx.setLineDash([]);
 
         ctx.beginPath();
@@ -814,9 +815,9 @@ export const StrokeLabView: React.FC<StrokeLabViewProps> = ({ onAwardXP }) => {
       }
     }
 
-    // G. SOLUCIÓN FANTASMA EN GRIS CON OPACIDAD (Visible antes de empezar a dibujar si showSolution está activo)
+    // G. SOLUCIÓN FANTASMA EN GRIS CON OPACIDAD (Visible antes de empezar a dibujar si showSolution está activo y no es Fase 3 sin guía)
     // Desaparece en cuanto el usuario toca el lienzo o tiene trazos, o si se desactiva Solución
-    if (showSolution && strokes.length === 0 && !isDrawing && challenge.ghostSolutionStrokes) {
+    if (showSolution && !isGuideHiddenByPhase && strokes.length === 0 && !isDrawing && challenge.ghostSolutionStrokes) {
       ctx.save();
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
       ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
@@ -1359,7 +1360,7 @@ export const StrokeLabView: React.FC<StrokeLabViewProps> = ({ onAwardXP }) => {
                   className={`py-1 text-[11px] font-mono font-bold border border-black cursor-pointer text-center transition-colors ${
                     currentPhase === 1 ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
                   }`}
-                  title="Fase 1: Precisión a ritmo libre"
+                  title="Fase 1: Precisión con guía (≥80%)"
                 >
                   1. Prec.
                 </button>
@@ -1368,7 +1369,7 @@ export const StrokeLabView: React.FC<StrokeLabViewProps> = ({ onAwardXP }) => {
                   className={`py-1 text-[11px] font-mono font-bold border border-black cursor-pointer text-center transition-colors ${
                     currentPhase === 2 ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
                   }`}
-                  title="Fase 2: Fluidez continua"
+                  title="Fase 2: Fluidez continua con guía atenuada (≥83%)"
                 >
                   2. Fluid.
                 </button>
@@ -1377,7 +1378,7 @@ export const StrokeLabView: React.FC<StrokeLabViewProps> = ({ onAwardXP }) => {
                   className={`py-1 text-[11px] font-mono font-bold border border-black cursor-pointer text-center transition-colors ${
                     currentPhase === 3 ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
                   }`}
-                  title="Fase 3: Disparo veloz"
+                  title="Fase 3: Disparo veloz sin guía visual (≥85%)"
                 >
                   3. Vel.
                 </button>
