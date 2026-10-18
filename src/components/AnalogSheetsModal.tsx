@@ -37,6 +37,9 @@ const PreviewCell: React.FC<{ cellIdx: number; seed: number; lesson: LessonNode 
       forceSide: lesson.forceSide,
       isShadowLevel: lesson.isShadowLevel,
       hasGroundGrid: lesson.hasGroundGrid,
+      boxType: lesson.boxType,
+      viewpoint: lesson.viewpoint,
+      rotationAngle: lesson.rotationAngle,
     });
   }, [cellSeed, lesson]);
 

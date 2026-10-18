@@ -9,7 +9,7 @@ import {
   ALL_SINGLE_STROKE_EXERCISES,
   StrokeEvaluation,
 } from './lib/strokeTypes';
-import { generateCubeChallenge, CubeChallenge } from './lib/geometry';
+import { generateCubeChallenge, CubeChallenge, CubeChallengeOptions } from './lib/geometry';
 import { validateCubeDrawing, ValidationFeedback, UserStroke, countDetectedAristas } from './lib/validation';
 import { DrawingCanvas, DrawingCanvasRef } from './components/DrawingCanvas';
 import { StrokePracticeCanvas, StrokePracticeCanvasRef } from './components/StrokePracticeCanvas';
@@ -338,16 +338,21 @@ export function App() {
   const [guidebookUnit, setGuidebookUnit] = useState<Unit | null>(null);
   const [showAnalogModal, setShowAnalogModal] = useState(false);
 
+  const buildCubeOptions = (node: LessonNode): CubeChallengeOptions => ({
+    mode: node.perspectiveMode,
+    axesMode: node.axesMode,
+    forceSide: node.forceSide,
+    isShadowLevel: node.isShadowLevel,
+    hasGroundGrid: node.hasGroundGrid,
+    boxType: node.boxType,
+    viewpoint: node.viewpoint,
+    rotationAngle: node.rotationAngle,
+  });
+
   // Desafío de Cubo 3D actual
   const [challenge, setChallenge] = useState<CubeChallenge>(() => {
     const initial = cubeUnits.flatMap((u) => u.nodes).find((n) => n.status === 'current') || cubeUnits[0].nodes[0];
-    return generateCubeChallenge(101, 600, 540, {
-      mode: initial.perspectiveMode,
-      axesMode: initial.axesMode,
-      forceSide: initial.forceSide,
-      isShadowLevel: initial.isShadowLevel,
-      hasGroundGrid: initial.hasGroundGrid,
-    });
+    return generateCubeChallenge(101, 600, 540, buildCubeOptions(initial));
   });
   const [strokes, setStrokes] = useState<UserStroke[]>([]);
   const [feedback, setFeedback] = useState<ValidationFeedback | null>(null);
@@ -481,13 +486,7 @@ export function App() {
     }
 
     setChallenge(
-      generateCubeChallenge(newSeed, 600, 540, {
-        mode: targetNode.perspectiveMode,
-        axesMode: targetNode.axesMode,
-        forceSide: targetNode.forceSide,
-        isShadowLevel: targetNode.isShadowLevel,
-        hasGroundGrid: targetNode.hasGroundGrid,
-      })
+      generateCubeChallenge(newSeed, 600, 540, buildCubeOptions(targetNode))
     );
     setFeedback(null);
     setShowSolution(false);
@@ -510,13 +509,7 @@ export function App() {
           setCalisthenicsSeed(nextProblem.seed);
         } else {
           setChallenge(
-            generateCubeChallenge(nextProblem.seed, 600, 540, {
-              mode: nextProblem.node.perspectiveMode,
-              axesMode: nextProblem.node.axesMode,
-              forceSide: nextProblem.node.forceSide,
-              isShadowLevel: nextProblem.node.isShadowLevel,
-              hasGroundGrid: nextProblem.node.hasGroundGrid,
-            })
+            generateCubeChallenge(nextProblem.seed, 600, 540, buildCubeOptions(nextProblem.node))
           );
         }
         setFeedback(null);
@@ -546,13 +539,7 @@ export function App() {
         setCalisthenicsSeed(firstProblem.seed);
       } else {
         setChallenge(
-          generateCubeChallenge(firstProblem.seed, 600, 540, {
-            mode: firstProblem.node.perspectiveMode,
-            axesMode: firstProblem.node.axesMode,
-            forceSide: firstProblem.node.forceSide,
-            isShadowLevel: firstProblem.node.isShadowLevel,
-            hasGroundGrid: firstProblem.node.hasGroundGrid,
-          })
+          generateCubeChallenge(firstProblem.seed, 600, 540, buildCubeOptions(firstProblem.node))
         );
       }
       setFeedback(null);
@@ -876,13 +863,7 @@ export function App() {
   const handlePracticeSpecificChallenge = (lesson: LessonNode, specificSeed: number) => {
     setActiveNode(lesson);
     setChallenge(
-      generateCubeChallenge(specificSeed, 600, 540, {
-        mode: lesson.perspectiveMode,
-        axesMode: lesson.axesMode,
-        forceSide: lesson.forceSide,
-        isShadowLevel: lesson.isShadowLevel,
-        hasGroundGrid: lesson.hasGroundGrid,
-      })
+      generateCubeChallenge(specificSeed, 600, 540, buildCubeOptions(lesson))
     );
     setFeedback(null);
     setShowSolution(false);

@@ -747,6 +747,9 @@ export async function processScannedSheet(
           forceSide: lesson.forceSide,
           isShadowLevel: lesson.isShadowLevel,
           hasGroundGrid: lesson.hasGroundGrid,
+          boxType: lesson.boxType,
+          viewpoint: lesson.viewpoint,
+          rotationAngle: lesson.rotationAngle,
         });
 
         // Registro geométrico 1:1: ancla la cara digital directamente sobre la cara impresa

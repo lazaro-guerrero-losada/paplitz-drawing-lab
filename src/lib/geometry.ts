@@ -20,6 +20,20 @@ export interface Face {
 
 export type PerspectiveMode = 'guided' | 'gentle' | 'normal' | 'dynamic';
 export type AxesMode = 'xyz' | 'base_axes' | 'none';
+export type BoxType = 'cube' | 'tower' | 'slab' | 'dynamic';
+export type ViewpointMode = 'normal' | 'high' | 'low' | 'dynamic';
+export type RotationAngleMode = 'symmetric' | 'steep_left' | 'steep_right' | 'dynamic';
+
+export interface CubeChallengeOptions {
+  mode?: PerspectiveMode;
+  axesMode?: AxesMode;
+  forceSide?: 'left' | 'right';
+  isShadowLevel?: boolean;
+  hasGroundGrid?: boolean;
+  boxType?: BoxType;
+  viewpoint?: ViewpointMode;
+  rotationAngle?: RotationAngleMode;
+}
 
 export interface CoordinateAxis {
   id: 'X' | 'Y' | 'Z';
@@ -70,6 +84,9 @@ export interface CubeChallenge {
   isShadowLevel?: boolean;
   hasGroundGrid?: boolean;
   shadowData?: ShadowChallengeData;
+  boxType?: BoxType;
+  viewpoint?: ViewpointMode;
+  rotationAngle?: RotationAngleMode;
 }
 
 function pseudoRandom(seed: number): () => number {
@@ -82,21 +99,18 @@ function pseudoRandom(seed: number): () => number {
 }
 
 /**
- * Genera un cubo con proporciones calibradas:
- * - El cubo ocupa ~270 x 240 px, centrado en el lienzo.
- * - Soporta ejes de coordenadas finos y largos X, Y, Z para guiar la fuga sin fijar la longitud de las aristas.
+ * Genera un paralelepípedo / cubo con proporciones calibradas y ricas en perspectiva:
+ * - Soporta Cubo 1:1:1 puro, Torre Vertical (Monolito) y Losa Horizontal (Plataforma).
+ * - Soporta puntos de vista contrastados: Cenital (Bird's Eye / alto) y Contrapicado (Worm's Eye / bajo).
+ * - Soporta rotaciones angulares asimétricas: 30°/60° y 20°/70° con escorzo diferenciado.
+ * - En sombras: proporciones 1:1:1 idénticas para el cubo básico, y sombras adaptadas para torres y losas.
+ * - Garantiza que ningún vértice caiga bajo la barra inferior flotante ni bajo el HUD superior.
  */
 export function generateCubeChallenge(
   seed: number = Math.floor(Math.random() * 1000000),
   canvasWidth: number = 600,
   canvasHeight: number = 540,
-  options: {
-    mode?: PerspectiveMode;
-    axesMode?: AxesMode;
-    forceSide?: 'left' | 'right';
-    isShadowLevel?: boolean;
-    hasGroundGrid?: boolean;
-  } = {}
+  options: CubeChallengeOptions = {}
 ): CubeChallenge {
   const rnd = pseudoRandom(seed);
   const isShadow = !!options.isShadowLevel;
@@ -106,33 +120,143 @@ export function generateCubeChallenge(
     ? options.axesMode 
     : (mode === 'guided' ? 'xyz' : 'none'));
 
+  // Determinar boxType efectivo
+  let rawBoxType: BoxType = options.boxType || 'cube';
+  if (rawBoxType === 'dynamic') {
+    const val = rnd();
+    rawBoxType = val < 0.36 ? 'tower' : val < 0.70 ? 'slab' : 'cube';
+  }
+
+  // Determinar viewpoint efectivo (altura de horizonte / picado-contrapicado)
+  let rawViewpoint: ViewpointMode = options.viewpoint || 'normal';
+  if (rawViewpoint === 'dynamic') {
+    rawViewpoint = rnd() > 0.5 ? 'high' : 'low';
+  }
+
+  // Determinar rotationAngle efectivo (giro asimétrico de caras 30°/60°)
+  let rawRotation: RotationAngleMode = options.rotationAngle || 'symmetric';
+  if (rawRotation === 'dynamic') {
+    rawRotation = rnd() > 0.5 ? 'steep_left' : 'steep_right';
+  }
+
   const lightSide: 'left' | 'right' = options.forceSide || (rnd() > 0.5 ? 'left' : 'right');
-  const cx = isShadow ? (lightSide === 'left' ? 260 : 340) : canvasWidth / 2;
-  const cy = isShadow ? 245 : canvasHeight / 2;
+  
+  // Posición central X, Y calibrada para mantener todos los vértices en zona segura ([65, 455] en Y, [70, 530] en X)
+  let cx = isShadow ? (lightSide === 'left' ? 240 : 360) : canvasWidth / 2;
+  let cy = isShadow ? 245 : canvasHeight / 2;
 
-  // Proporciones calibradas (en sombras un cubo ligeramente más compacto para holgura de sombra)
-  const height = isShadow ? 95 : 150 + rnd() * 18;
-  const leftWidth = isShadow ? 85 : 115 + rnd() * 20;
-  const rightWidth = isShadow ? 85 : 115 + rnd() * 20;
+  if (!isShadow) {
+    if (rawViewpoint === 'high') {
+      cy = 290; // Cubo más abajo para abrir la tapa ampliamente sin tocar el toolbar inferior
+    } else if (rawViewpoint === 'low') {
+      cy = 205; // Cubo más arriba para el contrapicado sin tocar el HUD superior
+    } else {
+      cy = 245;
+    }
+  }
 
-  const slopeFactor = isShadow ? 0.17 : (mode === 'guided' || mode === 'gentle' ? 0.18 : mode === 'dynamic' ? 0.28 : 0.22);
-  const leftSlope = leftWidth * slopeFactor;
-  const rightSlope = rightWidth * slopeFactor;
+  // Dimensiones según el tipo de caja (boxType)
+  let height: number;
+  let baseWidth: number;
+
+  if (isShadow) {
+    if (rawBoxType === 'tower') {
+      height = 118 + rnd() * 8;
+      baseWidth = 46 + rnd() * 4;
+    } else if (rawBoxType === 'slab') {
+      height = 50 + rnd() * 6;
+      baseWidth = 90 + rnd() * 6;
+    } else {
+      // 'cube' en sombras: ¡Proporción cúbica pura 1:1:1 perfecta!
+      // Altura 92px con base de 66px a 30° proyecta aristas ópticamente iguales
+      height = 92 + rnd() * 4;
+      baseWidth = 66 + rnd() * 4;
+    }
+  } else {
+    if (rawBoxType === 'tower') {
+      height = 205 + rnd() * 18;
+      baseWidth = 74 + rnd() * 8;
+    } else if (rawBoxType === 'slab') {
+      height = 68 + rnd() * 8;
+      baseWidth = 145 + rnd() * 12;
+    } else {
+      // 'cube': Proporciones de cubo estándar
+      if (mode === 'gentle' || mode === 'guided') {
+        height = 135 + rnd() * 10;
+        baseWidth = 105 + rnd() * 8;
+      } else {
+        height = 148 + rnd() * 14;
+        baseWidth = 112 + rnd() * 10;
+      }
+    }
+  }
+
+  // Escorzo y rotación angular de caras izquierda y derecha
+  let leftWidth = baseWidth;
+  let rightWidth = baseWidth;
+  let leftSlopeRatio = 1.0;
+  let rightSlopeRatio = 1.0;
+
+  if (rawRotation === 'steep_left') {
+    leftWidth = Math.round(baseWidth * 0.58);
+    rightWidth = Math.round(baseWidth * 1.42);
+    leftSlopeRatio = 1.65;  // Cara izquierda muy inclinada y escorzada
+    rightSlopeRatio = 0.65; // Cara derecha frontal amplia
+  } else if (rawRotation === 'steep_right') {
+    leftWidth = Math.round(baseWidth * 1.42);
+    rightWidth = Math.round(baseWidth * 0.58);
+    leftSlopeRatio = 0.65;  // Cara izquierda frontal amplia
+    rightSlopeRatio = 1.65; // Cara derecha muy inclinada y escorzada
+  }
+
+  // Factor de pendiente según modo de perspectiva y punto de vista
+  let topSlopeFactor: number;
+  let bottomSlopeFactor: number;
+
+  if (isShadow) {
+    topSlopeFactor = 0.20;
+    bottomSlopeFactor = 0.17;
+  } else if (rawViewpoint === 'high') {
+    topSlopeFactor = 0.32;   // Tapa superior muy abierta (Bird's Eye)
+    bottomSlopeFactor = 0.16; // Base más horizontal
+  } else if (rawViewpoint === 'low') {
+    topSlopeFactor = 0.08;   // Tapa superior en escorzo extremo (Worm's Eye)
+    bottomSlopeFactor = 0.28; // Base descendente acusada
+  } else {
+    // Normal / Gentle
+    if (mode === 'gentle' || mode === 'guided') {
+      // 1.4 Fuga suave: ángulo sereno ~14°, casi paralelo
+      topSlopeFactor = 0.14;
+      bottomSlopeFactor = 0.12;
+    } else if (mode === 'dynamic') {
+      topSlopeFactor = 0.28;
+      bottomSlopeFactor = 0.22;
+    } else {
+      // 2.1 Perspectiva cónica natural: convergencia clara ~24° arriba, ~18° abajo
+      topSlopeFactor = 0.24;
+      bottomSlopeFactor = 0.18;
+    }
+  }
+
+  const leftSlopeTop = leftWidth * topSlopeFactor * leftSlopeRatio;
+  const leftSlopeBottom = leftWidth * bottomSlopeFactor * leftSlopeRatio;
+  const rightSlopeTop = rightWidth * topSlopeFactor * rightSlopeRatio;
+  const rightSlopeBottom = rightWidth * bottomSlopeFactor * rightSlopeRatio;
 
   const frontX = cx;
   const frontYBottom = cy + height * 0.38;
   const frontYTop = frontYBottom - height;
 
   const leftX = frontX - leftWidth;
-  const leftYTop = frontYTop - leftSlope;
-  const leftYBottom = frontYBottom - leftSlope * 0.85;
+  const leftYTop = frontYTop - leftSlopeTop;
+  const leftYBottom = frontYBottom - leftSlopeBottom;
 
   const rightX = frontX + rightWidth;
-  const rightYTop = frontYTop - rightSlope;
-  const rightYBottom = frontYBottom - rightSlope * 0.85;
+  const rightYTop = frontYTop - rightSlopeTop;
+  const rightYBottom = frontYBottom - rightSlopeBottom;
 
   const backX = frontX - leftWidth + rightWidth;
-  const backYTop = leftYTop - rightSlope;
+  const backYTop = leftYTop - rightSlopeTop;
 
   // Vértices:
   // 0: Frontal Abajo
@@ -220,9 +344,9 @@ export function generateCubeChallenge(
       { start: 5, end: 6, family: 'width' },
     ];
 
-    const lightX = lightSide === 'left' ? 95 : 505;
-    const lightY = 28;
-    const groundStationY = 230;
+    const lightX = lightSide === 'left' ? 75 : 525;
+    const lightY = 18;
+    const groundStationY = 245;
 
     const light2D: Point2D = { x: lightX, y: lightY };
     const groundStation2D: Point2D = { x: lightX, y: groundStationY };
@@ -230,31 +354,36 @@ export function generateCubeChallenge(
 
     const H_light = groundStationY - lightY;
 
+    const clampShadowPt = (p: Point2D): Point2D => ({
+      x: Math.round(Math.max(45, Math.min(canvasWidth - 45, p.x))),
+      y: Math.round(Math.max(50, Math.min(canvasHeight - 80, p.y))),
+    });
+
     if (lightSide === 'left') {
       // 3 postes verticales que delimitan la silueta de sombra (de izq a der):
       // 1. Poste izquierdo: V2 (suelo) -> V3 (techo)
       const H_edge1 = vertices2D[2].y - vertices2D[3].y;
       const u1 = H_light / (H_light - H_edge1);
-      const S1: Point2D = {
+      const S1 = clampShadowPt({
         x: Math.round(lightX + u1 * (vertices2D[2].x - lightX)),
         y: Math.round(groundStationY + u1 * (vertices2D[2].y - groundStationY)),
-      };
+      });
 
       // 2. Poste frontal central: V0 (suelo) -> V1 (techo)
       const H_edge2 = vertices2D[0].y - vertices2D[1].y;
       const u2 = H_light / (H_light - H_edge2);
-      const S2: Point2D = {
+      const S2 = clampShadowPt({
         x: Math.round(lightX + u2 * (vertices2D[0].x - lightX)),
         y: Math.round(groundStationY + u2 * (vertices2D[0].y - groundStationY)),
-      };
+      });
 
       // 3. Poste derecho: V4 (suelo) -> V5 (techo)
       const H_edge3 = vertices2D[4].y - vertices2D[5].y;
       const u3 = H_light / (H_light - H_edge3);
-      const S3: Point2D = {
+      const S3 = clampShadowPt({
         x: Math.round(lightX + u3 * (vertices2D[4].x - lightX)),
         y: Math.round(groundStationY + u3 * (vertices2D[4].y - groundStationY)),
-      };
+      });
 
       const shadowVertices2D = [S1, S2, S3];
       const shadowPolygon = [vertices2D[2], S1, S2, S3, vertices2D[4], vertices2D[0]];
@@ -283,26 +412,26 @@ export function generateCubeChallenge(
       // 1. Poste derecho: V4 (suelo) -> V5 (techo)
       const H_edge1 = vertices2D[4].y - vertices2D[5].y;
       const u1 = H_light / (H_light - H_edge1);
-      const S1: Point2D = {
+      const S1 = clampShadowPt({
         x: Math.round(lightX + u1 * (vertices2D[4].x - lightX)),
         y: Math.round(groundStationY + u1 * (vertices2D[4].y - groundStationY)),
-      };
+      });
 
       // 2. Poste frontal central: V0 (suelo) -> V1 (techo)
       const H_edge2 = vertices2D[0].y - vertices2D[1].y;
       const u2 = H_light / (H_light - H_edge2);
-      const S2: Point2D = {
+      const S2 = clampShadowPt({
         x: Math.round(lightX + u2 * (vertices2D[0].x - lightX)),
         y: Math.round(groundStationY + u2 * (vertices2D[0].y - groundStationY)),
-      };
+      });
 
       // 3. Poste izquierdo: V2 (suelo) -> V3 (techo)
       const H_edge3 = vertices2D[2].y - vertices2D[3].y;
       const u3 = H_light / (H_light - H_edge3);
-      const S3: Point2D = {
+      const S3 = clampShadowPt({
         x: Math.round(lightX + u3 * (vertices2D[2].x - lightX)),
         y: Math.round(groundStationY + u3 * (vertices2D[2].y - groundStationY)),
-      };
+      });
 
       const shadowVertices2D = [S1, S2, S3];
       const shadowPolygon = [vertices2D[4], S1, S2, S3, vertices2D[2], vertices2D[0]];
@@ -329,33 +458,44 @@ export function generateCubeChallenge(
     }
   }
 
-  // Cálculo de los ejes de referencia proyectados X, Y, Z (proporción óptima)
+  // Cálculo de los ejes de referencia proyectados X, Y, Z (proporción óptima con confinamiento seguro)
+  const safeCanvasBox: BoundingBox2D = {
+    left: 45,
+    right: canvasWidth - 45,
+    top: 55,
+    bottom: canvasHeight - 75,
+  };
+
   const axes: CoordinateAxis[] = [];
+  const rawAxisZFar = { x: vertices2D[0].x, y: vertices2D[0].y - (height + 65) };
+  const rawAxisXFar = {
+    x: vertices2D[0].x + (vertices2D[2].x - vertices2D[0].x) * 1.55,
+    y: vertices2D[0].y + (vertices2D[2].y - vertices2D[0].y) * 1.55,
+  };
+  const rawAxisYFar = {
+    x: vertices2D[0].x + (vertices2D[4].x - vertices2D[0].x) * 1.55,
+    y: vertices2D[0].y + (vertices2D[4].y - vertices2D[0].y) * 1.55,
+  };
+
   const axisZ: CoordinateAxis = {
     id: 'Z',
     label: 'Z',
     origin: vertices2D[0],
-    farPoint: { x: vertices2D[0].x, y: vertices2D[0].y - (height + 65) },
+    farPoint: clampRayToBox(vertices2D[0].x, vertices2D[0].y, rawAxisZFar.x, rawAxisZFar.y, safeCanvasBox, 10),
   };
 
   const axisX: CoordinateAxis = {
     id: 'X',
     label: 'X',
     origin: vertices2D[0],
-    farPoint: {
-      x: vertices2D[0].x + (vertices2D[2].x - vertices2D[0].x) * 1.55,
-      y: vertices2D[0].y + (vertices2D[2].y - vertices2D[0].y) * 1.55,
-    },
+    farPoint: clampRayToBox(vertices2D[0].x, vertices2D[0].y, rawAxisXFar.x, rawAxisXFar.y, safeCanvasBox, 10),
   };
 
   const axisY: CoordinateAxis = {
     id: 'Y',
     label: 'Y',
     origin: vertices2D[0],
-    farPoint: {
-      x: vertices2D[0].x + (vertices2D[4].x - vertices2D[0].x) * 1.55,
-      y: vertices2D[0].y + (vertices2D[4].y - vertices2D[0].y) * 1.55,
-    },
+    farPoint: clampRayToBox(vertices2D[0].x, vertices2D[0].y, rawAxisYFar.x, rawAxisYFar.y, safeCanvasBox, 10),
   };
 
   if (!isShadow && axesMode === 'xyz') {
@@ -373,7 +513,9 @@ export function generateCubeChallenge(
     }
   });
 
-  const horizonY = frontYTop - 45;
+  const horizonY = isShadow
+    ? 210
+    : (rawViewpoint === 'high' ? 110 : rawViewpoint === 'low' ? 255 : frontYTop - 45);
 
   return {
     id: `cube-${seed}`,
@@ -393,6 +535,9 @@ export function generateCubeChallenge(
     isShadowLevel: isShadow,
     hasGroundGrid,
     shadowData,
+    boxType: rawBoxType,
+    viewpoint: rawViewpoint,
+    rotationAngle: rawRotation,
   };
 }
 

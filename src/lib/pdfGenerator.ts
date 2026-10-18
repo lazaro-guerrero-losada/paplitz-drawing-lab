@@ -192,6 +192,11 @@ export function generateA4PracticeSheet(config: SheetConfig): void {
         mode: config.lesson?.perspectiveMode || 'normal',
         axesMode: config.lesson?.axesMode || 'none',
         forceSide: config.lesson?.forceSide,
+        isShadowLevel: config.lesson?.isShadowLevel,
+        hasGroundGrid: config.lesson?.hasGroundGrid,
+        boxType: config.lesson?.boxType,
+        viewpoint: config.lesson?.viewpoint,
+        rotationAngle: config.lesson?.rotationAngle,
       });
       
       // Escalar y proyectar la cara al centro de la celda en mm
@@ -592,6 +597,9 @@ export async function generateCorrectionReportPDF(config: CorrectionPDFConfig): 
       forceSide: lesson.forceSide,
       isShadowLevel: lesson.isShadowLevel,
       hasGroundGrid: lesson.hasGroundGrid,
+      boxType: lesson.boxType,
+      viewpoint: lesson.viewpoint,
+      rotationAngle: lesson.rotationAngle,
     });
 
     // Componer la imagen con sus correcciones

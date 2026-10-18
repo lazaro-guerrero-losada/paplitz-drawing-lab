@@ -62,6 +62,9 @@ const DetailedMatrixCell: React.FC<{
       forceSide: lesson.forceSide,
       isShadowLevel: lesson.isShadowLevel,
       hasGroundGrid: lesson.hasGroundGrid,
+      boxType: lesson.boxType,
+      viewpoint: lesson.viewpoint,
+      rotationAngle: lesson.rotationAngle,
     });
   }, [cell.seed, lesson]);
 
