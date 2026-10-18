@@ -281,16 +281,21 @@ export function generateCubeChallenge(
 
   let vertices2D: Point2D[] = [v0, v1, v2, v3, v4, v5, v6];
 
-  // Confinamiento seguro en lienzo: garantiza que todos los vértices se mantengan en [70, 530] en X y [65, 450] en Y
+  // Confinamiento seguro en lienzo: garantiza que todos los vértices y elementos visibles
+  // se mantengan con márgenes confortables
   const safeBox: BoundingBox2D = {
-    left: 70,
-    right: canvasWidth - 70,
-    top: 65,
-    bottom: canvasHeight - 85,
+    left: 65,
+    right: canvasWidth - 65,
+    top: 45,
+    bottom: canvasHeight - 65,
   };
 
+  const isHorizonVisible = options.hasHorizonGuide !== undefined ? options.hasHorizonGuide : false;
+
   const xs = vertices2D.map((p) => p.x);
-  const ys = vertices2D.map((p) => p.y);
+  // Si la guía de horizonte está activa, incluimos la línea de horizonte (cy) en el confinamiento vertical
+  // para asegurar que NUNCA salga disparada fuera del lienzo (ej. en vistas cenitales o de contrapicado)
+  const ys = isHorizonVisible ? [...vertices2D.map((p) => p.y), cy] : vertices2D.map((p) => p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
 
@@ -301,11 +306,11 @@ export function generateCubeChallenge(
 
   let scaleFit = 1.0;
   if (spanX > maxSpanX || spanY > maxSpanY) {
-    scaleFit = Math.min(maxSpanX / spanX, maxSpanY / spanY) * 0.96;
+    scaleFit = Math.min(maxSpanX / spanX, maxSpanY / spanY) * 0.94;
   }
 
   const currentMidY = (minY + maxY) / 2;
-  const targetMidY = (safeBox.top + safeBox.bottom) / 2 + 10;
+  const targetMidY = (safeBox.top + safeBox.bottom) / 2;
   const shiftY = Math.round(targetMidY - currentMidY * scaleFit);
   const shiftX = Math.round(cx * (1 - scaleFit));
 

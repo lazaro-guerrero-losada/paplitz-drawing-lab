@@ -147,10 +147,10 @@ function renderHorizonAndVanishingPoints(
 
   ctx.save();
 
-  // 1. Línea de horizonte técnica continua y sutil de borde a borde
-  ctx.strokeStyle = '#CBD5E1'; // Slate-300: sutil, técnico y limpio sobre papel
-  ctx.lineWidth = 1.0;
-  ctx.setLineDash([7, 5]);
+  // 1. Línea de horizonte técnica continua y visible de borde a borde
+  ctx.strokeStyle = '#94A3B8'; // Slate-400: nítida y técnica
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([8, 5]);
   ctx.beginPath();
   ctx.moveTo(0, hy);
   ctx.lineTo(width, hy);
@@ -158,8 +158,8 @@ function renderHorizonAndVanishingPoints(
 
   // Etiqueta sutil central de la Línea de Horizonte
   ctx.setLineDash([]);
-  ctx.fillStyle = '#94A3B8'; // Slate-400
-  ctx.font = 'bold 8.5px monospace';
+  ctx.fillStyle = '#64748B'; // Slate-500
+  ctx.font = 'bold 9px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
   ctx.fillText('L.H. (HORIZONTE)', width / 2, hy - 4);
@@ -170,30 +170,61 @@ function renderHorizonAndVanishingPoints(
     const isOnScreen = vp.x >= margin && vp.x <= width - margin;
 
     if (isOnScreen) {
-      // Marcador técnico visible dentro de la pantalla
+      // Anillo concéntrico sutil de enfoque
+      ctx.strokeStyle = '#94A3B8';
+      ctx.lineWidth = 1.0;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.arc(vp.x, hy, 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Cruz técnica de precisión
       ctx.setLineDash([]);
-      ctx.strokeStyle = '#475569';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = '#0F172A';
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.arc(vp.x, hy, 4, 0, Math.PI * 2);
+      ctx.moveTo(vp.x - 11, hy);
+      ctx.lineTo(vp.x + 11, hy);
+      ctx.moveTo(vp.x, hy - 11);
+      ctx.lineTo(vp.x + 11, hy);
+      ctx.stroke();
+
+      // Punto central sólido de alto contraste (bullseye)
+      ctx.fillStyle = '#0F172A';
+      ctx.beginPath();
+      ctx.arc(vp.x, hy, 4.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
 
-      // Pequeña cruz centrada
+      // Centro blanco para máxima definición
+      ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.moveTo(vp.x - 7, hy);
-      ctx.lineTo(vp.x + 7, hy);
-      ctx.moveTo(vp.x, hy - 7);
-      ctx.lineTo(vp.x, hy + 7);
-      ctx.stroke();
+      ctx.arc(vp.x, hy, 1.8, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Etiqueta encima del punto
-      ctx.fillStyle = '#334155';
+      // Placa / Etiqueta destacada
+      const text = label;
       ctx.font = 'bold 9.5px monospace';
+      const textWidth = ctx.measureText(text).width;
+      const padX = 5;
+      const badgeH = 14;
+      let badgeY = hy - 12 - badgeH;
+      if (badgeY < 4) {
+        badgeY = hy + 12;
+      }
+
+      ctx.fillStyle = '#0F172A';
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(vp.x - textWidth / 2 - padX, badgeY, textWidth + padX * 2, badgeH, 3);
+      } else {
+        ctx.rect(vp.x - textWidth / 2 - padX, badgeY, textWidth + padX * 2, badgeH);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(label, vp.x, hy - 9);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, vp.x, badgeY + badgeH / 2 + 0.5);
     } else {
       // Indicador de borde si el punto de fuga cae fuera del marco del canvas
       const edgeX = isLeft ? 10 : width - 10;
