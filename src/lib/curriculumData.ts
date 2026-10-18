@@ -158,6 +158,16 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           'medium',
           30
         ),
+        createGroupedCalisthenicsNode(
+          'cal_u1_d_long',
+          'C1.5',
+          'Trazos Largos de Hombro (→ / ↑)',
+          'Líneas extensas de borde a borde para soltar el brazo entero',
+          all.filter((e) => e.id?.startsWith('d_long_h') || e.id?.startsWith('d_long_v')),
+          globalIndex++,
+          'medium',
+          40
+        ),
       ],
     },
     {
@@ -165,7 +175,7 @@ function buildCalisthenicsModuleUnits(): Unit[] {
       number: 2,
       title: 'Diagonales Principales y Fugas de Perspectiva',
       description: 'Líneas dinámicas a 45° y fugas sutiles a 15°-20° para proyectar aristas en escorzo y planos oblicuos.',
-      bookChapter: 'Paplitz Calisthenics — Cuadrantes Diagonales D1 (↗), D3 (↘), D2 (↙), D4 (↖) y Fugas D9, D10',
+      bookChapter: 'Paplitz Calisthenics — Cuadrantes Diagonales D1 (↗), D3 (↘), D2 (↙), D4 (↖), Fugas D9, D10 y Gran Diagonal C2.7',
       guidebookContent: {
         title: 'Cuadrantes Diagonales y Líneas de Fuga',
         axioms: [
@@ -235,6 +245,16 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           globalIndex++,
           'hard',
           40
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u2_d_long',
+          'C2.7',
+          'Gran Diagonal Ascendente (↗)',
+          'Trazo continuo de esquina a esquina cruzando todo el lienzo',
+          all.filter((e) => e.id?.startsWith('d_long_diag')),
+          globalIndex++,
+          'medium',
+          45
         ),
       ],
     },

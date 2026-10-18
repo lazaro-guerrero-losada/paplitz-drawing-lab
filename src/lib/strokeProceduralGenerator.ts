@@ -1358,27 +1358,28 @@ export function generateSingleStrokeChallenge(
 
   const rng = new SeededRNG(seed);
   const isCurve = cfg.direction === 'curve_c' || cfg.direction === 'curve_s';
+  const isLongLine = Boolean(cfg.isLongLine || cfg.variationType === 'long_line');
 
   // 1. Centro (cx, cy)
   let cx = canvasWidth / 2;
   let cy = canvasHeight / 2;
-  if (
+  if (!isLongLine && (
     cfg.variationType === 'position' ||
     cfg.variationType === 'position_length' ||
     cfg.variationType === 'total_random'
-  ) {
+  )) {
     cx = rng.range(210, canvasWidth - 210);
     cy = rng.range(190, canvasHeight - 190);
   }
 
   // 2. Longitud L
   let L = 220;
-  if (
+  if (!isLongLine && (
     cfg.variationType === 'length' ||
     cfg.variationType === 'rotation_length' ||
     cfg.variationType === 'position_length' ||
     cfg.variationType === 'total_random'
-  ) {
+  )) {
     L = rng.range(130, 310);
   }
 
@@ -1391,7 +1392,71 @@ export function generateSingleStrokeChallenge(
   let pStart = { x: cx, y: cy };
   let pEnd = { x: cx, y: cy };
 
-  if (cfg.direction === 'bottom_up_left_right') {
+  if (isLongLine) {
+    if (cfg.direction === 'horizontal_left_right') {
+      dirArrow = '→';
+      dirLabel = 'Gran Horizontal de Hombro (→ Izq-Der)';
+      angleDeg = 0;
+      const marginX = 55;
+      let y = canvasHeight / 2;
+      if (cfg.variationType === 'position' || cfg.variationType === 'position_length' || cfg.variationType === 'total_random') {
+        y = rng.range(110, canvasHeight - 110);
+      }
+      pStart = { x: marginX, y: Math.round(y) };
+      pEnd = { x: canvasWidth - marginX, y: Math.round(y) };
+      L = pEnd.x - pStart.x;
+      cx = (pStart.x + pEnd.x) / 2;
+      cy = y;
+    } else if (cfg.direction === 'vertical_bottom_up') {
+      dirArrow = '↑';
+      dirLabel = 'Gran Vertical de Brazo (↑ Abajo-Arriba)';
+      angleDeg = 90;
+      const marginY = 50;
+      let x = canvasWidth / 2;
+      if (cfg.variationType === 'position' || cfg.variationType === 'position_length' || cfg.variationType === 'total_random') {
+        x = rng.range(120, canvasWidth - 120);
+      }
+      pStart = { x: Math.round(x), y: canvasHeight - marginY };
+      pEnd = { x: Math.round(x), y: marginY };
+      L = pStart.y - pEnd.y;
+      cx = x;
+      cy = (pStart.y + pEnd.y) / 2;
+    } else if (cfg.direction === 'bottom_up_left_right') {
+      dirArrow = '↗';
+      dirLabel = 'Gran Diagonal Ascendente (↗)';
+      if (cfg.variationType === 'fixed') {
+        pStart = { x: 60, y: canvasHeight - 55 };
+        pEnd = { x: canvasWidth - 60, y: 55 };
+      } else if (cfg.variationType === 'rotation') {
+        const startX = rng.range(50, 95);
+        const startY = rng.range(canvasHeight - 75, canvasHeight - 50);
+        const endX = rng.range(canvasWidth - 140, canvasWidth - 50);
+        const endY = rng.range(50, 95);
+        pStart = { x: Math.round(startX), y: Math.round(startY) };
+        pEnd = { x: Math.round(endX), y: Math.round(endY) };
+      } else if (cfg.variationType === 'position') {
+        const spanX = canvasWidth - 160;
+        const spanY = canvasHeight - 130;
+        const offsetX = rng.range(0, 50);
+        const offsetY = rng.range(0, 30);
+        pStart = { x: Math.round(55 + offsetX), y: Math.round(canvasHeight - 50 - offsetY) };
+        pEnd = { x: Math.round(55 + offsetX + spanX), y: Math.round(canvasHeight - 50 - offsetY - spanY) };
+      } else {
+        const startX = rng.range(50, 100);
+        const startY = rng.range(canvasHeight - 85, canvasHeight - 50);
+        const endX = rng.range(canvasWidth - 110, canvasWidth - 50);
+        const endY = rng.range(50, 100);
+        pStart = { x: Math.round(startX), y: Math.round(startY) };
+        pEnd = { x: Math.round(endX), y: Math.round(endY) };
+      }
+      const dx = pEnd.x - pStart.x;
+      const dy = pStart.y - pEnd.y;
+      L = Math.hypot(dx, dy);
+      angleDeg = Math.round((Math.atan2(dy, dx) * 180) / Math.PI);
+      cx = (pStart.x + pEnd.x) / 2;
+      cy = (pStart.y + pEnd.y) / 2;
+    }
+  } else if (cfg.direction === 'bottom_up_left_right') {
     // ↗ D1: Abajo hacia Arriba, Izquierda hacia Derecha
     // Inicio (1) = Abajo-Izquierda (x menor, y mayor en canvas)
     // Fin (2) = Arriba-Derecha (x mayor, y menor en canvas)
@@ -1665,7 +1730,7 @@ export function generateSingleStrokeChallenge(
     category: exercise.category,
     title: exercise.title,
     subtitle: `${dirArrow} ${dirLabel} · L: ${Math.round(L)}px · ${
-      cfg.guideType === 'gray_line' ? 'Guía Gris Continua' : 'Solo Puntos Diana'
+      cfg.guideType === 'gray_line' ? (isLongLine ? 'Guía Continua de Hombro' : 'Guía Gris Continua') : 'Solo Puntos Diana'
     }`,
     blockTitle: exercise.block,
     seed,

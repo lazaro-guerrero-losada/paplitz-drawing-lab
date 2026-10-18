@@ -61,13 +61,14 @@ export interface TargetLineDef {
 
 export interface SingleStrokeConfig {
   direction: StrokeDirection;
-  variationType: 'fixed' | 'length' | 'rotation' | 'rotation_length' | 'position' | 'position_length' | 'total_random' | 'multi_line';
+  variationType: 'fixed' | 'length' | 'rotation' | 'rotation_length' | 'position' | 'position_length' | 'total_random' | 'multi_line' | 'long_line';
   guideType: 'gray_line' | 'points_only';
   curvature?: 'subtle' | 'medium' | 'pronounced';
   baseAngleDeg?: number;
   baseLengthPx?: number;
   multiLineCount?: number;
   spokeCount?: 8 | 12;
+  isLongLine?: boolean;
 }
 
 export interface SpacingTrackConfig {
@@ -269,7 +270,8 @@ function buildSingleStrokeLevel(
   curvature?: 'subtle' | 'medium' | 'pronounced',
   baseAngleDeg?: number,
   multiLineCount?: number,
-  spokeCount?: 8 | 12
+  spokeCount?: 8 | 12,
+  isLongLine?: boolean
 ): LabExerciseDef {
   const isRadial = direction === 'radial_outward' || direction === 'radial_inward';
   return {
@@ -288,6 +290,8 @@ function buildSingleStrokeLevel(
       ? `Confluencia radial (${spokeCount || 8} radios), puntería en dianas y rectitud`
       : multiLineCount
       ? `Coordinación multi-trazo (${multiLineCount} líneas), precisión en dianas y rectitud`
+      : isLongLine
+      ? 'Trazo continuo de hombro de borde a borde, rectitud y frenada milimétrica'
       : guideType === 'gray_line'
       ? 'Seguimiento de guía, rectitud y dirección'
       : 'Puntería en dianas ① y ②, rectitud y dirección',
@@ -302,6 +306,7 @@ function buildSingleStrokeLevel(
       baseAngleDeg,
       multiLineCount,
       spokeCount,
+      isLongLine,
     },
   };
 }
@@ -664,6 +669,19 @@ export const ALL_SINGLE_STROKE_EXERCISES: LabExerciseDef[] = [
   buildSingleStrokeLevel('cs_18', 'CS.18', 'Onda en S — 5 Puntos (Amplitud Media)', '⚡ Calistenia: Trazos Curvos & Arcos (C & S)', 'curve_s', 'rotation_length', 'points_only', 'Difícil', '5 puntos con mayor oscilación y ángulo rotado.', 'Calcula la parábola de cada cresta y valle.', 'medium'),
   buildSingleStrokeLevel('cs_19', 'CS.19', 'Onda en S — 5 Puntos (Amplitud Pronunciada)', '⚡ Calistenia: Trazos Curvos & Arcos (C & S)', 'curve_s', 'total_random', 'points_only', 'Experto', '5 puntos con ondulación extrema en cualquier posición.', 'Enlaza los 5 puntos en un trazo elástico y armónico.', 'pronounced'),
   buildSingleStrokeLevel('cs_20', 'CS.20', 'Maestría de Curvas & Arcos (Racha Rápida)', '⚡ Calistenia: Trazos Curvos & Arcos (C & S)', 'curve_s', 'total_random', 'points_only', 'Experto', 'Desafío supremo de curvas dinámicas con racha de fuego.', 'Mantén la fluidez y precisión en arcos y sinusoides.', 'pronounced'),
+
+  // LÍNEAS LARGAS DE HOMBRO (C1.5 y C2.7)
+  // Unidad 1: Horizontales y Verticales Largas de Hombro (→ y ↑)
+  buildSingleStrokeLevel('d_long_h_01', 'C1.5_V1', 'Gran Horizontal Central (→ Guía Gris)', '⚡ Calistenia: Trazos Largos de Hombro (→ / ↑)', 'horizontal_left_right', 'fixed', 'gray_line', 'Media', 'Trazo horizontal de gran recorrido cruzando el lienzo de izquierda a derecha. Fija el codo y desliza desde el hombro.', 'Traza continuo desde ① a la izquierda hasta ② a la derecha sin doblar la muñeca.', undefined, 0, undefined, undefined, true),
+  buildSingleStrokeLevel('d_long_h_02', 'C1.5_V2', 'Gran Horizontal a Alturas Variables (→ Guía Gris)', '⚡ Calistenia: Trazos Largos de Hombro (→ / ↑)', 'horizontal_left_right', 'position', 'gray_line', 'Media', 'Línea horizontal larga proyectada a distintas alturas de la pantalla para dominar el deslizamiento superior e inferior.', 'Ubica la diana ① y barre el lienzo hacia la derecha hasta ②.', undefined, 0, undefined, undefined, true),
+  buildSingleStrokeLevel('d_long_v_01', 'C1.5_V3', 'Gran Vertical Central (↑ Guía Gris)', '⚡ Calistenia: Trazos Largos de Hombro (→ / ↑)', 'vertical_bottom_up', 'fixed', 'gray_line', 'Media', 'Empuje vertical continuo de abajo hacia arriba a través de todo el lienzo.', 'Inicia en ① abajo y empuja con el antebrazo hacia ② arriba.', undefined, 90, undefined, undefined, true),
+  buildSingleStrokeLevel('d_long_v_02', 'C1.5_V4', 'Gran Vertical en Carriles Variables (↑ Guía Gris)', '⚡ Calistenia: Trazos Largos de Hombro (→ / ↑)', 'vertical_bottom_up', 'position', 'gray_line', 'Difícil', 'Vertical extensa desplazada lateralmente para ejercitar el alcance en diferentes zonas del plano.', 'Traza la vertical de abajo hacia arriba sin desviaciones laterales.', undefined, 90, undefined, undefined, true),
+
+  // Unidad 2: Gran Diagonal Ascendente de Hombro (↗)
+  buildSingleStrokeLevel('d_long_diag_01', 'C2.7_V1', 'Gran Diagonal Esquina a Esquina (↗ Guía Gris)', '⚡ Calistenia: Gran Diagonal Ascendente (↗)', 'bottom_up_left_right', 'fixed', 'gray_line', 'Media', 'Trazo diagonal completo cruzando de la esquina inferior izquierda a la superior derecha.', 'Lanza un trazo continuo y seguro desde ① en la esquina inferior hasta ② en la superior.', undefined, 55, undefined, undefined, true),
+  buildSingleStrokeLevel('d_long_diag_02', 'C2.7_V2', 'Gran Diagonal — Inclinación Variable (↗ Guía Gris)', '⚡ Calistenia: Gran Diagonal Ascendente (↗)', 'bottom_up_left_right', 'rotation', 'gray_line', 'Media', 'Diagonal larga adaptando la pendiente del recorrido entre 30° y 50°.', 'Alinea el codo con la inclinación requerida y traza de borde a borde.', undefined, 55, undefined, undefined, true),
+  buildSingleStrokeLevel('d_long_diag_03', 'C2.7_V3', 'Gran Diagonal — Desplazamiento (↗ Guía Gris)', '⚡ Calistenia: Gran Diagonal Ascendente (↗)', 'bottom_up_left_right', 'position', 'gray_line', 'Difícil', 'Trayectoria diagonal extensa atravesando distintos sectores del lienzo.', 'Visualiza el vector mental antes del trazo y conecta con firmeza.', undefined, 55, undefined, undefined, true),
+  buildSingleStrokeLevel('d_long_diag_04', 'C2.7_V4', 'Gran Diagonal — Dinámica Total (↗ Guía Gris)', '⚡ Calistenia: Gran Diagonal Ascendente (↗)', 'bottom_up_left_right', 'position_length', 'gray_line', 'Difícil', 'Variación conjunta de origen y longitud para máxima soltura y control del brazo.', 'Mantén velocidad uniforme y frena en la diana ②.', undefined, 55, undefined, undefined, true),
 ];
 
 /**
