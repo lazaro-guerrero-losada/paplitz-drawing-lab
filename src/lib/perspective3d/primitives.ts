@@ -48,42 +48,46 @@ export function generateDynamicCamera(
   canvasWidth: number,
   canvasHeight: number
 ): Camera3D {
-  // Elevación: vista picada (+22° a +42°) o contrapicado (-18° a -32°)
+  // Elevación: vista picada (+18° a +36°) o contrapicado (-16° a -28°)
   const isWormEye = rng() > 0.65;
-  const elevationDeg = isWormEye ? -(18 + rng() * 16) : 22 + rng() * 20;
+  const elevationDeg = isWormEye ? -(16 + rng() * 12) : 18 + rng() * 18;
   const elevRad = (elevationDeg * Math.PI) / 180;
 
-  // Azimut: entre 30° y 60° o 120° y 150° para perspectiva clara a 3 puntos sin degeneración
+  // Azimut: rotación orbital en el plano horizontal XZ (entre 30° y 60° o 120° y 150°)
   const quadrant = rng() > 0.5 ? 0 : Math.PI / 2;
   const azimuthRad = quadrant + ((30 + rng() * 30) * Math.PI) / 180;
 
-  // Distancia cómoda para enmarcar la habitación y el objeto en el lienzo
-  const distance = 4.8 + rng() * 0.5;
+  // Distancia horizontal en plano XZ
+  const distanceXZ = 4.8 + rng() * 0.4;
 
-  const camX = distance * Math.cos(elevRad) * Math.sin(azimuthRad);
-  const camY = distance * Math.sin(elevRad);
-  const camZ = distance * Math.cos(elevRad) * Math.cos(azimuthRad);
+  const camX = distanceXZ * Math.sin(azimuthRad);
+  const camY = distanceXZ * Math.tan(elevRad);
+  const camZ = distanceXZ * Math.cos(azimuthRad);
 
   const eye = v3(camX, camY, camZ);
-  const target = v3(0, 0, 0);
+  // Eje óptico horizontal (target.y = camY).
+  // Esto garantiza que el eje vertical sea recto a 90° (Delta x = 0 en pantalla, sin fuga vertical forzada).
+  const target = v3(0, camY, 0);
 
-  // Inclinación sutil de cámara (Dutch roll de ±4° a ±8°)
-  const rollDeg = (rng() - 0.5) * 12;
-  const rollRad = (rollDeg * Math.PI) / 180;
+  // Cámara estrictamente alineada verticalmente con el mundo (SIN Dutch roll / sin rotación ladeada)
+  const up = v3(0, 1, 0);
 
-  const baseUp = v3(0, 1, 0);
-  const forward = vNorm(vSub(target, eye));
-  const right = vNorm(vCross(forward, baseUp));
-  const up = vNorm(vAdd(vScale(baseUp, Math.cos(rollRad)), vScale(right, Math.sin(rollRad))));
+  const fov = 54 + rng() * 8;
+  const fovRad = (fov * Math.PI) / 180;
+  const f = 1.0 / Math.tan(fovRad / 2.0);
+
+  // Desplazamiento de lente vertical (tilt-shift) para centrar perfectamente la figura (Y=0) en pantalla
+  const shiftY = -f * Math.tan(elevRad);
 
   return {
     eye,
     target,
     up,
-    fov: 55 + rng() * 8,
+    fov,
     aspectRatio: canvasWidth / canvasHeight,
     near: 0.15,
     far: 50.0,
+    shiftY,
   };
 }
 
@@ -920,7 +924,7 @@ export function generate3DChallenge(
   const camera = generateDynamicCamera(rng, canvasWidth, canvasHeight);
 
   const viewMatrix = createLookAtMatrix(camera.eye, camera.target, camera.up);
-  const projMatrix = createPerspectiveMatrix(camera.fov, camera.aspectRatio, camera.near, camera.far);
+  const projMatrix = createPerspectiveMatrix(camera.fov, camera.aspectRatio, camera.near, camera.far, camera.shiftY || 0);
   const viewProjMatrix = multiplyMatrices(projMatrix, viewMatrix);
 
   // Puntos de fuga exactos
@@ -952,12 +956,12 @@ export function generate3DChallenge(
     case 'CUBE':
       primitiveData = createCubePrimitive(camera, viewProjMatrix, canvasWidth, canvasHeight);
       name = 'CUBE';
-      tipText = 'Fuga las aristas verticales y de profundidad hacia los 3 puntos de fuga.';
+      tipText = 'Fuga las aristas de anchura y profundidad hacia los puntos de fuga; mantén las verticales rectas.';
       break;
     case 'CYLINDER':
       primitiveData = createCylinderPrimitive(camera, viewProjMatrix, canvasWidth, canvasHeight);
       name = 'CYLINDER';
-      tipText = 'Dibuja la elipse superior y las aristas laterales en fuga vertical.';
+      tipText = 'Dibuja la elipse superior y las generatrices laterales alineadas verticalmente.';
       break;
     case 'CONE':
       primitiveData = createConePrimitive(camera, viewProjMatrix, canvasWidth, canvasHeight);

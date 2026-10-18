@@ -22,6 +22,7 @@ export interface Camera3D {
   aspectRatio: number;
   near: number;
   far: number;
+  shiftY?: number;
 }
 
 export interface VanishingPoint {

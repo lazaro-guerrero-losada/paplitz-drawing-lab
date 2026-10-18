@@ -101,14 +101,20 @@ export function createLookAtMatrix(eye: Vector3D, target: Vector3D, up: Vector3D
   ];
 }
 
-export function createPerspectiveMatrix(fovDeg: number, aspect: number, near: number, far: number): Matrix4x4 {
+export function createPerspectiveMatrix(
+  fovDeg: number,
+  aspect: number,
+  near: number,
+  far: number,
+  shiftY: number = 0
+): Matrix4x4 {
   const fovRad = (fovDeg * Math.PI) / 180;
   const f = 1.0 / Math.tan(fovRad / 2.0);
   const nf = 1.0 / (near - far);
 
   return [
     f / aspect, 0, 0, 0,
-    0, f, 0, 0,
+    0, f, shiftY, 0,
     0, 0, (far + near) * nf, 2 * far * near * nf,
     0, 0, -1, 0,
   ];
@@ -225,7 +231,7 @@ export function clipAndProject3DSegment(
   // 2. Proyectar con la matriz de perspectiva
   const projectCameraPt = (c: Vector3D): Point2D => {
     const clipX = projMatrix[0] * c.x;
-    const clipY = projMatrix[5] * c.y;
+    const clipY = projMatrix[5] * c.y + projMatrix[6] * c.z;
     const clipW = -c.z; // Debido a la fila [0, 0, -1, 0]
 
     const ndcX = clipX / clipW;
@@ -285,19 +291,21 @@ export function calculateVanishingPoints(
     let sx: number;
     let sy: number;
 
+    const shiftY = camera.shiftY || 0;
+
     if (Math.abs(dz) > 0.001) {
       // Si dz != 0, las líneas paralelas a este eje convergen en un punto de fuga finito
       // Si dz < 0, se toma el sentido opuesto (-dir) que apunta hacia adelante de la escena
       const sign = dz > 0 ? 1 : -1;
       const ndcX = (f / aspect) * (dx * sign) / Math.abs(dz);
-      const ndcY = f * (dy * sign) / Math.abs(dz);
+      const ndcY = (f * (dy * sign)) / Math.abs(dz) - shiftY;
 
       sx = (ndcX * 0.5 + 0.5) * canvasWidth;
       sy = (-ndcY * 0.5 + 0.5) * canvasHeight;
     } else {
       // Eje perfectamente ortogonal / paralelo al plano de proyección
       const ndcX = (f / aspect) * dx * 1000;
-      const ndcY = f * dy * 1000;
+      const ndcY = f * dy * 1000 - shiftY;
       sx = cx + ndcX;
       sy = cy - ndcY;
     }
