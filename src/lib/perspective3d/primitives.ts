@@ -57,27 +57,22 @@ export function generateDynamicCamera(
   const quadrant = rng() > 0.5 ? 0 : Math.PI / 2;
   const azimuthRad = quadrant + ((30 + rng() * 30) * Math.PI) / 180;
 
-  // Distancia horizontal en plano XZ
-  const distanceXZ = 4.8 + rng() * 0.4;
+  // Distancia radial al centro del objeto
+  const distance = 4.8 + rng() * 0.4;
 
-  const camX = distanceXZ * Math.sin(azimuthRad);
-  const camY = distanceXZ * Math.tan(elevRad);
-  const camZ = distanceXZ * Math.cos(azimuthRad);
+  const camX = distance * Math.cos(elevRad) * Math.sin(azimuthRad);
+  const camY = distance * Math.sin(elevRad);
+  const camZ = distance * Math.cos(elevRad) * Math.cos(azimuthRad);
 
   const eye = v3(camX, camY, camZ);
-  // Eje óptico horizontal (target.y = camY).
-  // Esto garantiza que el eje vertical sea recto a 90° (Delta x = 0 en pantalla, sin fuga vertical forzada).
-  const target = v3(0, camY, 0);
+  // El objetivo es el centro del objeto (0, 0, 0) para una perspectiva realista a 3 puntos focales
+  const target = v3(0, 0, 0);
 
-  // Cámara estrictamente alineada verticalmente con el mundo (SIN Dutch roll / sin rotación ladeada)
+  // Cámara con horizonte perfectamente nivelado (up = (0, 1, 0)),
+  // SIN rotación de cámara parásita (cero Dutch roll / sin inclinación ladeada de pantalla)
   const up = v3(0, 1, 0);
 
   const fov = 54 + rng() * 8;
-  const fovRad = (fov * Math.PI) / 180;
-  const f = 1.0 / Math.tan(fovRad / 2.0);
-
-  // Desplazamiento de lente vertical (tilt-shift) para centrar perfectamente la figura (Y=0) en pantalla
-  const shiftY = -f * Math.tan(elevRad);
 
   return {
     eye,
@@ -87,7 +82,7 @@ export function generateDynamicCamera(
     aspectRatio: canvasWidth / canvasHeight,
     near: 0.15,
     far: 50.0,
-    shiftY,
+    shiftY: 0,
   };
 }
 
@@ -956,12 +951,12 @@ export function generate3DChallenge(
     case 'CUBE':
       primitiveData = createCubePrimitive(camera, viewProjMatrix, canvasWidth, canvasHeight);
       name = 'CUBE';
-      tipText = 'Fuga las aristas de anchura y profundidad hacia los puntos de fuga; mantén las verticales rectas.';
+      tipText = 'Fuga las aristas verticales, de anchura y profundidad hacia los 3 puntos de fuga.';
       break;
     case 'CYLINDER':
       primitiveData = createCylinderPrimitive(camera, viewProjMatrix, canvasWidth, canvasHeight);
       name = 'CYLINDER';
-      tipText = 'Dibuja la elipse superior y las generatrices laterales alineadas verticalmente.';
+      tipText = 'Dibuja la elipse superior (con escorzo y mayor tamaño en picado) y las generatrices en fuga vertical.';
       break;
     case 'CONE':
       primitiveData = createConePrimitive(camera, viewProjMatrix, canvasWidth, canvasHeight);
