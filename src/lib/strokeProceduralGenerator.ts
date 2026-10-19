@@ -2285,3 +2285,223 @@ export function generateStrokeChallenge(
     }
   }
 }
+
+/**
+ * Calcula la posición del badge/número diana para un KeyPoint dado.
+ * Garantiza que en trazos verticales y diagonales el número se transfiera
+ * al lateral perpendicular del trazo, sin solaparse ni interferir jamás con la trayectoria.
+ */
+export function computeKeyPointBadgePosition(
+  kp: KeyPoint,
+  challenge: ProceduralStrokeChallenge,
+  canvasWidth = 750,
+  canvasHeight = 500,
+  offsetDist = 22
+): { badgeX: number; badgeY: number } {
+  // 1. Rosetas Radiales 360° (D11 y D12)
+  const isRadial =
+    (challenge.category === 'radial_focal' ||
+      challenge.directionKey === 'radial_outward' ||
+      challenge.directionKey === 'radial_inward') &&
+    challenge.keyPoints &&
+    challenge.keyPoints.length > 2;
+
+  if (isRadial && challenge.keyPoints) {
+    const centerKp = challenge.keyPoints[0];
+    const dx = kp.x - centerKp.x;
+    const dy = kp.y - centerKp.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 15) {
+      return {
+        badgeX: Math.round(kp.x + (dx / dist) * 18),
+        badgeY: Math.round(kp.y + (dy / dist) * 18),
+      };
+    } else {
+      // Centro común de la roseta: colocar arriba-izquierda
+      return {
+        badgeX: Math.round(kp.x - 16),
+        badgeY: Math.round(kp.y - 16),
+      };
+    }
+  }
+
+  // 2. Determinar el vector unitario tangente t (dx, dy) de la línea o segmento asociado
+  let tx = 0;
+  let ty = -1; // default vertical ascendente
+  let foundTangent = false;
+
+  // 2a. Si hay targetLines, buscar la línea que contiene este keypoint
+  if (challenge.targetLines && challenge.targetLines.length > 0) {
+    for (const tl of challenge.targetLines) {
+      if (tl.startKeyPointOrder === kp.order || tl.endKeyPointOrder === kp.order) {
+        const dx = tl.end.x - tl.start.x;
+        const dy = tl.end.y - tl.start.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 1) {
+          tx = dx / len;
+          ty = dy / len;
+          foundTangent = true;
+          break;
+        }
+      }
+    }
+  }
+
+  // 2b. Si no se encontró en targetLines pero hay al menos 2 keyPoints en el reto
+  if (!foundTangent && challenge.keyPoints && challenge.keyPoints.length >= 2) {
+    const kps = challenge.keyPoints;
+    const idx = kps.indexOf(kp);
+    if (idx === 0) {
+      const otherKp = kps[1];
+      const dx = otherKp.x - kp.x;
+      const dy = otherKp.y - kp.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 1) {
+        tx = dx / len;
+        ty = dy / len;
+        foundTangent = true;
+      }
+    } else if (idx === kps.length - 1) {
+      const otherKp = kps[idx - 1];
+      const dx = kp.x - otherKp.x;
+      const dy = kp.y - otherKp.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 1) {
+        tx = dx / len;
+        ty = dy / len;
+        foundTangent = true;
+      }
+    } else if (idx > 0 && idx < kps.length - 1) {
+      // Punto intermedio en curvas o segmentos múltiples
+      const prevKp = kps[idx - 1];
+      const nextKp = kps[idx + 1];
+      const dx = nextKp.x - prevKp.x;
+      const dy = nextKp.y - prevKp.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 1) {
+        tx = dx / len;
+        ty = dy / len;
+        foundTangent = true;
+      }
+    }
+  }
+
+  // 2c. Si aún no hay tangente, inferir por directionKey o targetAngleDeg
+  if (!foundTangent) {
+    if (challenge.directionKey === 'vertical_bottom_up') {
+      tx = 0; ty = -1;
+      foundTangent = true;
+    } else if (challenge.directionKey === 'vertical_top_down') {
+      tx = 0; ty = 1;
+      foundTangent = true;
+    } else if (challenge.directionKey === 'horizontal_left_right') {
+      tx = 1; ty = 0;
+      foundTangent = true;
+    } else if (challenge.directionKey === 'horizontal_right_left') {
+      tx = -1; ty = 0;
+      foundTangent = true;
+    } else if (challenge.directionKey === 'bottom_up_left_right') {
+      tx = 0.7071; ty = -0.7071;
+      foundTangent = true;
+    } else if (challenge.directionKey === 'top_down_right_left') {
+      tx = -0.7071; ty = 0.7071;
+      foundTangent = true;
+    } else if (challenge.directionKey === 'top_down_left_right') {
+      tx = 0.7071; ty = 0.7071;
+      foundTangent = true;
+    } else if (challenge.directionKey === 'bottom_up_right_left') {
+      tx = -0.7071; ty = -0.7071;
+      foundTangent = true;
+    } else if (challenge.directionKey === 'shallow_up_left_right') {
+      tx = Math.cos((18 * Math.PI) / 180); ty = -Math.sin((18 * Math.PI) / 180);
+      foundTangent = true;
+    } else if (challenge.directionKey === 'shallow_up_right_left') {
+      tx = -Math.cos((18 * Math.PI) / 180); ty = -Math.sin((18 * Math.PI) / 180);
+      foundTangent = true;
+    } else if (challenge.targetAngleDeg !== undefined) {
+      const rad = (challenge.targetAngleDeg * Math.PI) / 180;
+      tx = Math.cos(rad);
+      ty = -Math.sin(rad);
+      foundTangent = true;
+    }
+  }
+
+  // 3. Normales perpendiculares al vector tangente
+  // n1 = (-ty, tx) y n2 = (ty, -tx) = -n1
+  const n1x = -ty;
+  const n1y = tx;
+  const n2x = ty;
+  const n2y = -tx;
+
+  // Determinar la normal preferida:
+  // - Para trazos casi verticales (|tx| < 0.35, como C1.2 / C1.3): siempre transferir al lateral IZQUIERDO (nx < 0)
+  // - Para trazos casi horizontales (|ty| < 0.35, como C1.1 / C1.4): siempre transferir ARRIBA (ny < 0)
+  // - Para trazos diagonales (C2.1, C2.2, C2.3, C2.4, C2.7): preferir normal que apunte hacia ARRIBA/IZQUIERDA
+  let prefNx = n1x;
+  let prefNy = n1y;
+
+  const isNearlyVertical = Math.abs(tx) < 0.35;
+  const isNearlyHorizontal = Math.abs(ty) < 0.35;
+
+  if (isNearlyVertical) {
+    if (n1x < 0) {
+      prefNx = n1x;
+      prefNy = n1y;
+    } else {
+      prefNx = n2x;
+      prefNy = n2y;
+    }
+  } else if (isNearlyHorizontal) {
+    if (n1y < 0) {
+      prefNx = n1x;
+      prefNy = n1y;
+    } else {
+      prefNx = n2x;
+      prefNy = n2y;
+    }
+  } else {
+    const score1 = -n1y * 2 - n1x;
+    const score2 = -n2y * 2 - n2x;
+    if (score1 >= score2) {
+      prefNx = n1x;
+      prefNy = n1y;
+    } else {
+      prefNx = n2x;
+      prefNy = n2y;
+    }
+  }
+
+  // 4. Posiciones candidatas con verificación de márgenes seguros
+  const margin = 16;
+  const cand1 = {
+    x: Math.round(kp.x + prefNx * offsetDist),
+    y: Math.round(kp.y + prefNy * offsetDist),
+  };
+  const cand2 = {
+    x: Math.round(kp.x - prefNx * offsetDist),
+    y: Math.round(kp.y - prefNy * offsetDist),
+  };
+
+  const isCand1Inside =
+    cand1.x >= margin &&
+    cand1.x <= canvasWidth - margin &&
+    cand1.y >= margin &&
+    cand1.y <= canvasHeight - margin;
+
+  const isCand2Inside =
+    cand2.x >= margin &&
+    cand2.x <= canvasWidth - margin &&
+    cand2.y >= margin &&
+    cand2.y <= canvasHeight - margin;
+
+  if (isCand1Inside) {
+    return { badgeX: cand1.x, badgeY: cand1.y };
+  } else if (isCand2Inside) {
+    return { badgeX: cand2.x, badgeY: cand2.y };
+  } else {
+    return {
+      badgeX: Math.max(margin, Math.min(canvasWidth - margin, cand1.x)),
+      badgeY: Math.max(margin, Math.min(canvasHeight - margin, cand1.y)),
+    };
+  }
+}

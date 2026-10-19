@@ -7,7 +7,7 @@ import {
   ProceduralStrokeChallenge,
   StrokeEvaluation,
 } from '../lib/strokeTypes';
-import { generateStrokeChallenge } from '../lib/strokeProceduralGenerator';
+import { generateStrokeChallenge, computeKeyPointBadgePosition } from '../lib/strokeProceduralGenerator';
 import { evaluateStrokeSubmission, buildStrokeDebugReport } from '../lib/strokeEvaluator';
 import { copyReportToClipboard, downloadReportJson } from '../lib/debugReport';
 import {
@@ -848,34 +848,14 @@ export const StrokeLabView: React.FC<StrokeLabViewProps> = ({ onAwardXP }) => {
         ctx.arc(kp.x, kp.y, 3.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Número pequeño
+        // Número pequeño posicionado al lateral perpendicular para no interferir con el trazo
         ctx.fillStyle = '#000000';
         ctx.font = 'bold 10px monospace';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
+        ctx.textBaseline = 'middle';
 
         const labelText = kp.label || String(kp.order);
-        let labelX = kp.x;
-        let labelY = kp.y - 6;
-
-        // Si es un punto de roseta perimetral, proyectar el número hacia el exterior de la roseta
-        if (
-          (challenge.category === 'radial_focal' ||
-            challenge.directionKey === 'radial_outward' ||
-            challenge.directionKey === 'radial_inward') &&
-          challenge.keyPoints &&
-          challenge.keyPoints.length > 2
-        ) {
-          const centerKp = challenge.keyPoints[0];
-          const dx = kp.x - centerKp.x;
-          const dy = kp.y - centerKp.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist > 15) {
-            labelX = kp.x + (dx / dist) * 12;
-            labelY = kp.y + (dy / dist) * 12;
-            ctx.textBaseline = 'middle';
-          }
-        }
+        const { badgeX: labelX, badgeY: labelY } = computeKeyPointBadgePosition(kp, challenge, w, h, 15);
 
         ctx.fillText(labelText, labelX, labelY);
         ctx.restore();

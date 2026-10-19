@@ -25,7 +25,7 @@ import {
   ProceduralStrokeChallenge,
   StrokeEvaluation,
 } from '../lib/strokeTypes';
-import { generateStrokeChallenge } from '../lib/strokeProceduralGenerator';
+import { generateStrokeChallenge, computeKeyPointBadgePosition } from '../lib/strokeProceduralGenerator';
 import { evaluateStrokeSubmission, buildStrokeDebugReport } from '../lib/strokeEvaluator';
 import { copyReportToClipboard, downloadReportJson } from '../lib/debugReport';
 import { QuickCommentModal } from './QuickCommentModal';
@@ -823,35 +823,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
 
           // 3. Cálculo de la posición del Badge para que no tape la diana ni el trazo
           const labelText = kp.label || String(kp.order);
-          let badgeX = kp.x;
-          let badgeY = kp.y - 17;
-
-          const isRadial =
-            (challenge.category === 'radial_focal' ||
-              challenge.directionKey === 'radial_outward' ||
-              challenge.directionKey === 'radial_inward') &&
-            challenge.keyPoints &&
-            challenge.keyPoints.length > 2;
-
-          if (isRadial) {
-            const centerKp = challenge.keyPoints[0];
-            const dx = kp.x - centerKp.x;
-            const dy = kp.y - centerKp.y;
-            const dist = Math.hypot(dx, dy);
-            if (dist > 15) {
-              badgeX = kp.x + (dx / dist) * 16;
-              badgeY = kp.y + (dy / dist) * 16;
-            } else {
-              // Punto central de la roseta
-              badgeX = kp.x - 14;
-              badgeY = kp.y - 14;
-            }
-          } else {
-            // Evitar salirse por el borde superior
-            if (badgeY < 14) {
-              badgeY = kp.y + 17;
-            }
-          }
+          const { badgeX, badgeY } = computeKeyPointBadgePosition(kp, challenge, w, h, 22);
 
           // 4. Badge circular nítido (fondo blanco opaco que limpia la cuadrícula + borde entintado negro)
           const badgeR = 9.5;
