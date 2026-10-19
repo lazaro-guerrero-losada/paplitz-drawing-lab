@@ -798,14 +798,23 @@ export const StrokeLabView: React.FC<StrokeLabViewProps> = ({ onAwardXP }) => {
       ctx.restore();
     }
 
-    // F. Líneas de cota y carriles guía (Andamiaje: en Fase 3 se retira la guía completamente)
+    // F. Líneas de cota y carriles guía (Andamiaje: en Fase 3 se retira la guía del contorno pero se mantienen los ejes radiales de referencia)
     const isGuideHiddenByPhase = currentPhase === 3;
-    if (!challenge.spacingTrackParams && showSolution && !isGuideHiddenByPhase && challenge.guideLines) {
+    if (!challenge.spacingTrackParams && showSolution && challenge.guideLines) {
       for (const line of challenge.guideLines) {
-        ctx.strokeStyle = currentPhase === 2 ? '#d8d8d8' : (line.dashed ? '#888888' : '#cccccc');
-        ctx.lineWidth = currentPhase === 2 ? 1.0 : 1.5;
-        if (line.dashed || currentPhase === 2) ctx.setLineDash([5, 5]);
-        else ctx.setLineDash([]);
+        const isRadialAxis = Boolean((line as any).isRadialAxis);
+        if (isGuideHiddenByPhase && !isRadialAxis) continue;
+
+        if (isRadialAxis) {
+          ctx.strokeStyle = '#b5b5b5';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([6, 5]);
+        } else {
+          ctx.strokeStyle = currentPhase === 2 ? '#d8d8d8' : (line.dashed ? '#888888' : '#cccccc');
+          ctx.lineWidth = currentPhase === 2 ? 1.0 : 1.5;
+          if (line.dashed || currentPhase === 2) ctx.setLineDash([5, 5]);
+          else ctx.setLineDash([]);
+        }
 
         ctx.beginPath();
         ctx.moveTo(line.x1, line.y1);

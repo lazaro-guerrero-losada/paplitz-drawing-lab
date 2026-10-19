@@ -763,15 +763,24 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
         ctx.restore();
       }
 
-      // D. Líneas guía punteadas (Andamiaje pedagógico: en Fase 3 se retira la guía completamente para el test sin guía)
+      // D. Líneas guía punteadas (Andamiaje pedagógico: en Fase 3 se retira la guía del contorno pero se mantienen los ejes radiales de referencia)
       const isGuideHiddenByPhase = currentPhase === 3;
-      if (!challenge.spacingTrackParams && challenge.guideLines && challenge.guideMode !== 'points_only' && !isGuideHiddenByPhase) {
+      if (!challenge.spacingTrackParams && challenge.guideLines && challenge.guideMode !== 'points_only') {
         for (const line of challenge.guideLines) {
-          // En Fase 2 la guía se atenúa para fomentar la anticipación mental
-          ctx.strokeStyle = currentPhase === 2 ? '#D8D8D8' : (line.dashed ? '#888888' : '#CCCCCC');
-          ctx.lineWidth = currentPhase === 2 ? 1.0 : 1.5;
-          if (line.dashed || currentPhase === 2) ctx.setLineDash([5, 5]);
-          else ctx.setLineDash([]);
+          const isRadialAxis = Boolean((line as any).isRadialAxis);
+          if (isGuideHiddenByPhase && !isRadialAxis) continue;
+
+          if (isRadialAxis) {
+            ctx.strokeStyle = '#B5B5B5';
+            ctx.lineWidth = 1.2;
+            ctx.setLineDash([6, 5]);
+          } else {
+            // En Fase 2 la guía se atenúa para fomentar la anticipación mental
+            ctx.strokeStyle = currentPhase === 2 ? '#D8D8D8' : (line.dashed ? '#888888' : '#CCCCCC');
+            ctx.lineWidth = currentPhase === 2 ? 1.0 : 1.5;
+            if (line.dashed || currentPhase === 2) ctx.setLineDash([5, 5]);
+            else ctx.setLineDash([]);
+          }
 
           ctx.beginPath();
           ctx.moveTo(line.x1, line.y1);

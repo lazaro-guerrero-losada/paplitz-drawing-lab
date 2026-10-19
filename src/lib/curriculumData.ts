@@ -309,17 +309,18 @@ function buildCalisthenicsModuleUnits(): Unit[] {
     {
       id: 'unit-cal-4',
       number: 4,
-      title: 'Carriles de Ritmo y Espaciado Interlineal',
-      description: 'Consistencia de trama en bandas acotadas: espaciado x y x/2, diagonales, quiebros en V, relámpagos y ondas.',
-      bookChapter: 'Paplitz Calisthenics — Carriles y Espaciado Rítmico E1.1 a E17.1',
+      title: 'Carriles de Ritmo, Espaciado y Polígonos Concéntricos',
+      description: 'Consistencia de trama en bandas y figuras concéntricas: espaciado x y x/2, quiebros, ondas y polígonos anidados.',
+      bookChapter: 'Paplitz Calisthenics — Carriles y Polígonos Concéntricos C4.1 a C4.4',
       guidebookContent: {
-        title: 'Espaciado Interlineal y Muros de Carril',
+        title: 'Espaciado Interlineal y Polígonos Concéntricos',
         axioms: [
           'Observa la muestra entintada a la izquierda y replica el paso exacto dentro de los carriles.',
           'En quiebros angulares (V, chevron, zigzag), detén el trazo secamente en el vértice antes de cambiar de dirección.',
-          'Respeta los límites superior e inferior de cada franja sin salirte ni quedarte corto.',
+          'En los polígonos concéntricos (△ / ▢ / ⬡), ancla cada vértice en los ejes radiales y mantén el paso constante.',
+          'Respeta los límites de cada figura sin salirte ni deformar el paralelismo entre caras.',
         ],
-        diagramNotes: 'El espaciado regular crea valores tonales homogéneos fundamentales para el render.',
+        diagramNotes: 'El espaciado regular y el paralelismo concéntrico crean ritmos tonales y geométricos homogéneos.',
       },
       nodes: [
         createGroupedCalisthenicsNode(
@@ -365,6 +366,16 @@ function buildCalisthenicsModuleUnits(): Unit[] {
           globalIndex++,
           'hard',
           50
+        ),
+        createGroupedCalisthenicsNode(
+          'cal_u4_concentric',
+          'C4.4',
+          'Polígonos Concéntricos y Fugas Radiales (△ / ▢ / ⬡)',
+          'Triángulos, cuadrados, diamantes y trapecios con paso y ángulos variables',
+          all.filter((e) => e.id?.startsWith('cp_')),
+          globalIndex++,
+          'hard',
+          55
         ),
       ],
     },

@@ -21,7 +21,8 @@ export type StrokeExerciseCategory =
   | 'composition_forms'  // Ejercicios 2.38, 2.39, 2.40
   | 'local_value'        // Ejercicio 2.41
   | 'cross_hatch_density'// Densidad de trama y retícula
-  | 'compound_forms';    // Ejercicios 2.45, 2.46
+  | 'compound_forms'     // Ejercicios 2.45, 2.46
+  | 'concentric_polygons';// C4.4: Triángulos, cuadrados y polígonos concéntricos con ejes radiales
 
 export type StrokeDirection =
   | 'bottom_up_left_right'   // ↗ D1: Abajo a Arriba, Izquierda a Derecha (35° a 75°)
@@ -92,6 +93,40 @@ export interface SpacingTrackBlock {
   targetInteriorLineCount: number;
 }
 
+export type ConcentricPolygonShape =
+  | 'triangle_up'
+  | 'triangle_wide'
+  | 'diamond'
+  | 'square_ortho'
+  | 'trapezoid'
+  | 'hexagon';
+
+export interface ConcentricPolygonConfig {
+  shape: ConcentricPolygonShape;
+  ringCount: number;         // e.g. 4 concentric rings
+  basePitchPx: number;       // e.g. 18, 20, 22, 24 px between rings
+  pitchProgression?: 'constant' | 'increasing' | 'decreasing';
+  apexAngleDeg?: number;     // e.g. 60 for equilateral, 100 for wide
+  rotationDeg?: number;      // e.g. 0, 45, etc.
+  hasRadialAxes?: boolean;   // Draw 8-spoke radial star axes (default true)
+  guideType?: 'gray_line' | 'points_only';
+}
+
+export interface ConcentricPolygonRing {
+  ringIndex: number; // 0 (innermost) to ringCount - 1
+  vertices: { x: number; y: number }[];
+  edges: { start: { x: number; y: number }; end: { x: number; y: number } }[];
+  perimeterPx: number;
+}
+
+export interface ConcentricPolygonParams {
+  shape: ConcentricPolygonShape;
+  center: { x: number; y: number };
+  rings: ConcentricPolygonRing[];
+  targetPitchPx: number;
+  radialAxes: { x1: number; y1: number; x2: number; y2: number }[];
+}
+
 export interface LabExerciseDef {
   id?: string;
   family?: 'calisthenics_single' | 'workbook_page';
@@ -107,6 +142,7 @@ export interface LabExerciseDef {
   isSingleStroke?: boolean;
   singleStrokeConfig?: SingleStrokeConfig;
   spacingTrackConfig?: SpacingTrackConfig;
+  concentricPolygonConfig?: ConcentricPolygonConfig;
 }
 
 export type WorkbookExerciseDef = LabExerciseDef;
@@ -163,7 +199,7 @@ export interface ProceduralStrokeChallenge {
   directionToleranceDeg?: number;
 
   // Guías visuales 2D
-  guideLines: { x1: number; y1: number; x2: number; y2: number; dashed?: boolean }[];
+  guideLines: { x1: number; y1: number; x2: number; y2: number; dashed?: boolean; isRadialAxis?: boolean }[];
   guideBounds?: { x: number; y: number; width: number; height: number };
 
   // Curvas S y Arcos
@@ -218,6 +254,7 @@ export interface ProceduralStrokeChallenge {
     kinkType?: 'none' | 'triangle_left' | 'triangle_right' | 'chevron_left' | 'v_concentric' | 'v_inverted' | 'zigzag_wave' | 'zigzag_zn' | 'bracket_left' | 'curve_c_left' | 'curve_c_right' | 'curve_arch_up' | 'curve_arch_down' | 'curve_wave_horizontal' | 'curve_wave_vertical' | 'curve_wave_slanted';
     blocks?: SpacingTrackBlock[];
   };
+  concentricPolygonParams?: ConcentricPolygonParams;
 }
 
 export interface StrokeEvaluation {
@@ -396,6 +433,45 @@ function buildSpacingTrackLevel(
       variationType: 'fixed',
       guideType: 'gray_line',
       baseAngleDeg: angleDeg,
+    },
+  };
+}
+
+function buildConcentricPolygonLevel(
+  id: string,
+  code: string,
+  title: string,
+  block: string,
+  shape: ConcentricPolygonShape,
+  ringCount: number,
+  basePitchPx: number,
+  difficulty: 'Fácil' | 'Media' | 'Difícil' | 'Experto',
+  desc: string,
+  instruction: string,
+  apexAngleDeg?: number,
+  pitchProgression?: 'constant' | 'increasing' | 'decreasing',
+  guideType: 'gray_line' | 'points_only' = 'gray_line'
+): LabExerciseDef {
+  return {
+    id,
+    family: 'calisthenics_single',
+    code,
+    title,
+    block,
+    category: 'concentric_polygons',
+    difficulty,
+    metrics: `Paralelismo de caras, paso interlineal (${basePitchPx}px) y anclaje en ejes radiales`,
+    desc,
+    instruction,
+    isSingleStroke: false,
+    concentricPolygonConfig: {
+      shape,
+      ringCount,
+      basePitchPx,
+      pitchProgression: pitchProgression || 'constant',
+      apexAngleDeg,
+      hasRadialAxes: true,
+      guideType,
     },
   };
 }
@@ -682,6 +758,14 @@ export const ALL_SINGLE_STROKE_EXERCISES: LabExerciseDef[] = [
   buildSingleStrokeLevel('d_long_diag_02', 'C2.7_V2', 'Gran Diagonal — Inclinación Variable (↗ Guía Gris)', '⚡ Calistenia: Gran Diagonal Ascendente (↗)', 'bottom_up_left_right', 'rotation', 'gray_line', 'Media', 'Diagonal larga adaptando la pendiente del recorrido entre 30° y 50°.', 'Alinea el codo con la inclinación requerida y traza de borde a borde.', undefined, 55, undefined, undefined, true),
   buildSingleStrokeLevel('d_long_diag_03', 'C2.7_V3', 'Gran Diagonal — Desplazamiento (↗ Guía Gris)', '⚡ Calistenia: Gran Diagonal Ascendente (↗)', 'bottom_up_left_right', 'position', 'gray_line', 'Difícil', 'Trayectoria diagonal extensa atravesando distintos sectores del lienzo.', 'Visualiza el vector mental antes del trazo y conecta con firmeza.', undefined, 55, undefined, undefined, true),
   buildSingleStrokeLevel('d_long_diag_04', 'C2.7_V4', 'Gran Diagonal — Dinámica Total (↗ Guía Gris)', '⚡ Calistenia: Gran Diagonal Ascendente (↗)', 'bottom_up_left_right', 'position_length', 'gray_line', 'Difícil', 'Variación conjunta de origen y longitud para máxima soltura y control del brazo.', 'Mantén velocidad uniforme y frena en la diana ②.', undefined, 55, undefined, undefined, true),
+
+  // POLÍGONOS CONCÉNTRICOS (C4.4 - Triángulos, Cuadrados, Diamantes, Trapecios y Hexágonos)
+  buildConcentricPolygonLevel('cp_01', 'C4.4_V1', 'Triángulos Concéntricos (△ Paso 24px)', '⚡ Calistenia: Polígonos Concéntricos (△ / ▢ / ⬡)', 'triangle_up', 4, 24, 'Media', 'Triángulos equiláteros anidados con vértice superior en el eje vertical y base horizontal sobre los ejes diagonales.', 'Dibuja cada triángulo concéntrico manteniendo el paso de 24px entre caras y anclando las esquinas en los ejes radiales.', 60),
+  buildConcentricPolygonLevel('cp_02', 'C4.4_V2', 'Triángulos Anchos (△ Paso Fino 18px)', '⚡ Calistenia: Polígonos Concéntricos (△ / ▢ / ⬡)', 'triangle_wide', 4, 18, 'Difícil', 'Triángulos isósceles obtusos de base ancha con paso estrecho (18px) para afinar la precisión motriz.', 'Traza los triángulos anchos manteniendo la base horizontal paralela y un espaciado estrecho constante de 18px.', 100),
+  buildConcentricPolygonLevel('cp_03', 'C4.4_V3', 'Diamantes / Rombos a 45° (◇ Paso 22px)', '⚡ Calistenia: Polígonos Concéntricos (△ / ▢ / ⬡)', 'diamond', 4, 22, 'Media', 'Cuadrados girados a 45° con los 4 vértices apoyados en los ejes ortogonales X e Y.', 'Dibuja los rombos/cuadrados concéntricos conectando los ejes a 45° con caras paralelas equidistantes.', 90),
+  buildConcentricPolygonLevel('cp_04', 'C4.4_V4', 'Cuadrados Ortogonales (□ Paso Graduado)', '⚡ Calistenia: Polígonos Concéntricos (△ / ▢ / ⬡)', 'square_ortho', 4, 20, 'Difícil', 'Cuadrados ortogonales con aristas horizontales y verticales cuyos vértices coinciden con los ejes diagonales a 45°.', 'Dibuja los cuadrados concéntricos con esquinas sobre los ejes diagonales y aristas perfectamente horizontales y verticales.', 90, 'increasing'),
+  buildConcentricPolygonLevel('cp_05', 'C4.4_V5', 'Trapecios Isósceles (⏢ Ángulos Variables)', '⚡ Calistenia: Polígonos Concéntricos (△ / ▢ / ⬡)', 'trapezoid', 4, 22, 'Difícil', 'Trapecios isósceles anidados combinando techos y bases horizontales con costados oblicuos en ángulo.', 'Traza los trapecios concéntricos manteniendo las bases paralelas y los costados simétricos sobre los ejes.'),
+  buildConcentricPolygonLevel('cp_06', 'C4.4_V6', 'Hexágonos Radiales (⬡ Paso 20px)', '⚡ Calistenia: Polígonos Concéntricos (△ / ▢ / ⬡)', 'hexagon', 4, 20, 'Experto', 'Hexágonos regulares de 6 lados con vértices anclados en los ejes radiales a 60°.', 'Dibuja los hexágonos concéntricos cerrando cada polígono de 6 caras con paralelismo continuo 360°.'),
 ];
 
 /**

@@ -7,6 +7,8 @@ import {
   KeyPoint,
   TargetLineDef,
   SpacingTrackBlock,
+  ConcentricPolygonRing,
+  ConcentricPolygonShape,
 } from './strokeTypes';
 
 /**
@@ -643,6 +645,266 @@ export function generateZNStrokePoints(
     { x: Math.round(p2X * 10) / 10, y: Math.round(yBase * 10) / 10 },
     { x: Math.round(xEnd * 10) / 10, y: Math.round((yBase - amplitude) * 10) / 10 },
   ];
+}
+
+/**
+ * Genera un reto de Calistenia de Polígonos Concéntricos con Ejes Radiales (C4.4)
+ * Triángulos, cuadrados, diamantes, trapecios y hexágonos anidados a paso regular
+ */
+export function generateConcentricPolygonChallenge(
+  exercise: LabExerciseDef,
+  seed: number,
+  canvasWidth = 750,
+  canvasHeight = 500
+): ProceduralStrokeChallenge {
+  const cfg = exercise.concentricPolygonConfig || {
+    shape: 'triangle_up' as ConcentricPolygonShape,
+    ringCount: 4,
+    basePitchPx: 22,
+    pitchProgression: 'constant',
+    hasRadialAxes: true,
+    guideType: 'gray_line',
+  };
+
+  const cx = Math.round(canvasWidth / 2);
+  const cy = Math.round(canvasHeight / 2);
+  const ringCount = cfg.ringCount || 4;
+  const targetPitchPx = cfg.basePitchPx || 22;
+
+  // 1. Cálculo de Radios para cada anillo concéntrico
+  const baseR = 48;
+  const radii: number[] = [];
+  for (let i = 0; i < ringCount; i++) {
+    if (cfg.pitchProgression === 'increasing') {
+      const prev = i === 0 ? baseR : radii[i - 1];
+      radii.push(prev + Math.round(targetPitchPx * (0.8 + i * 0.35)));
+    } else {
+      radii.push(baseR + i * targetPitchPx);
+    }
+  }
+
+  // 2. Generación de vértices para cada anillo según la forma geométrica
+  const rings: ConcentricPolygonRing[] = [];
+  const targetLines: TargetLineDef[] = [];
+  const guideLines: { x1: number; y1: number; x2: number; y2: number; dashed?: boolean; isRadialAxis?: boolean }[] = [];
+  const ghostSolutionStrokes: { points: { x: number; y: number }[] }[] = [];
+  const keyPoints: KeyPoint[] = [];
+
+  let lineOrderCounter = 1;
+  let kpOrderCounter = 1;
+
+  for (let rIdx = 0; rIdx < ringCount; rIdx++) {
+    const r = radii[rIdx];
+    let ringVertices: { x: number; y: number }[] = [];
+
+    if (cfg.shape === 'triangle_up') {
+      // Triángulo hacia arriba (idéntico al de la imagen de referencia):
+      // Vértice superior en el eje vertical
+      // Vértices inferiores con base horizontal y esquinas sobre los ejes diagonales
+      const topY = cy - r * 1.25;
+      const botY = cy + r * 0.72;
+      const halfW = r * 1.22;
+      ringVertices = [
+        { x: cx, y: Math.round(topY) },
+        { x: Math.round(cx + halfW), y: Math.round(botY) },
+        { x: Math.round(cx - halfW), y: Math.round(botY) },
+      ];
+    } else if (cfg.shape === 'triangle_wide') {
+      // Triángulo ancho obtuso
+      const topY = cy - r * 0.85;
+      const botY = cy + r * 0.65;
+      const halfW = r * 1.55;
+      ringVertices = [
+        { x: cx, y: Math.round(topY) },
+        { x: Math.round(cx + halfW), y: Math.round(botY) },
+        { x: Math.round(cx - halfW), y: Math.round(botY) },
+      ];
+    } else if (cfg.shape === 'diamond') {
+      // Cuadrado rotado 45° (Rombo con vértices en ejes X e Y)
+      ringVertices = [
+        { x: cx, y: Math.round(cy - r) },
+        { x: Math.round(cx + r), y: cy },
+        { x: cx, y: Math.round(cy + r) },
+        { x: Math.round(cx - r), y: cy },
+      ];
+    } else if (cfg.shape === 'square_ortho') {
+      // Cuadrado ortogonal con aristas horizontales y verticales
+      ringVertices = [
+        { x: Math.round(cx - r), y: Math.round(cy - r) },
+        { x: Math.round(cx + r), y: Math.round(cy - r) },
+        { x: Math.round(cx + r), y: Math.round(cy + r) },
+        { x: Math.round(cx - r), y: Math.round(cy + r) },
+      ];
+    } else if (cfg.shape === 'trapezoid') {
+      // Trapecio isósceles concéntrico
+      const topY = cy - r * 0.75;
+      const botY = cy + r * 0.75;
+      const topHalfW = r * 0.60;
+      const botHalfW = r * 1.35;
+      ringVertices = [
+        { x: Math.round(cx - topHalfW), y: Math.round(topY) },
+        { x: Math.round(cx + topHalfW), y: Math.round(topY) },
+        { x: Math.round(cx + botHalfW), y: Math.round(botY) },
+        { x: Math.round(cx - botHalfW), y: Math.round(botY) },
+      ];
+    } else if (cfg.shape === 'hexagon') {
+      // Hexágono regular concéntrico
+      for (let k = 0; k < 6; k++) {
+        const rad = ((k * 60 - 90) * Math.PI) / 180;
+        ringVertices.push({
+          x: Math.round(cx + r * Math.cos(rad)),
+          y: Math.round(cy + r * Math.sin(rad)),
+        });
+      }
+    }
+
+    // Keypoint en el vértice principal del anillo (numeración ①, ②, ③, ④ de dentro hacia fuera)
+    const apexPt = ringVertices[0];
+    keyPoints.push({
+      x: apexPt.x,
+      y: apexPt.y,
+      order: rIdx + 1,
+      label: String(rIdx + 1),
+      type: 'start',
+    });
+
+    // Construir aristas del anillo
+    const edges: { start: { x: number; y: number }; end: { x: number; y: number } }[] = [];
+    let perimeter = 0;
+    const closedPolyline: { x: number; y: number }[] = [];
+
+    const numV = ringVertices.length;
+    for (let v = 0; v < numV; v++) {
+      const p1 = ringVertices[v];
+      const p2 = ringVertices[(v + 1) % numV];
+      const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      perimeter += d;
+
+      edges.push({ start: p1, end: p2 });
+      closedPolyline.push(p1);
+
+      // Trayectoria ideal interpolada
+      const STEPS = 20;
+      const idealPath: { x: number; y: number }[] = [];
+      for (let s = 0; s <= STEPS; s++) {
+        const t = s / STEPS;
+        idealPath.push({
+          x: Math.round(p1.x + (p2.x - p1.x) * t),
+          y: Math.round(p1.y + (p2.y - p1.y) * t),
+        });
+      }
+
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      if (angle < 0) angle += 360;
+
+      targetLines.push({
+        id: `cp-ring-${rIdx + 1}-edge-${v + 1}`,
+        start: p1,
+        end: p2,
+        idealPath,
+        angleDeg: Math.round(angle),
+        lengthPx: Math.round(d),
+        order: lineOrderCounter++,
+        startKeyPointOrder: kpOrderCounter++,
+        endKeyPointOrder: kpOrderCounter,
+      });
+
+      // Guía de contorno poligonal
+      guideLines.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, dashed: false });
+    }
+
+    // Cerrar la polilínea para la solución fantasma
+    closedPolyline.push(ringVertices[0]);
+    ghostSolutionStrokes.push({ points: closedPolyline });
+
+    rings.push({
+      ringIndex: rIdx,
+      vertices: ringVertices,
+      edges,
+      perimeterPx: Math.round(perimeter),
+    });
+  }
+
+  // 3. Ejes Radiales de Referencia (Marco de Andamiaje Geométrico)
+  // Cruz ortogonal + Aspas diagonales alineadas con los vértices de las figuras
+  const axisLen = Math.min(canvasWidth - 70, canvasHeight - 70) / 2;
+  const outerRing = rings[rings.length - 1];
+  let diagRayX = Math.round(axisLen * 0.95);
+  let diagRayY = Math.round(axisLen * 0.95);
+
+  if (outerRing && outerRing.vertices.length >= 3 && (cfg.shape === 'triangle_up' || cfg.shape === 'triangle_wide')) {
+    // Alinear las aspas diagonales inferiores exactamente a través de las esquinas del triángulo
+    const corner = outerRing.vertices[1];
+    const dxCorner = corner.x - cx;
+    const dyCorner = corner.y - cy;
+    const cornerDist = Math.hypot(dxCorner, dyCorner);
+    if (cornerDist > 10) {
+      diagRayX = Math.round((dxCorner / cornerDist) * axisLen * 1.15);
+      diagRayY = Math.round((dyCorner / cornerDist) * axisLen * 1.15);
+    }
+  }
+
+  const radialAxes: { x1: number; y1: number; x2: number; y2: number }[] = [
+    // Eje vertical
+    { x1: cx, y1: Math.round(cy - axisLen * 1.1), x2: cx, y2: Math.round(cy + axisLen * 1.1) },
+    // Eje horizontal
+    { x1: Math.round(cx - axisLen * 1.35), y1: cy, x2: Math.round(cx + axisLen * 1.35), y2: cy },
+    // Diagonal 1 (a través de la esquina inferior derecha y el cuadrante superior izquierdo)
+    { x1: Math.round(cx - diagRayX), y1: Math.round(cy - diagRayY), x2: Math.round(cx + diagRayX), y2: Math.round(cy + diagRayY) },
+    // Diagonal 2 (a través de la esquina inferior izquierda y el cuadrante superior derecho)
+    { x1: Math.round(cx + diagRayX), y1: Math.round(cy - diagRayY), x2: Math.round(cx - diagRayX), y2: Math.round(cy + diagRayY) },
+  ];
+
+  // Insertar los ejes radiales al principio de guideLines
+  for (const ax of radialAxes) {
+    guideLines.unshift({ ...ax, dashed: false, isRadialAxis: true });
+  }
+
+  const shapeLabels: Record<ConcentricPolygonShape, string> = {
+    triangle_up: 'Triángulos Concéntricos (△)',
+    triangle_wide: 'Triángulos Anchos (△)',
+    diamond: 'Diamantes a 45° (◇)',
+    square_ortho: 'Cuadrados Ortogonales (□)',
+    trapezoid: 'Trapecios Isósceles (⏢)',
+    hexagon: 'Hexágonos Radiales (⬡)',
+  };
+
+  const shapeTitle = shapeLabels[cfg.shape] || 'Polígonos Concéntricos';
+  const totalEdges = rings.reduce((acc, r) => acc + r.edges.length, 0);
+
+  return {
+    id: `cp-${exercise.code}-${seed}`,
+    pageNumber: exercise.page || 0,
+    code: exercise.code,
+    category: 'concentric_polygons',
+    title: exercise.title,
+    subtitle: `${shapeTitle} · ${ringCount} Anillos · Paso ${targetPitchPx}px · Ejes Radiales`,
+    blockTitle: exercise.block,
+    seed,
+    instruction: exercise.instruction,
+    targetMetricsText: exercise.metrics,
+    targetAngleDeg: 0,
+    targetSpacingPx: targetPitchPx,
+    targetLengthPx: Math.round(rings[0]?.edges[0] ? Math.hypot(rings[0].edges[0].end.x - rings[0].edges[0].start.x, rings[0].edges[0].end.y - rings[0].edges[0].start.y) : 100),
+    minRequiredStrokes: Math.min(ringCount, totalEdges),
+    targetLines,
+    isSingleStrokeAutoEval: false,
+    guideMode: cfg.guideType || 'gray_line',
+    keyPoints,
+    ghostSolutionStrokes,
+    idealPath: ghostSolutionStrokes[0]?.points || [],
+    expectedDirectionAngleDeg: 0,
+    guideLines,
+    concentricPolygonParams: {
+      shape: cfg.shape,
+      center: { x: cx, y: cy },
+      rings,
+      targetPitchPx,
+      radialAxes,
+    },
+  };
 }
 
 /**
@@ -1335,6 +1597,11 @@ export function generateSingleStrokeChallenge(
   canvasWidth = 750,
   canvasHeight = 500
 ): ProceduralStrokeChallenge {
+  // Si es un reto de polígonos concéntricos (C4.4)
+  if (exercise.category === 'concentric_polygons' || exercise.concentricPolygonConfig) {
+    return generateConcentricPolygonChallenge(exercise, seed, canvasWidth, canvasHeight);
+  }
+
   // Si es un reto de espaciado en carriles (Consistencia 1.1)
   if (exercise.spacingTrackConfig) {
     return generateSpacingTrackChallenge(exercise, seed, canvasWidth, canvasHeight);
@@ -1768,10 +2035,12 @@ export function generateStrokeChallenge(
       ? ALL_LAB_EXERCISES.find((e) => e.page === exerciseOrPage) || ALL_LAB_EXERCISES[0]
       : exerciseOrPage;
 
-  // Si es un ejercicio de trazo único de calistenia, generamos reto de trazo único
+  // Si es un ejercicio de trazo único de calistenia o polígonos concéntricos
   if (
     exercise.isSingleStroke ||
     exercise.spacingTrackConfig ||
+    exercise.concentricPolygonConfig ||
+    exercise.category === 'concentric_polygons' ||
     exercise.family === 'calisthenics_single' ||
     exercise.category === 'single_stroke_line' ||
     exercise.category === 'single_stroke_curve'

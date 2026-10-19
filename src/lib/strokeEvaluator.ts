@@ -4107,12 +4107,429 @@ export function evaluateSpacingTrackSubmission(
 }
 
 /**
+ * Evalúa el reto de Polígonos Concéntricos con Ejes Radiales (C4.4)
+ * Mide paso interlineal (pitch), paralelismo de caras, rectitud y anclaje en ejes radiales
+ */
+export function evaluateConcentricPolygonSubmission(
+  strokes: RawStroke[],
+  challenge: ProceduralStrokeChallenge
+): StrokeEvaluation {
+  const activePhase = challenge.activePhase || 1;
+  const cp = challenge.concentricPolygonParams;
+
+  if (strokes.length === 0) {
+    return {
+      overallScore: 0,
+      passed: false,
+      metrics: {
+        parallelismScore: 0,
+        spacingScore: 0,
+        straightnessScore: 0,
+        tonalDensityScore: 0,
+        boundaryScore: 0,
+      },
+      detectedStats: {
+        strokeCount: 0,
+        measuredAvgSpacingPx: 0,
+        spacingVariance: 0,
+        measuredAvgAngleDeg: 0,
+        measuredOpticalDensityPct: 0,
+      },
+      feedbackTitle: '¡Lienzo Vacío!',
+      feedbackMessage: 'No has dibujado ningún polígono. Dibuja los polígonos concéntricos anclando sus esquinas en los ejes radiales.',
+      tipMessage: 'Mantén una velocidad uniforme y apóyate en los ejes para calcular el espaciado entre anillos.',
+      avatarMood: 'surprised',
+      currentPhase: activePhase,
+      phasePassed: false,
+    };
+  }
+
+  const center = cp?.center || { x: 375, y: 250 };
+  const rings = cp?.rings || [];
+  const targetPitch = cp?.targetPitchPx || 22;
+  const ringCount = rings.length || 4;
+
+  // Filtrar trazos válidos (longitud > 10px)
+  const validStrokes = strokes.filter((s) => {
+    if (s.points.length < 2) return false;
+    let len = 0;
+    for (let i = 0; i < s.points.length - 1; i++) {
+      len += dist(s.points[i].x, s.points[i].y, s.points[i + 1].x, s.points[i + 1].y);
+    }
+    return len >= 10;
+  });
+
+  if (validStrokes.length === 0) {
+    return {
+      overallScore: 0,
+      passed: false,
+      metrics: {
+        parallelismScore: 0,
+        spacingScore: 0,
+        straightnessScore: 0,
+        tonalDensityScore: 0,
+        boundaryScore: 0,
+      },
+      detectedStats: {
+        strokeCount: 0,
+        measuredAvgSpacingPx: 0,
+        spacingVariance: 0,
+        measuredAvgAngleDeg: 0,
+        measuredOpticalDensityPct: 0,
+      },
+      feedbackTitle: 'Trazos Demasiado Cortos',
+      feedbackMessage: 'Los trazos son muy breves o toques accidentales. Dibuja las aristas o polígonos con decisión.',
+      tipMessage: 'Sigue los ejes radiales y conecta los vértices de cada figura.',
+      avatarMood: 'curious',
+      currentPhase: activePhase,
+      phasePassed: false,
+    };
+  }
+
+  // 1. Recolección de puntos y descomposición en segmentos de aristas
+  interface Segment {
+    p1: { x: number; y: number };
+    p2: { x: number; y: number };
+    angleDeg: number;
+    length: number;
+    centerDist: number;
+    straightness: number;
+  }
+
+  const segments: Segment[] = [];
+
+  for (const s of validStrokes) {
+    const pts = s.points;
+    let strokeLen = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      strokeLen += dist(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
+    }
+
+    // Si el trazo es largo y tiene esquinas pronunciadas (polilínea cerrada o semi-cerrada)
+    // detectamos esquinas para dividir en aristas individuales
+    if (pts.length >= 6 && strokeLen > targetPitch * 2.5) {
+      const cornerIndices: number[] = [0];
+      const step = Math.max(2, Math.floor(pts.length / 25));
+
+      for (let i = step; i < pts.length - step; i += step) {
+        const pPrev = pts[i - step];
+        const pCurr = pts[i];
+        const pNext = pts[i + step];
+        const a1 = Math.atan2(pCurr.y - pPrev.y, pCurr.x - pPrev.x);
+        const a2 = Math.atan2(pNext.y - pCurr.y, pNext.x - pCurr.x);
+        let diff = Math.abs(a2 - a1) * (180 / Math.PI);
+        if (diff > 180) diff = 360 - diff;
+        if (diff > 35) {
+          cornerIndices.push(i);
+        }
+      }
+      cornerIndices.push(pts.length - 1);
+
+      // Limpiar esquinas demasiado juntas (< 15px)
+      const cleanCorners: number[] = [cornerIndices[0]];
+      for (let c = 1; c < cornerIndices.length; c++) {
+        const lastIdx = cleanCorners[cleanCorners.length - 1];
+        const d = dist(pts[lastIdx].x, pts[lastIdx].y, pts[cornerIndices[c]].x, pts[cornerIndices[c]].y);
+        if (d >= 15 || c === cornerIndices.length - 1) {
+          cleanCorners.push(cornerIndices[c]);
+        }
+      }
+
+      if (cleanCorners.length >= 3) {
+        for (let c = 0; c < cleanCorners.length - 1; c++) {
+          const idxA = cleanCorners[c];
+          const idxB = cleanCorners[c + 1];
+          const subPts = pts.slice(idxA, idxB + 1);
+          const p1 = subPts[0];
+          const p2 = subPts[subPts.length - 1];
+          const segLen = dist(p1.x, p1.y, p2.x, p2.y);
+          if (segLen < 10) continue;
+
+          let angle = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
+          if (angle < 0) angle += 180;
+
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+          const cDist = dist(center.x, center.y, midX, midY);
+          const straight = evaluateStrokeStraightness({ points: subPts });
+
+          segments.push({
+            p1,
+            p2,
+            angleDeg: angle,
+            length: segLen,
+            centerDist: cDist,
+            straightness: straight,
+          });
+        }
+        continue;
+      }
+    }
+
+    // Trazo simple como arista individual
+    const p1 = pts[0];
+    const p2 = pts[pts.length - 1];
+    const segLen = dist(p1.x, p1.y, p2.x, p2.y);
+    let angle = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
+    if (angle < 0) angle += 180;
+    const midX = (p1.x + p2.x) / 2;
+    const midY = (p1.y + p2.y) / 2;
+    const cDist = dist(center.x, center.y, midX, midY);
+    const straight = evaluateStrokeStraightness(s);
+
+    segments.push({
+      p1,
+      p2,
+      angleDeg: angle,
+      length: segLen,
+      centerDist: cDist,
+      straightness: straight,
+    });
+  }
+
+  // 2. Rectitud Promedio
+  let sumStraightness = 0;
+  for (const seg of segments) {
+    sumStraightness += seg.straightness;
+  }
+  const straightnessScore = segments.length > 0 ? Math.round(sumStraightness / segments.length) : 80;
+
+  // 3. Medición del Paso Interlineal Radial (Pitch / Spacing)
+  const ringIdealRadii = rings.map((r) => {
+    let sumR = 0;
+    for (const v of r.vertices) {
+      sumR += dist(center.x, center.y, v.x, v.y);
+    }
+    return sumR / Math.max(1, r.vertices.length);
+  });
+
+  const ringMeasuredRadiiBuckets: number[][] = rings.map(() => []);
+  for (const s of validStrokes) {
+    for (const p of s.points) {
+      const d = dist(center.x, center.y, p.x, p.y);
+      let bestRIdx = 0;
+      let minDiff = Infinity;
+      for (let ri = 0; ri < ringIdealRadii.length; ri++) {
+        const diff = Math.abs(d - ringIdealRadii[ri]);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestRIdx = ri;
+        }
+      }
+      if (minDiff < targetPitch * 1.6) {
+        ringMeasuredRadiiBuckets[bestRIdx].push(d);
+      }
+    }
+  }
+
+  const ringMeasuredRadii: (number | null)[] = ringMeasuredRadiiBuckets.map((bucket) => {
+    if (bucket.length < 5) return null;
+    const sum = bucket.reduce((a, b) => a + b, 0);
+    return sum / bucket.length;
+  });
+
+  const validRingRadii = ringMeasuredRadii.filter((r): r is number => r !== null);
+  const detectedPitches: number[] = [];
+  for (let i = 0; i < ringMeasuredRadii.length - 1; i++) {
+    const r1 = ringMeasuredRadii[i];
+    const r2 = ringMeasuredRadii[i + 1];
+    if (r1 !== null && r2 !== null && r2 > r1) {
+      detectedPitches.push(r2 - r1);
+    }
+  }
+
+  let measuredAvgSpacingPx = targetPitch;
+  let measuredSpacingVariance = 0;
+  let spacingScore = 70;
+
+  if (detectedPitches.length > 0) {
+    const sumP = detectedPitches.reduce((a, b) => a + b, 0);
+    measuredAvgSpacingPx = Math.round((sumP / detectedPitches.length) * 10) / 10;
+
+    let varSum = 0;
+    for (const p of detectedPitches) {
+      varSum += (p - measuredAvgSpacingPx) * (p - measuredAvgSpacingPx);
+    }
+    measuredSpacingVariance = Math.round(Math.sqrt(varSum / detectedPitches.length) * 10) / 10;
+
+    const pitchError = Math.abs(measuredAvgSpacingPx - targetPitch);
+    spacingScore = Math.max(0, Math.min(100, Math.round(100 - pitchError * 2.8 - measuredSpacingVariance * 3.2)));
+  } else if (validRingRadii.length >= 2) {
+    const span = validRingRadii[validRingRadii.length - 1] - validRingRadii[0];
+    measuredAvgSpacingPx = Math.round((span / (validRingRadii.length - 1)) * 10) / 10;
+    const pitchError = Math.abs(measuredAvgSpacingPx - targetPitch);
+    spacingScore = Math.max(0, Math.min(100, Math.round(90 - pitchError * 3.0)));
+  }
+
+  // 4. Paralelismo de Caras entre Anillos Concéntricos
+  const faceTargetAngles: number[] = [];
+  if (rings.length > 0 && rings[0].edges.length > 0) {
+    for (const edge of rings[0].edges) {
+      let a = (Math.atan2(edge.end.y - edge.start.y, edge.end.x - edge.start.x) * 180) / Math.PI;
+      if (a < 0) a += 180;
+      faceTargetAngles.push(a);
+    }
+  }
+
+  const faceSegmentAngles: number[][] = faceTargetAngles.map(() => []);
+  for (const seg of segments) {
+    let bestFaceIdx = -1;
+    let minAngleDiff = Infinity;
+    for (let f = 0; f < faceTargetAngles.length; f++) {
+      let diff = Math.abs(seg.angleDeg - faceTargetAngles[f]);
+      if (diff > 90) diff = 180 - diff;
+      if (diff < minAngleDiff) {
+        minAngleDiff = diff;
+        bestFaceIdx = f;
+      }
+    }
+    if (bestFaceIdx >= 0 && minAngleDiff < 32) {
+      faceSegmentAngles[bestFaceIdx].push(seg.angleDeg);
+    }
+  }
+
+  let totalFaceStdDev = 0;
+  let evaluatedFacesCount = 0;
+  for (const fAngles of faceSegmentAngles) {
+    if (fAngles.length >= 2) {
+      const avg = fAngles.reduce((a, b) => a + b, 0) / fAngles.length;
+      let v = 0;
+      for (const a of fAngles) {
+        let diff = Math.abs(a - avg);
+        if (diff > 90) diff = 180 - diff;
+        v += diff * diff;
+      }
+      totalFaceStdDev += Math.sqrt(v / fAngles.length);
+      evaluatedFacesCount++;
+    }
+  }
+
+  const avgFaceStdDev = evaluatedFacesCount > 0 ? totalFaceStdDev / evaluatedFacesCount : 4.0;
+  const parallelismScore = Math.max(0, Math.min(100, Math.round(100 - avgFaceStdDev * 4.2)));
+
+  // 5. Anclaje de Vértices en Ejes Radiales (Boundary Score)
+  let sumVertexAxisDist = 0;
+  let countedVertices = 0;
+  const allTargetVertices = rings.flatMap((r) => r.vertices);
+
+  for (const tv of allTargetVertices) {
+    let minD = Infinity;
+    for (const s of validStrokes) {
+      for (const p of s.points) {
+        const d = dist(tv.x, tv.y, p.x, p.y);
+        if (d < minD) minD = d;
+      }
+    }
+    if (minD < targetPitch * 2.0) {
+      sumVertexAxisDist += minD;
+      countedVertices++;
+    }
+  }
+
+  const avgVertexDist = countedVertices > 0 ? sumVertexAxisDist / countedVertices : targetPitch;
+  const boundaryScore = Math.max(0, Math.min(100, Math.round(100 - avgVertexDist * 2.2)));
+
+  // 6. Cobertura del Ejercicio (Tonal Density / Rings Drawn)
+  const drawnRingsCount = validRingRadii.length;
+  const coverageRatio = Math.min(1.0, drawnRingsCount / Math.max(1, ringCount));
+  const tonalDensityScore = Math.round(coverageRatio * 100);
+
+  // 7. Puntuación Global Ponderada
+  const overallScore = Math.round(
+    spacingScore * 0.35 +
+    parallelismScore * 0.25 +
+    boundaryScore * 0.20 +
+    straightnessScore * 0.20
+  );
+
+  const passed = overallScore >= 75 && coverageRatio >= 0.70;
+  const phasePassed = passed;
+
+  // 8. Mensajes pedagógicos y avatar
+  let feedbackTitle = '¡Nivel Superado! ✅';
+  let feedbackMessage = `Buen control del paralelismo y proporción concéntrica (${overallScore}%). Las figuras guardan una distancia regular.`;
+  let tipMessage = 'Mantén la velocidad uniforme y apóyate en los ejes para calcular el paso entre figuras.';
+  let avatarMood: AvatarMood = 'wink';
+
+  if (coverageRatio < 0.6) {
+    feedbackTitle = 'Polígonos Incompletos';
+    feedbackMessage = `Has dibujado solo ${drawnRingsCount} de los ${ringCount} anillos concéntricos requeridos. Completa la serie completa.`;
+    tipMessage = 'Traza todos los anillos concéntricos anidándolos hacia el exterior.';
+    avatarMood = 'curious';
+  } else if (overallScore >= 90) {
+    feedbackTitle = '¡Geometría Impecable! 🌟';
+    feedbackMessage = `Paso medio de ${measuredAvgSpacingPx}px (±${measuredSpacingVariance}px) y vértices perfectamente anclados en los ejes radiales.`;
+    tipMessage = 'Excelente ritmo y precisión. Pasa ahora a las siguientes fases de fluidez.';
+    avatarMood = 'success-stars';
+  } else if (overallScore >= 75) {
+    feedbackTitle = '¡Nivel Superado! ✅';
+    feedbackMessage = `Buen control del paralelismo y proporción concéntrica (${overallScore}%). El paso se mantiene en ${measuredAvgSpacingPx}px.`;
+    tipMessage = 'Asegura que cada esquina toque exactamente la línea de los ejes radiales.';
+    avatarMood = 'wink';
+  } else {
+    if (spacingScore < parallelismScore && spacingScore < boundaryScore) {
+      feedbackTitle = 'Paso Interlineal Irregular 💨';
+      feedbackMessage = `La distancia entre anillos varía demasiado (${measuredAvgSpacingPx}px vs ${targetPitch}px objetivo). Mantén un ritmo de separación constante.`;
+      tipMessage = 'Compara visualmente el ancho de cada carril entre anillos antes de lanzar el trazo.';
+    } else if (boundaryScore < parallelismScore) {
+      feedbackTitle = 'Desvío de los Ejes Radiales ⚠️';
+      feedbackMessage = `Las esquinas de las figuras se alejan de los ejes radiales de referencia (${overallScore}%).`;
+      tipMessage = 'Usa la intersección con los ejes radiales para clavar los vértices de cada figura.';
+    } else {
+      feedbackTitle = 'Falta de Paralelismo en Caras 📏';
+      feedbackMessage = `Las caras concéntricas pierden la alineación entre sí (${overallScore}%).`;
+      tipMessage = 'Bloquea la muñeca y mantén la misma inclinación en cada cara correspondiente.';
+    }
+    avatarMood = 'curious';
+  }
+
+  const representativeStroke = validStrokes[0] || strokes[0];
+  const kinematics = analyzeStrokeKinematics(
+    representativeStroke,
+    'bottom_up_left_right',
+    activePhase,
+    challenge.targetLengthPx || 100
+  );
+
+  return {
+    overallScore,
+    passed,
+    metrics: {
+      parallelismScore,
+      spacingScore,
+      straightnessScore,
+      tonalDensityScore,
+      boundaryScore,
+    },
+    detectedStats: {
+      strokeCount: validStrokes.length,
+      measuredAvgSpacingPx,
+      spacingVariance: measuredSpacingVariance,
+      measuredAvgAngleDeg: Math.round(faceTargetAngles[0] || 0),
+      measuredOpticalDensityPct: tonalDensityScore,
+    },
+    feedbackTitle,
+    feedbackMessage,
+    tipMessage,
+    avatarMood,
+    kinematics,
+    currentPhase: activePhase,
+    phasePassed,
+  };
+}
+
+/**
  * Validador principal para evaluar cualquier reto del laboratorio
  */
 export function evaluateStrokeSubmission(
   strokes: RawStroke[],
   challenge: ProceduralStrokeChallenge
 ): StrokeEvaluation {
+  // Si es un reto de polígonos concéntricos (C4.4)
+  if (challenge.concentricPolygonParams || challenge.category === 'concentric_polygons') {
+    return evaluateConcentricPolygonSubmission(strokes, challenge);
+  }
+
   // Si es un reto de carriles y espaciado (Consistencia 1.1)
   if (challenge.spacingTrackParams) {
     return evaluateSpacingTrackSubmission(strokes, challenge);
