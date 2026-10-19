@@ -4186,7 +4186,103 @@ export function evaluateConcentricPolygonSubmission(
     };
   }
 
-  // 1. Recolección de puntos y descomposición en segmentos de aristas
+  // 1. Verificación individual de cada forma contra el patrón objetivo
+  // REGLA: Si falta una sola forma concéntrica, la nota global es 0% (tienen que estar todas).
+  const missingRingIndices: number[] = [];
+
+  for (let rIdx = 0; rIdx < rings.length; rIdx++) {
+    const ring = rings[rIdx];
+    let matchedEdgesCount = 0;
+
+    for (const edge of ring.edges) {
+      const dx = edge.end.x - edge.start.x;
+      const dy = edge.end.y - edge.start.y;
+      const edgeLen = Math.hypot(dx, dy);
+      const edgeDir = edgeLen > 0.001 ? { x: dx / edgeLen, y: dy / edgeLen } : { x: 1, y: 0 };
+
+      const SAMPLES = 12;
+      let matchedSamples = 0;
+
+      for (let s = 0; s <= SAMPLES; s++) {
+        const t = s / SAMPLES;
+        const px = edge.start.x + dx * t;
+        const py = edge.start.y + dy * t;
+
+        let minDist = Infinity;
+        for (const strk of validStrokes) {
+          for (let i = 0; i < strk.points.length - 1; i++) {
+            const p1 = strk.points[i];
+            const p2 = strk.points[i + 1];
+            const sDx = p2.x - p1.x;
+            const sDy = p2.y - p1.y;
+            const sLen = Math.hypot(sDx, sDy);
+            if (sLen < 1) continue;
+
+            const dot = Math.abs((sDx / sLen) * edgeDir.x + (sDy / sLen) * edgeDir.y);
+            if (dot < 0.45) continue;
+
+            const d = distPointToSegment(px, py, p1.x, p1.y, p2.x, p2.y);
+            if (d < minDist) minDist = d;
+          }
+        }
+
+        if (minDist <= 24) {
+          matchedSamples++;
+        }
+      }
+
+      const edgeCoverage = matchedSamples / (SAMPLES + 1);
+      if (edgeCoverage >= 0.38) {
+        matchedEdgesCount++;
+      }
+    }
+
+    const ringCoverage = matchedEdgesCount / ring.edges.length;
+    // Si se ha dibujado menos del 45% de las aristas del anillo, la figura se considera faltante
+    if (ringCoverage < 0.45) {
+      missingRingIndices.push(rIdx);
+    }
+  }
+
+  // Si falta cualquier figura de la serie concéntrica -> Nota 0%
+  if (missingRingIndices.length > 0) {
+    const drawnRings = ringCount - missingRingIndices.length;
+    const representativeStroke = validStrokes[0] || strokes[0];
+    const kinematics = analyzeStrokeKinematics(
+      representativeStroke,
+      'bottom_up_left_right',
+      activePhase,
+      challenge.targetLengthPx || 100
+    );
+
+    return {
+      overallScore: 0,
+      passed: false,
+      metrics: {
+        parallelismScore: 0,
+        spacingScore: 0,
+        straightnessScore: 0,
+        tonalDensityScore: Math.round((drawnRings / ringCount) * 100),
+        boundaryScore: 0,
+      },
+      detectedStats: {
+        strokeCount: validStrokes.length,
+        measuredAvgSpacingPx: 0,
+        spacingVariance: 0,
+        measuredAvgAngleDeg: 0,
+        measuredOpticalDensityPct: Math.round((drawnRings / ringCount) * 100),
+      },
+      feedbackTitle: '¡Falta una Forma Concéntrica! (Nota: 0%)',
+      feedbackMessage: `Has omitido ${missingRingIndices.length} de las ${ringCount} figuras concéntricas (anillo ${missingRingIndices.map((i) => i + 1).join(', ')}). Es obligatorio completar TODAS las formas concéntricas para puntuar.`,
+      tipMessage: 'Dibuja cada una de las figuras concéntricas completas apoyando las esquinas en los ejes radiales.',
+      avatarMood: 'fail-spiral',
+      kinematics,
+      currentPhase: activePhase,
+      phasePassed: false,
+    };
+  }
+
+  // 2. Recolección de puntos y descomposición en segmentos de aristas
   interface Segment {
     p1: { x: number; y: number };
     p2: { x: number; y: number };

@@ -758,16 +758,6 @@ export function generateConcentricPolygonChallenge(
       }
     }
 
-    // Keypoint en el vértice principal del anillo (numeración ①, ②, ③, ④ de dentro hacia fuera)
-    const apexPt = ringVertices[0];
-    keyPoints.push({
-      x: apexPt.x,
-      y: apexPt.y,
-      order: rIdx + 1,
-      label: String(rIdx + 1),
-      type: 'start',
-    });
-
     // Construir aristas del anillo
     const edges: { start: { x: number; y: number }; end: { x: number; y: number } }[] = [];
     let perimeter = 0;
