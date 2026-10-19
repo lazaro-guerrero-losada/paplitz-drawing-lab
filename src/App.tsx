@@ -34,6 +34,7 @@ import { SessionRecordPanel } from './components/SessionRecordPanel';
 import { VariantSelectorModal } from './components/VariantSelectorModal';
 import { StrokeLabView } from './components/StrokeLabView';
 import { Lab3DView } from './components/Lab3D/Lab3DView';
+import { Focal3DView } from './components/Focal3D/Focal3DView';
 import { calculatePlayerLevel } from './lib/levelSystem';
 import { SenseiCubo } from './components/avatar/SenseiCubo';
 import { AvatarMood } from './lib/avatarTypes';
@@ -54,7 +55,6 @@ import {
   Maximize2,
   ArrowRight,
   FileText,
-  FlaskConical,
   Boxes,
 } from 'lucide-react';
 import { PaplitzSaveData, applySaveDataToLocalStorage, fastForwardCurriculum } from './lib/saveSystem';
@@ -135,8 +135,8 @@ function loadAndSanitizeUnits(savedKey: string, defaultUnits: Unit[]): Unit[] {
 }
 
 export function App() {
-  // Pestañas principales: 'practice' (Home / Práctica Rápida), 'path' (El Camino), 'minigames' (Minijuegos), 'profile' (Perfil), 'strokelab' (Laboratorio de Trazos Beta), 'lab3d' (Laboratorio de Perspectiva 3D)
-  const [activeTab, setActiveTab] = useState<'practice' | 'path' | 'minigames' | 'profile' | 'strokelab' | 'lab3d'>('practice');
+  // Pestañas principales: 'practice' (Home / Práctica Rápida), 'path' (El Camino), 'minigames' (Minijuegos), 'profile' (Perfil), 'lab3d' (Laboratorio de Perspectiva 3D), 'focal3d' (Perspectiva 1 Punto Focal)
+  const [activeTab, setActiveTab] = useState<'practice' | 'path' | 'minigames' | 'profile' | 'strokelab' | 'lab3d' | 'focal3d'>('practice');
 
   // Estado del Menú Lateral Móvil (Drawer) y Detección de Orientación
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -1260,19 +1260,6 @@ export function App() {
               <span>Perfil</span>
             </button>
             <button
-              onClick={() => setActiveTab('strokelab')}
-              className={`px-2 sm:px-3 py-1.5 text-xs font-mono uppercase font-bold flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer ${
-                activeTab === 'strokelab'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'hover:bg-amber-50 text-amber-900 border-l border-neutral-300'
-              }`}
-              title="Laboratorio de Trazos y Patrones Procedurales (Beta)"
-            >
-              <FlaskConical className="w-4 h-4 shrink-0 text-amber-600" />
-              <span>Lab Trazos</span>
-              <span className="text-[9px] bg-amber-200 text-amber-900 font-extrabold px-1 py-0.2 rounded">BETA</span>
-            </button>
-            <button
               onClick={() => setActiveTab('lab3d')}
               className={`px-2 sm:px-3 py-1.5 text-xs font-mono uppercase font-bold flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer ${
                 activeTab === 'lab3d'
@@ -1283,6 +1270,18 @@ export function App() {
             >
               <Boxes className="w-4 h-4 shrink-0 text-indigo-600" />
               <span>Lab 3D</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('focal3d')}
+              className={`px-2 sm:px-3 py-1.5 text-xs font-mono uppercase font-bold flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer ${
+                activeTab === 'focal3d'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'hover:bg-violet-50 text-violet-900 border-l border-neutral-300'
+              }`}
+              title="Entrenamiento de Perspectiva con 1 Punto Focal (8 Radios y Formas 3D)"
+            >
+              <Target className="w-4 h-4 shrink-0 text-violet-600" />
+              <span>Focal 3D</span>
             </button>
           </nav>
 
@@ -1521,19 +1520,6 @@ export function App() {
                 </button>
 
                 <button
-                  onClick={() => { setActiveTab('strokelab'); setMobileMenuOpen(false); }}
-                  className={`w-full p-2.5 text-xs font-mono font-bold flex items-center justify-between border-2 border-black shadow-[2px_2px_0px_#000000] transition-colors cursor-pointer ${
-                    activeTab === 'strokelab' ? 'bg-amber-500 text-slate-950' : 'bg-amber-50 text-amber-950 hover:bg-amber-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <FlaskConical className="w-4 h-4 stroke-[2.5] text-amber-700" />
-                    <span className="uppercase font-bold">Lab de Trazos (Beta)</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-
-                <button
                   onClick={() => { setActiveTab('lab3d'); setMobileMenuOpen(false); }}
                   className={`w-full p-2.5 text-xs font-mono font-bold flex items-center justify-between border-2 border-black shadow-[2px_2px_0px_#000000] transition-colors cursor-pointer ${
                     activeTab === 'lab3d' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-950 hover:bg-indigo-100'
@@ -1542,6 +1528,19 @@ export function App() {
                   <div className="flex items-center gap-2.5">
                     <Boxes className="w-4 h-4 stroke-[2.5] text-indigo-600" />
                     <span className="uppercase font-bold">Lab 3D (Perspectiva)</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('focal3d'); setMobileMenuOpen(false); }}
+                  className={`w-full p-2.5 text-xs font-mono font-bold flex items-center justify-between border-2 border-black shadow-[2px_2px_0px_#000000] transition-colors cursor-pointer ${
+                    activeTab === 'focal3d' ? 'bg-violet-600 text-white' : 'bg-violet-50 text-violet-950 hover:bg-violet-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Target className="w-4 h-4 stroke-[2.5] text-violet-600" />
+                    <span className="uppercase font-bold">Focal 3D (1 Punto Focal)</span>
                   </div>
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -2081,6 +2080,27 @@ export function App() {
             isRecording={isRecording}
             onRecordExercise={handleRecordExercise}
             onOpenRecordModal={() => setIsRecordModalOpen(true)}
+          />
+        )}
+
+        {/* PESTAÑA: LABORATORIO DE PERSPECTIVA 1 PUNTO FOCAL (FOCAL 3D) */}
+        {activeTab === 'focal3d' && (
+          <Focal3DView
+            onAwardXP={(amount) => setXp((prev) => prev + amount)}
+            onAvatarMoodChange={(mood) => setAvatarMood(mood)}
+            onExit={() => setActiveTab('practice')}
+            isRecording={isRecording}
+            onToggleRecording={() => {
+              if (!isRecording) {
+                setIsRecording(true);
+                showToast('🔴', 'Modo Récord Activado', 'Cada ejercicio que completes se guardará en esta sesión temporal.', 'Ver', () => setIsRecordModalOpen(true));
+              } else {
+                setIsRecordModalOpen(true);
+              }
+            }}
+            onOpenRecordModal={() => setIsRecordModalOpen(true)}
+            recordedCount={sessionRecords.length}
+            onRecordExercise={handleRecordExercise}
           />
         )}
       </main>
