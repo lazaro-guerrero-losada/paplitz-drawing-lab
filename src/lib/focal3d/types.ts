@@ -41,6 +41,7 @@ export interface PrecalculatedShape3D {
   axisCurve?: CurveSegment2D;    // Eje central requerido en cilindro
   radiusCurve?: CurveSegment2D;  // Radio del cilindro
   guidelinesToFocal: CurveSegment2D[]; // Rayos discontinuos desde los vértices hasta el punto focal
+  anchorCurves: CurveSegment2D[]; // Líneas de referencia permanentes que indican dónde está la forma y sus dimensiones (visibles siempre, con o sin ayudas)
   allCurves: CurveSegment2D[];   // Todas las curvas objetivo que el alumno debe dibujar
 }
 

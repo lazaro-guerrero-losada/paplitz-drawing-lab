@@ -13,6 +13,7 @@ import {
 } from '../../lib/focal3d/types';
 import { generateFocal3DChallenge } from '../../lib/focal3d/generator';
 import { evaluateFocal3DSubmission } from '../../lib/focal3d/evaluator';
+import { FocalSelectorPanel } from './FocalSelectorPanel';
 import {
   Undo2,
   Redo2,
@@ -27,9 +28,7 @@ import {
   AlertTriangle,
   Sparkles,
   PenTool,
-  Target,
   Box,
-  Compass,
   Trophy,
 } from 'lucide-react';
 import { SessionRecordItem } from '../../lib/sessionRecorder';
@@ -273,7 +272,69 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
     ctx.fillText('PUNTO FOCAL (1 PF)', fp.x, fp.y + 19);
     ctx.restore();
 
-    // 3. AYUDAS 3D (Rayos de fuga hacia el punto focal o solución fantasma)
+    // 3. LÍNEAS DE ANCLAJE OBLIGATORIAS (VISIBLES SIEMPRE, INCLUSO CON AYUDAS OFF)
+    // Indican dónde está cada forma, sus dimensiones y los rayos de convergencia al punto focal
+    if (!evaluation || visionMode === 'all' || visionMode === 'solution') {
+      ctx.save();
+      for (const shape of challenge.shapes) {
+        if (shape.anchorCurves) {
+          for (const anc of shape.anchorCurves) {
+            ctx.beginPath();
+            if (anc.style === 'dashed') {
+              ctx.strokeStyle = '#64748b'; // Rayos de fuga al punto focal / eje
+              ctx.lineWidth = 1.3;
+              ctx.setLineDash([6, 5]);
+            } else {
+              ctx.strokeStyle = '#475569'; // Cara frontal / dimensiones sólidas
+              ctx.lineWidth = 1.6;
+              ctx.setLineDash([]);
+            }
+            anc.points.forEach((pt, idx) => {
+              if (idx === 0) ctx.moveTo(pt.x, pt.y);
+              else ctx.lineTo(pt.x, pt.y);
+            });
+            ctx.stroke();
+          }
+        }
+
+        // Vértices y marcadores de dimensiones
+        if (shape.type === 'CYLINDER') {
+          // Centro del cilindro
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(shape.centerPos.x, shape.centerPos.y, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Marcador de radio
+          if (shape.radiusCurve && shape.radiusCurve.points.length > 0) {
+            const rTip = shape.radiusCurve.points[shape.radiusCurve.points.length - 1];
+            ctx.fillStyle = '#475569';
+            ctx.beginPath();
+            ctx.arc(rTip.x, rTip.y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#475569';
+            ctx.font = 'bold 9px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('R', (shape.centerPos.x + rTip.x) / 2, (shape.centerPos.y + rTip.y) / 2 - 5);
+          }
+        } else {
+          // Puntos en los vértices frontales para facilitar inicio de trazos
+          shape.frontCurves.forEach((fc) => {
+            if (fc.points.length > 0) {
+              const p = fc.points[0];
+              ctx.fillStyle = '#475569';
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          });
+        }
+      }
+      ctx.restore();
+    }
+
+    // 4. AYUDAS 3D ADICIONALES (Rayos de fuga prolongados o esqueleto completo fantasma)
     if (!evaluation && aidMode !== 'off') {
       ctx.save();
       for (const shape of challenge.shapes) {
@@ -513,60 +574,24 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
 
   return (
     <div className="relative w-full h-[calc(100vh-65px)] min-h-[500px] bg-white flex flex-col overflow-hidden select-none">
-      {/* 1. BARRA SUPERIOR DE INFORMACIÓN Y SELECTOR DE FORMAS */}
-      <div className="absolute top-3 left-3 sm:left-5 z-20 flex flex-wrap items-center gap-2">
-        {/* Selector de Modo: Rueda Completa vs Sector */}
-        <div className="bg-white border-2 border-black p-1 shadow-[2px_2px_0px_#000000] flex items-center gap-1 font-mono text-xs">
-          <button
-            onClick={() => {
-              setPracticeMode('full_wheel');
-              loadNewChallenge(currentRound, 'full_wheel', selectedShapeType);
-            }}
-            className={`px-2 py-1 font-bold flex items-center gap-1 transition-colors cursor-pointer ${
-              practiceMode === 'full_wheel' ? 'bg-black text-white' : 'text-neutral-700 hover:bg-neutral-100'
-            }`}
-            title="Dibuja las 8 formas a la vez alrededor del punto focal (como en la foto)"
-          >
-            <Compass className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Rueda 8 Formas</span>
-          </button>
-          <button
-            onClick={() => {
-              setPracticeMode('single');
-              loadNewChallenge(currentRound, 'single', selectedShapeType);
-            }}
-            className={`px-2 py-1 font-bold flex items-center gap-1 transition-colors cursor-pointer ${
-              practiceMode === 'single' ? 'bg-black text-white' : 'text-neutral-700 hover:bg-neutral-100'
-            }`}
-            title="Dibuja 1 sector a la vez avanzando de 1 a 8 rondas"
-          >
-            <Target className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">1 Sector ({currentRound}/8)</span>
-          </button>
-        </div>
-
-        {/* Selector de Forma */}
-        <div className="bg-white border-2 border-black p-1 shadow-[2px_2px_0px_#000000] flex items-center gap-1 font-mono text-xs">
-          <select
-            value={selectedShapeType}
-            onChange={(e) => {
-              const val = e.target.value as Focal3DShapeType;
-              setSelectedShapeType(val);
-              loadNewChallenge(currentRound, practiceMode, val);
-            }}
-            className="bg-transparent font-bold text-xs uppercase cursor-pointer outline-none px-1"
-          >
-            <option value="CUBE">Cubos / Prismas (3 líneas fuga)</option>
-            <option value="CYLINDER">Cilindro (Eje + Radio + Fuga)</option>
-            <option value="TRIANGULAR_PRISM">Prisma Triangular (3 aristas)</option>
-            <option value="PYRAMID">Pirámide</option>
-            <option value="HEXAGON_PRISM">Prisma Hexagonal</option>
-            <option value="MIXED_WHEEL">Rueda Mixta (Variedad)</option>
-          </select>
-        </div>
+      {/* 1. PANEL FLOTANTE LATERAL DE FORMAS Y MODOS (IGUAL A LAB 3D) */}
+      <div className="absolute top-3 left-3 sm:left-5 z-20 flex items-start gap-2">
+        <FocalSelectorPanel
+          currentType={selectedShapeType}
+          onSelectType={(type) => {
+            setSelectedShapeType(type);
+            loadNewChallenge(currentRound, practiceMode, type);
+          }}
+          practiceMode={practiceMode}
+          onChangePracticeMode={(mode) => {
+            setPracticeMode(mode);
+            loadNewChallenge(currentRound, mode, selectedShapeType);
+          }}
+          currentRound={currentRound}
+        />
 
         {sessionScores.length > 0 && (
-          <div className="bg-white border-2 border-black px-2 py-1 shadow-[2px_2px_0px_#000000] font-mono text-xs font-bold flex items-center gap-1">
+          <div className="bg-white border-2 border-black px-2.5 py-1.5 shadow-[2px_2px_0px_#000000] font-mono text-xs font-bold flex items-center gap-1">
             <span className="text-neutral-500">Media:</span>
             <span>{averageScore}%</span>
           </div>
@@ -575,7 +600,7 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
         {onExit && (
           <button
             onClick={onExit}
-            className="bg-white border-2 border-black px-2 py-1 shadow-[2px_2px_0px_#000000] font-mono text-xs font-bold hover:bg-neutral-100 flex items-center gap-1 cursor-pointer"
+            className="bg-white border-2 border-black px-2.5 py-1.5 shadow-[2px_2px_0px_#000000] font-mono text-xs font-bold hover:bg-neutral-100 flex items-center gap-1 cursor-pointer"
             title="Volver a Práctica"
           >
             ← Salir

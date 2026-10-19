@@ -101,6 +101,7 @@ function buildPrecalculatedShape(
   let axisCurve: CurveSegment2D | undefined;
   let radiusCurve: CurveSegment2D | undefined;
   const guidelinesToFocal: CurveSegment2D[] = [];
+  const anchorCurves: CurveSegment2D[] = [];
 
   const prefix = `s${sectorIndex}-${type.toLowerCase()}`;
 
@@ -123,10 +124,11 @@ function buildPrecalculatedShape(
     }));
 
     // 4 Aristas frontales
-    frontCurves.push(makeLineCurve(`${prefix}-f0`, frontVerts[0], frontVerts[1], 'Arista frontal 1'));
-    frontCurves.push(makeLineCurve(`${prefix}-f1`, frontVerts[1], frontVerts[2], 'Arista frontal 2'));
-    frontCurves.push(makeLineCurve(`${prefix}-f2`, frontVerts[2], frontVerts[3], 'Arista frontal 3'));
-    frontCurves.push(makeLineCurve(`${prefix}-f3`, frontVerts[3], frontVerts[0], 'Arista frontal 4'));
+    const f0 = makeLineCurve(`${prefix}-f0`, frontVerts[0], frontVerts[1], 'Arista frontal 1');
+    const f1 = makeLineCurve(`${prefix}-f1`, frontVerts[1], frontVerts[2], 'Arista frontal 2');
+    const f2 = makeLineCurve(`${prefix}-f2`, frontVerts[2], frontVerts[3], 'Arista frontal 3');
+    const f3 = makeLineCurve(`${prefix}-f3`, frontVerts[3], frontVerts[0], 'Arista frontal 4');
+    frontCurves.push(f0, f1, f2, f3);
 
     // En un cubo se necesitan 3 aristas de profundidad visibles hacia el punto focal
     // Los 3 vértices más orientados hacia el punto focal F
@@ -158,6 +160,27 @@ function buildPrecalculatedShape(
     // Aristas traseras visibles conectando los vértices de fuga
     backCurves.push(makeLineCurve(`${prefix}-b0`, backVerts[visibleDepthIndices[0]], backVerts[visibleDepthIndices[1]], 'Arista trasera 1'));
     backCurves.push(makeLineCurve(`${prefix}-b1`, backVerts[visibleDepthIndices[1]], backVerts[visibleDepthIndices[2]], 'Arista trasera 2'));
+
+    // LÍNEAS DE ANCLAJE OBLIGATORIAS (permanentes, incluso con ayudas apagadas):
+    // Cara frontal para dimensiones (ancho x alto) y las 3 líneas de fuga al punto focal
+    anchorCurves.push(
+      makeLineCurve(`${prefix}-anc-f0`, frontVerts[0], frontVerts[1], 'Anclaje frontal 1', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-f1`, frontVerts[1], frontVerts[2], 'Anclaje frontal 2', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-f2`, frontVerts[2], frontVerts[3], 'Anclaje frontal 3', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-f3`, frontVerts[3], frontVerts[0], 'Anclaje frontal 4', 'construction', 'solid')
+    );
+    visibleDepthIndices.forEach((idx, i) => {
+      anchorCurves.push(
+        makeLineCurve(
+          `${prefix}-anc-ray-${i}`,
+          frontVerts[idx],
+          focalPoint,
+          `Línea de fuga obligatoria ${i + 1}`,
+          'construction',
+          'dashed'
+        )
+      );
+    });
 
   } else if (type === 'CYLINDER') {
     // CILINDRO ("colanders"):
@@ -200,6 +223,29 @@ function buildPrecalculatedShape(
     guidelinesToFocal.push(makeLineCurve(`${prefix}-tan1-guide`, tan1Front, focalPoint, 'Guía lateral 1 al punto focal', 'construction', 'dashed'));
     guidelinesToFocal.push(makeLineCurve(`${prefix}-tan2-guide`, tan2Front, focalPoint, 'Guía lateral 2 al punto focal', 'construction', 'dashed'));
 
+    // LÍNEAS DE ANCLAJE OBLIGATORIAS PARA CILINDRO:
+    // "in a cylinder I need the axis line, and the radius"
+    anchorCurves.push(
+      makeLineCurve(
+        `${prefix}-anc-axis`,
+        centerPos,
+        focalPoint,
+        'Eje central cilíndrico hacia el punto focal',
+        'construction',
+        'dashed'
+      )
+    );
+    anchorCurves.push(
+      makeLineCurve(
+        `${prefix}-anc-radius`,
+        centerPos,
+        tan1Front,
+        'Radio de dimensión de la elipse frontal',
+        'construction',
+        'solid'
+      )
+    );
+
   } else if (type === 'TRIANGULAR_PRISM') {
     // PRISMA TRIANGULAR:
     // "for a triangle 3 lines, etc."
@@ -232,14 +278,34 @@ function buildPrecalculatedShape(
     backCurves.push(makeLineCurve(`${prefix}-tb1`, backVerts[1], backVerts[2], 'Arista trasera 2'));
     backCurves.push(makeLineCurve(`${prefix}-tb2`, backVerts[2], backVerts[0], 'Arista trasera 3'));
 
+    // LÍNEAS DE ANCLAJE OBLIGATORIAS: Cara triangular y las 3 líneas de fuga
+    anchorCurves.push(
+      makeLineCurve(`${prefix}-anc-tf0`, frontVerts[0], frontVerts[1], 'Anclaje triángulo 1', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-tf1`, frontVerts[1], frontVerts[2], 'Anclaje triángulo 2', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-tf2`, frontVerts[2], frontVerts[0], 'Anclaje triángulo 3', 'construction', 'solid')
+    );
+    for (let i = 0; i < 3; i++) {
+      anchorCurves.push(
+        makeLineCurve(
+          `${prefix}-anc-tray-${i}`,
+          frontVerts[i],
+          focalPoint,
+          `Línea de fuga triangular ${i + 1}`,
+          'construction',
+          'dashed'
+        )
+      );
+    }
+
   } else if (type === 'PYRAMID') {
     // PIRÁMIDE:
     // Base cuadrangular + ápice convergente hacia el punto focal
     const halfW = 42;
-    const v0: Point2D = { x: centerPos.x - halfW * vPerp.x - halfW * 0.7 * uRad.x, y: centerPos.y - halfW * vPerp.y - halfW * 0.7 * uRad.y };
-    const v1: Point2D = { x: centerPos.x + halfW * vPerp.x - halfW * 0.7 * uRad.x, y: centerPos.y + halfW * vPerp.y - halfW * 0.7 * uRad.y };
-    const v2: Point2D = { x: centerPos.x + halfW * 0.8 * vPerp.x + halfW * 0.7 * uRad.x, y: centerPos.y + halfW * 0.8 * vPerp.y + halfW * 0.7 * uRad.y };
-    const v3: Point2D = { x: centerPos.x - halfW * 0.8 * vPerp.x + halfW * 0.7 * uRad.x, y: centerPos.y - halfW * 0.8 * vPerp.y + halfW * 0.7 * uRad.y };
+    const halfH = 38;
+    const v0: Point2D = { x: centerPos.x - halfW * vPerp.x - halfH * 0.7 * uRad.x, y: centerPos.y - halfW * vPerp.y - halfH * 0.7 * uRad.y };
+    const v1: Point2D = { x: centerPos.x + halfW * vPerp.x - halfH * 0.7 * uRad.x, y: centerPos.y + halfW * vPerp.y - halfH * 0.7 * uRad.y };
+    const v2: Point2D = { x: centerPos.x + halfW * 0.8 * vPerp.x + halfH * 0.7 * uRad.x, y: centerPos.y + halfW * 0.8 * vPerp.y + halfH * 0.7 * uRad.y };
+    const v3: Point2D = { x: centerPos.x - halfW * 0.8 * vPerp.x + halfH * 0.7 * uRad.x, y: centerPos.y - halfW * 0.8 * vPerp.y + halfH * 0.7 * uRad.y };
 
     frontCurves.push(makeLineCurve(`${prefix}-pyr-b0`, v0, v1, 'Base piramidal 1'));
     frontCurves.push(makeLineCurve(`${prefix}-pyr-b1`, v1, v2, 'Base piramidal 2'));
@@ -258,6 +324,14 @@ function buildPrecalculatedShape(
     depthCurves.push(makeLineCurve(`${prefix}-pyr-a3`, v3, apex, 'Arista arista al ápice 4'));
 
     guidelinesToFocal.push(makeLineCurve(`${prefix}-pyr-guide`, apex, focalPoint, 'Eje focal de pirámide', 'construction', 'dashed'));
+
+    anchorCurves.push(
+      makeLineCurve(`${prefix}-anc-pb0`, v0, v1, 'Anclaje base 1', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-pb1`, v1, v2, 'Anclaje base 2', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-pb2`, v2, v3, 'Anclaje base 3', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-pb3`, v3, v0, 'Anclaje base 4', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-paxis`, centerPos, focalPoint, 'Eje de convergencia de ápice', 'construction', 'dashed')
+    );
 
   } else {
     // HEXAGON_PRISM:
@@ -288,6 +362,13 @@ function buildPrecalculatedShape(
 
     for (let k = 0; k < 3; k++) {
       backCurves.push(makeLineCurve(`${prefix}-hxb${k}`, backVerts[k], backVerts[(k + 1) % 6], `Arista trasera hexagonal ${k + 1}`));
+    }
+
+    for (let k = 0; k < 6; k++) {
+      anchorCurves.push(makeLineCurve(`${prefix}-anc-hxf${k}`, frontVerts[k], frontVerts[(k + 1) % 6], 'Anclaje hexágono', 'construction', 'solid'));
+    }
+    for (let k = 0; k < 4; k++) {
+      anchorCurves.push(makeLineCurve(`${prefix}-anc-hxray-${k}`, frontVerts[k], focalPoint, `Línea de fuga hexagonal ${k + 1}`, 'construction', 'dashed'));
     }
   }
 
@@ -322,6 +403,7 @@ function buildPrecalculatedShape(
     axisCurve,
     radiusCurve,
     guidelinesToFocal,
+    anchorCurves,
     allCurves,
   };
 }

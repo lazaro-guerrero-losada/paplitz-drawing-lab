@@ -204,9 +204,6 @@ export function evaluateFocal3DSubmission(
       if (axisRes.isCompleted) {
         shapeCompletedCurves++;
         matchedCurves.push({ points: shape.axisCurve.points, accuracy: axisRes.precision });
-      } else {
-        missingParts.push('Falta el Eje Central hacia el punto focal');
-        missingCurves.push({ points: shape.axisCurve.points });
       }
     }
 
@@ -218,9 +215,6 @@ export function evaluateFocal3DSubmission(
       if (radiusRes.isCompleted) {
         shapeCompletedCurves++;
         matchedCurves.push({ points: shape.radiusCurve.points, accuracy: radiusRes.precision });
-      } else {
-        missingParts.push('Falta marcar el Radio de la elipse');
-        missingCurves.push({ points: shape.radiusCurve.points });
       }
     }
 
