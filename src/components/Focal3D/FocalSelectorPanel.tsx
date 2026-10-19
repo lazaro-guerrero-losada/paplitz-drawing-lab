@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Focal3DShapeType, FocalPracticeMode } from '../../lib/focal3d/types';
+import { Focal3DShapeType, FocalPracticeMode, FocalWheelDensity } from '../../lib/focal3d/types';
 import {
   SlidersHorizontal,
   ChevronLeft,
@@ -19,6 +19,9 @@ interface FocalSelectorPanelProps {
   onSelectType: (type: Focal3DShapeType) => void;
   practiceMode: FocalPracticeMode;
   onChangePracticeMode: (mode: FocalPracticeMode) => void;
+  density: FocalWheelDensity;
+  onChangeDensity: (density: FocalWheelDensity) => void;
+  activeShapeCount: number;
   currentRound: number;
 }
 
@@ -28,8 +31,8 @@ const SHAPE_CONFIG: Record<
 > = {
   CUBE: {
     name: 'Cubo / Prisma',
-    tag: '3 Líneas Fuga',
-    description: '3 líneas de fuga al punto focal y cara frontal',
+    tag: '3 Aristas',
+    description: 'Mínimo indispensable: arista ancho, alto y profundidad',
     icon: Box,
   },
   CYLINDER: {
@@ -40,26 +43,26 @@ const SHAPE_CONFIG: Record<
   },
   TRIANGULAR_PRISM: {
     name: 'Prisma Triangular',
-    tag: '3 Aristas',
-    description: '3 líneas de convergencia desde los 3 vértices',
+    tag: 'Puntos + Fuga',
+    description: 'Vértices frontales a unir + 1 arista de profundidad',
     icon: Triangle,
   },
   PYRAMID: {
     name: 'Pirámide',
     tag: 'Base + Ápice',
-    description: 'Base cuadrangular y aristas que convergen al ápice',
+    description: 'Vértices de base cuadrangular y arista al ápice',
     icon: PyramidIcon,
   },
   HEXAGON_PRISM: {
     name: 'Prisma Hexagonal',
-    tag: '6 Caras',
-    description: 'Hexágono frontal con aristas de profundidad',
+    tag: '6 Vértices',
+    description: 'Vértices del hexágono + 1 arista de profundidad',
     icon: Hexagon,
   },
   MIXED_WHEEL: {
-    name: 'Rueda Mixta (8)',
-    tag: 'Variedad Total',
-    description: 'Cubos, cilindros, prismas y pirámides a la vez',
+    name: 'Rueda Mixta',
+    tag: 'Variedad',
+    description: 'Cubos, cilindros, prismas y pirámides variables',
     icon: Sparkles,
   },
 };
@@ -69,6 +72,9 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
   onSelectType,
   practiceMode,
   onChangePracticeMode,
+  density,
+  onChangeDensity,
+  activeShapeCount,
   currentRound,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
@@ -104,7 +110,7 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
 
         <div className="flex items-center gap-1">
           <span className="bg-black text-white px-1.5 py-0.5 text-[10px] font-mono font-black leading-none shadow-[1px_1px_0px_#000000]">
-            {practiceMode === 'full_wheel' ? 'Rueda 8' : `Sector ${currentRound}/8`}
+            {practiceMode === 'full_wheel' ? `${activeShapeCount} Formas` : `Sector ${currentRound}/8`}
           </span>
           <button
             onClick={() => setIsCollapsed(true)}
@@ -132,7 +138,7 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
             }`}
           >
             <Compass className="w-3 h-3" />
-            <span>Rueda 8 Formas</span>
+            <span>Rueda ({activeShapeCount})</span>
           </button>
 
           <button
@@ -149,6 +155,62 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Selector de Densidad / Adaptación a Pantalla (Tablets vs Desktop) */}
+      {practiceMode === 'full_wheel' && (
+        <div className="flex flex-col gap-1 bg-neutral-50 border border-black p-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-600 font-bold">
+              Figuras en Pantalla
+            </span>
+            <span className="text-[9px] font-mono font-bold bg-white px-1 border border-neutral-300">
+              {activeShapeCount} formas
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            <button
+              type="button"
+              onClick={() => onChangeDensity('auto')}
+              className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
+                density === 'auto' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+              }`}
+              title="Adaptar automáticamente al tamaño de pantalla (Tablets: 2 a 4 figuras grandes, Desktop: 8)"
+            >
+              Auto
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeDensity('wheel4')}
+              className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
+                density === 'wheel4' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+              }`}
+              title="4 Figuras grandes (ideal para tablets o práctica cómoda)"
+            >
+              4 (Tab)
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeDensity('wheel2')}
+              className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
+                density === 'wheel2' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+              }`}
+              title="2 Figuras extra grandes en diagonal"
+            >
+              2 (Diag)
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeDensity('wheel8')}
+              className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
+                density === 'wheel8' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
+              }`}
+              title="8 Figuras completas"
+            >
+              8 (HD)
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Lista de Formas 3D Precalculadas */}
       <div className="flex flex-col gap-1">

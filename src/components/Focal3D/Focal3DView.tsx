@@ -10,6 +10,7 @@ import {
   FocalVisionMode,
   Focal3DChallenge,
   FocalEvaluationResult,
+  FocalWheelDensity,
 } from '../../lib/focal3d/types';
 import { generateFocal3DChallenge } from '../../lib/focal3d/generator';
 import { evaluateFocal3DSubmission } from '../../lib/focal3d/evaluator';
@@ -60,8 +61,10 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   const [sessionScores, setSessionScores] = useState<number[]>([]);
   const [isSessionComplete, setIsSessionComplete] = useState<boolean>(false);
 
-  // Modo de práctica: 'full_wheel' (8 formas a la vez como en la foto) o 'single' (sector por sector)
+  // Modo de práctica: 'full_wheel' o 'single'
   const [practiceMode, setPracticeMode] = useState<FocalPracticeMode>('full_wheel');
+  // Densidad y adaptación a pantalla: 'auto' (2-4 en tablet, 8 en desktop), 'wheel8', 'wheel4', 'wheel2'
+  const [density, setDensity] = useState<FocalWheelDensity>('auto');
   // Tipo de forma seleccionada
   const [selectedShapeType, setSelectedShapeType] = useState<Focal3DShapeType>('CUBE');
 
@@ -80,7 +83,7 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
 
   // Reto actual
   const [challenge, setChallenge] = useState<Focal3DChallenge>(() =>
-    generateFocal3DChallenge(Date.now(), 'full_wheel', 'CUBE', 960, 600, 0)
+    generateFocal3DChallenge(Date.now(), 'full_wheel', 'CUBE', 960, 600, 0, 'auto')
   );
 
   // Trazos y evaluación
@@ -113,9 +116,15 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
 
   // Cargar nuevo reto
   const loadNewChallenge = useCallback(
-    (roundNum: number, modeOverride?: FocalPracticeMode, typeOverride?: Focal3DShapeType) => {
+    (
+      roundNum: number,
+      modeOverride?: FocalPracticeMode,
+      typeOverride?: Focal3DShapeType,
+      densityOverride?: FocalWheelDensity
+    ) => {
       const mode = modeOverride || practiceMode;
       const type = typeOverride || selectedShapeType;
+      const den = densityOverride || density;
       const sectorIdx = (roundNum - 1) % 8;
       const seed = Math.floor(Math.random() * 1000000);
       const newCh = generateFocal3DChallenge(
@@ -124,7 +133,8 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
         type,
         canvasDimensions.width,
         canvasDimensions.height,
-        sectorIdx
+        sectorIdx,
+        den
       );
       setChallenge(newCh);
       setStrokes([]);
@@ -134,7 +144,7 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
       setVisionMode('all');
       setCurrentRound(roundNum);
     },
-    [practiceMode, selectedShapeType, canvasDimensions]
+    [practiceMode, selectedShapeType, density, canvasDimensions]
   );
 
   // Recargar si cambian las dimensiones iniciales
@@ -272,21 +282,22 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
     ctx.fillText('PUNTO FOCAL (1 PF)', fp.x, fp.y + 19);
     ctx.restore();
 
-    // 3. LÍNEAS DE ANCLAJE OBLIGATORIAS (VISIBLES SIEMPRE, INCLUSO CON AYUDAS OFF)
-    // Indican dónde está cada forma, sus dimensiones y los rayos de convergencia al punto focal
+    // 3. LÍNEAS Y PUNTOS DE ANCLAJE MÍNIMOS INDISPENSABLES (VISIBLES SIEMPRE, INCLUSO CON AYUDAS OFF)
+    // Proporciona la mínima información para construir la forma (3 aristas en cubo, vértices en polígonos, eje+radio en cilindro)
     if (!evaluation || visionMode === 'all' || visionMode === 'solution') {
       ctx.save();
       for (const shape of challenge.shapes) {
+        // Trazado de las líneas de anclaje indispensables
         if (shape.anchorCurves) {
           for (const anc of shape.anchorCurves) {
             ctx.beginPath();
             if (anc.style === 'dashed') {
-              ctx.strokeStyle = '#64748b'; // Rayos de fuga al punto focal / eje
-              ctx.lineWidth = 1.3;
-              ctx.setLineDash([6, 5]);
+              ctx.strokeStyle = '#64748b'; // Arista de profundidad / eje hacia el punto focal
+              ctx.lineWidth = 1.4;
+              ctx.setLineDash([5, 4]);
             } else {
-              ctx.strokeStyle = '#475569'; // Cara frontal / dimensiones sólidas
-              ctx.lineWidth = 1.6;
+              ctx.strokeStyle = '#334155'; // Arista de ancho / alto sólida
+              ctx.lineWidth = 1.8;
               ctx.setLineDash([]);
             }
             anc.points.forEach((pt, idx) => {
@@ -297,38 +308,94 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
           }
         }
 
-        // Vértices y marcadores de dimensiones
-        if (shape.type === 'CYLINDER') {
-          // Centro del cilindro
+        // Puntos de anclaje según el tipo de figura geométrica:
+        if (shape.type === 'CUBE') {
+          // EN CUBO: Puntos en los extremos de las 3 aristas concurrentes (ancho, alto y profundidad)
+          if (shape.anchorVertices && shape.anchorVertices.length >= 3) {
+            // Vértice origen (esquina compartida)
+            const origin = shape.anchorVertices[0];
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.arc(origin.x, origin.y, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            // Extremos de ancho, alto y profundidad
+            for (let i = 1; i < shape.anchorVertices.length; i++) {
+              const pt = shape.anchorVertices[i];
+              ctx.fillStyle = i === 3 ? '#64748b' : '#334155';
+              ctx.beginPath();
+              ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        } else if (shape.type === 'CYLINDER') {
+          // EN CILINDRO: Centro + Radio
           ctx.fillStyle = '#0f172a';
           ctx.beginPath();
-          ctx.arc(shape.centerPos.x, shape.centerPos.y, 3.2, 0, Math.PI * 2);
+          ctx.arc(shape.centerPos.x, shape.centerPos.y, 3.5, 0, Math.PI * 2);
           ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
 
-          // Marcador de radio
           if (shape.radiusCurve && shape.radiusCurve.points.length > 0) {
             const rTip = shape.radiusCurve.points[shape.radiusCurve.points.length - 1];
-            ctx.fillStyle = '#475569';
+            ctx.fillStyle = '#334155';
             ctx.beginPath();
-            ctx.arc(rTip.x, rTip.y, 2.5, 0, Math.PI * 2);
+            ctx.arc(rTip.x, rTip.y, 2.8, 0, Math.PI * 2);
             ctx.fill();
 
+            // Etiqueta R
             ctx.fillStyle = '#475569';
             ctx.font = 'bold 9px monospace';
             ctx.textAlign = 'center';
             ctx.fillText('R', (shape.centerPos.x + rTip.x) / 2, (shape.centerPos.y + rTip.y) / 2 - 5);
           }
-        } else {
-          // Puntos en los vértices frontales para facilitar inicio de trazos
-          shape.frontCurves.forEach((fc) => {
-            if (fc.points.length > 0) {
-              const p = fc.points[0];
-              ctx.fillStyle = '#475569';
+        } else if (shape.type === 'TRIANGULAR_PRISM' || shape.type === 'HEXAGON_PRISM') {
+          // EN POLÍGONOS (Triángulo / Hexágono):
+          // En la cara frontal aparecen SOLO LOS VÉRTICES (puntos) para unir + 1 arista de profundidad
+          if (shape.frontVertices) {
+            shape.frontVertices.forEach((v) => {
+              ctx.fillStyle = '#1e293b';
               ctx.beginPath();
-              ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+              ctx.arc(v.x, v.y, 3.2, 0, Math.PI * 2);
               ctx.fill();
-            }
-          });
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.2;
+              ctx.stroke();
+            });
+          }
+          // Punto final de la arista de profundidad
+          if (shape.anchorVertices && shape.anchorVertices.length > 0) {
+            const lastV = shape.anchorVertices[shape.anchorVertices.length - 1];
+            ctx.fillStyle = '#64748b';
+            ctx.beginPath();
+            ctx.arc(lastV.x, lastV.y, 2.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (shape.type === 'PYRAMID') {
+          // EN PIRÁMIDE: Vértices de la base + ápice
+          if (shape.frontVertices) {
+            shape.frontVertices.forEach((v) => {
+              ctx.fillStyle = '#1e293b';
+              ctx.beginPath();
+              ctx.arc(v.x, v.y, 3.0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.2;
+              ctx.stroke();
+            });
+          }
+          if (shape.anchorVertices && shape.anchorVertices.length > 0) {
+            const apex = shape.anchorVertices[shape.anchorVertices.length - 1];
+            ctx.fillStyle = '#64748b';
+            ctx.beginPath();
+            ctx.arc(apex.x, apex.y, 2.8, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
       ctx.restore();
@@ -580,13 +647,19 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
           currentType={selectedShapeType}
           onSelectType={(type) => {
             setSelectedShapeType(type);
-            loadNewChallenge(currentRound, practiceMode, type);
+            loadNewChallenge(currentRound, practiceMode, type, density);
           }}
           practiceMode={practiceMode}
           onChangePracticeMode={(mode) => {
             setPracticeMode(mode);
-            loadNewChallenge(currentRound, mode, selectedShapeType);
+            loadNewChallenge(currentRound, mode, selectedShapeType, density);
           }}
+          density={density}
+          onChangeDensity={(d) => {
+            setDensity(d);
+            loadNewChallenge(currentRound, practiceMode, selectedShapeType, d);
+          }}
+          activeShapeCount={challenge.activeShapeCount || challenge.shapes.length}
           currentRound={currentRound}
         />
 

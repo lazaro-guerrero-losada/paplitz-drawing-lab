@@ -16,6 +16,7 @@ export type Focal3DShapeType =
 export type FocalAidMode = 'off' | 'line' | 'vertices';
 export type FocalVisionMode = 'all' | 'solution' | 'drawing' | 'off';
 export type FocalPracticeMode = 'single' | 'full_wheel';
+export type FocalWheelDensity = 'auto' | 'wheel8' | 'wheel4' | 'wheel2';
 
 export interface FocalRay {
   index: number; // 0 a 7
@@ -34,6 +35,8 @@ export interface PrecalculatedShape3D {
   sectorIndex: number; // 0 a 7
   angleDeg: number;
   centerPos: Point2D;
+  frontVertices: Point2D[]; // Vértices de la cara frontal (para marcar los puntos cuando ayudas están apagadas)
+  anchorVertices: Point2D[]; // Puntos indispensables a renderizar como referencia (vértices base/anclaje)
   // Componentes geométricas para evaluación didáctica
   frontCurves: CurveSegment2D[];
   backCurves: CurveSegment2D[];
@@ -41,7 +44,7 @@ export interface PrecalculatedShape3D {
   axisCurve?: CurveSegment2D;    // Eje central requerido en cilindro
   radiusCurve?: CurveSegment2D;  // Radio del cilindro
   guidelinesToFocal: CurveSegment2D[]; // Rayos discontinuos desde los vértices hasta el punto focal
-  anchorCurves: CurveSegment2D[]; // Líneas de referencia permanentes que indican dónde está la forma y sus dimensiones (visibles siempre, con o sin ayudas)
+  anchorCurves: CurveSegment2D[]; // Líneas de referencia mínimas indispensables (3 aristas en cubo, 1 de profundidad en polígonos, eje+radio en cilindro)
   allCurves: CurveSegment2D[];   // Todas las curvas objetivo que el alumno debe dibujar
 }
 
@@ -50,7 +53,9 @@ export interface Focal3DChallenge {
   title: string;
   subtitle: string;
   seed: number;
-  mode: FocalPracticeMode; // 'single' (un sector por ronda) o 'full_wheel' (las 8 formas a la vez)
+  mode: FocalPracticeMode; // 'single' (un sector por ronda) o 'full_wheel'
+  density: FocalWheelDensity; // 'auto', 'wheel8', 'wheel4', 'wheel2'
+  activeShapeCount: number;
   shapeType: Focal3DShapeType;
   focalPoint: Point2D;
   focalRays: FocalRay[];
