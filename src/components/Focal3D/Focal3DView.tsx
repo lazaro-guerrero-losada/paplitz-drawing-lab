@@ -31,8 +31,18 @@ import {
   PenTool,
   Box,
   Trophy,
+  X,
+  Copy,
+  Download,
+  FileText,
+  Check,
 } from 'lucide-react';
 import { SessionRecordItem } from '../../lib/sessionRecorder';
+import {
+  buildFocalDebugReport,
+  downloadReportFocalJson,
+  copyReportFocalToClipboard,
+} from '../../lib/focal3d/debugReportFocal';
 
 interface Focal3DViewProps {
   onAwardXP?: (amount: number) => void;
@@ -43,6 +53,7 @@ interface Focal3DViewProps {
   onOpenRecordModal?: () => void;
   recordedCount?: number;
   onRecordExercise?: (record: SessionRecordItem) => void;
+  onUpdateRecordComment?: (recordId: string, comment: string) => void;
 }
 
 export const Focal3DView: React.FC<Focal3DViewProps> = ({
@@ -54,6 +65,7 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   onOpenRecordModal,
   recordedCount = 0,
   onRecordExercise,
+  onUpdateRecordComment,
 }) => {
   // Configuración de la sesión (8 rondas por defecto)
   const TOTAL_ROUNDS = 8;
@@ -90,6 +102,18 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   const [strokes, setStrokes] = useState<UserStroke3D[]>([]);
   const [redoStack, setRedoStack] = useState<UserStroke3D[]>([]);
   const [evaluation, setEvaluation] = useState<FocalEvaluationResult | null>(null);
+
+  // Reporte técnico y feedback de depuración
+  const [showReportModal, setShowReportModal] = useState<boolean>(false);
+  const [userNote, setUserNote] = useState<string>('');
+  const [copiedReport, setCopiedReport] = useState<boolean>(false);
+  const [downloadedReport, setDownloadedReport] = useState<boolean>(false);
+  const currentRecordIdRef = useRef<string | null>(null);
+
+  // Generación memoizada del reporte de depuración Focal 3D
+  const currentReport = React.useMemo(() => {
+    return buildFocalDebugReport(challenge, strokes, evaluation, userNote);
+  }, [challenge, strokes, evaluation, userNote]);
 
   // Referencias interactivas
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
@@ -143,6 +167,11 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
       setCurrentLiveStroke([]);
       setVisionMode('all');
       setCurrentRound(roundNum);
+      setUserNote('');
+      setShowReportModal(false);
+      setCopiedReport(false);
+      setDownloadedReport(false);
+      currentRecordIdRef.current = null;
     },
     [practiceMode, selectedShapeType, density, canvasDimensions]
   );
@@ -182,6 +211,7 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
       setEvaluation(result);
 
       if (onRecordExercise) {
+        const rep = buildFocalDebugReport(challenge, strokes, result, userNote);
         const newRecord: SessionRecordItem = {
           id: `focal3d-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           timestamp: new Date().toISOString(),
@@ -192,11 +222,12 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
           seed: challenge.seed,
           score: Math.round(result.score),
           passed: result.passed,
-          userComment: '',
+          userComment: userNote.trim(),
           metricsSummary: `${Math.round(result.score)}% · ${result.passed ? 'Aprobado ✓' : 'No Superado'} · 1 Punto Focal`,
-          reportMarkdown: `### ${challenge.title}\nScore: ${result.score}%`,
-          reportJsonString: JSON.stringify(result),
+          reportMarkdown: rep.markdownText,
+          reportJsonString: rep.jsonString,
         };
+        currentRecordIdRef.current = newRecord.id;
         onRecordExercise(newRecord);
       }
 
@@ -844,6 +875,18 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
             <span>{isRecording ? `REC (${recordedCount})` : 'REC'}</span>
           </button>
 
+          {/* Botón Reportar Ejercicio - Visible siempre */}
+          <button
+            type="button"
+            onClick={() => setShowReportModal(true)}
+            className={`btn-ink-outline p-2 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[1px_1px_0px_#000000] hover:bg-neutral-100 ${
+              userNote.trim() ? 'bg-black text-white' : ''
+            }`}
+            title="Escribir nota y descargar reporte técnico de este ejercicio (JSON / Copiar)"
+          >
+            <AlertTriangle className="w-4 h-4 stroke-[2.2]" />
+          </button>
+
           {/* Rejilla de 8 Líneas Focales */}
           <button
             onClick={() => setShowFocalGrid((prev) => !prev)}
@@ -955,6 +998,157 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
                   Salir
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE REPORTE Y DIAGNÓSTICO FOCAL 3D CON NOTAS */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in font-sans">
+          <div className="bg-white border-4 border-black p-4 sm:p-5 max-w-lg w-full shadow-[8px_8px_0px_#000000] flex flex-col gap-3 max-h-[92vh] overflow-y-auto">
+            {/* Cabecera */}
+            <div className="flex items-center justify-between border-b-2 border-black pb-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-black stroke-[2.5]" />
+                <h3 className="font-display font-bold text-sm sm:text-base uppercase tracking-tight">
+                  Reporte de Perspectiva 1 Punto Focal
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="p-1 hover:bg-neutral-100 border border-black cursor-pointer shadow-[1px_1px_0px_#000000]"
+                title="Cerrar modal (Esc)"
+              >
+                <X className="w-4 h-4 text-black stroke-[2.5]" />
+              </button>
+            </div>
+
+            {/* Metadatos del reto */}
+            <div className="flex items-center justify-between text-xs font-mono bg-neutral-50 p-2 border border-black">
+              <div>
+                <span className="text-neutral-500">Forma:</span> <strong>{challenge.title}</strong>
+              </div>
+              <div>
+                <span className="text-neutral-500">Semilla:</span> <strong>#{challenge.seed}</strong>
+              </div>
+              <div>
+                <span className="text-neutral-500">Nota:</span>{' '}
+                <strong>{evaluation ? `${Math.round(evaluation.score)}% (${evaluation.passed ? 'Aprobado ✓' : 'No Superado'})` : 'Calculada'}</strong>
+              </div>
+            </div>
+
+            {/* Campo de Nota / Explicación del problema */}
+            <div className="flex flex-col gap-1.5 bg-neutral-50 p-3 border-2 border-black">
+              <label className="text-xs font-mono font-bold text-black flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Nota o apreciación del ejercicio:</span>
+                </span>
+                <span className="text-[10px] text-neutral-500 font-normal hidden sm:inline">
+                  (Se incluirá en el archivo .JSON y en el texto copiado)
+                </span>
+              </label>
+              <textarea
+                value={userNote}
+                onChange={(e) => {
+                  const nextVal = e.target.value;
+                  setUserNote(nextVal);
+                  if (currentRecordIdRef.current && onUpdateRecordComment) {
+                    onUpdateRecordComment(currentRecordIdRef.current, nextVal);
+                  }
+                }}
+                placeholder="Escribe aquí qué ocurrió (ej: 'Línea de fuga no detectada hacia el foco', 'Fallo en cara posterior', 'Buena orientación pero nota baja')..."
+                className="w-full h-20 p-2 text-xs font-mono bg-white border border-black resize-none focus:outline-none focus:ring-2 focus:ring-black selection:bg-black selection:text-white"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-1 items-center pt-0.5">
+                <span className="text-[10px] font-mono text-neutral-500 font-bold mr-1">Rápido:</span>
+                {['Nota injusta', 'Punto focal desalineado', 'Trazo no detectado', 'Fallo de profundidad', 'Buena sensación'].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const nextVal = userNote.trim() ? `${userNote.trim()} · ${tag}` : tag;
+                      setUserNote(nextVal);
+                      if (currentRecordIdRef.current && onUpdateRecordComment) {
+                        onUpdateRecordComment(currentRecordIdRef.current, nextVal);
+                      }
+                    }}
+                    className="text-[10px] font-mono bg-white hover:bg-black hover:text-white border border-black px-1.5 py-0.5 cursor-pointer transition-colors shadow-[1px_1px_0px_#000000]"
+                  >
+                    +{tag}
+                  </button>
+                ))}
+                {userNote && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserNote('');
+                      if (currentRecordIdRef.current && onUpdateRecordComment) {
+                        onUpdateRecordComment(currentRecordIdRef.current, '');
+                      }
+                    }}
+                    className="text-[10px] font-mono text-neutral-500 hover:text-black ml-auto underline cursor-pointer"
+                  >
+                    Borrar nota
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Vista previa del contenido */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-mono font-bold text-neutral-600">
+                Vista previa del reporte (Markdown / JSON con tu nota):
+              </label>
+              <textarea
+                readOnly
+                value={currentReport.markdownText}
+                className="w-full h-28 p-2 font-mono text-[10px] bg-neutral-50 border border-black resize-none selection:bg-black selection:text-white"
+              />
+            </div>
+
+            {/* Acciones de exportación */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-200">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    downloadReportFocalJson(currentReport.jsonString, challenge.seed, challenge.shapeType, userNote);
+                    setDownloadedReport(true);
+                    setTimeout(() => setDownloadedReport(false), 2500);
+                  }}
+                  className="btn-ink px-3 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                  title="Descargar archivo .JSON incluyendo tu nota"
+                >
+                  {downloadedReport ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : <Download className="w-3.5 h-3.5" />}
+                  <span>{downloadedReport ? '¡Descargado!' : 'Descargar JSON'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await copyReportFocalToClipboard(currentReport.markdownText);
+                    setCopiedReport(true);
+                    setTimeout(() => setCopiedReport(false), 2500);
+                  }}
+                  className="btn-ink-outline px-3 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#000000]"
+                  title="Copiar texto con tu nota al portapapeles"
+                >
+                  {copiedReport ? <Check className="w-3.5 h-3.5 text-black stroke-[2.5]" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedReport ? '¡Copiado!' : 'Copiar Texto'}</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="px-3 py-1.5 text-xs font-mono text-neutral-600 hover:text-black border border-neutral-300 hover:border-black cursor-pointer ml-auto"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

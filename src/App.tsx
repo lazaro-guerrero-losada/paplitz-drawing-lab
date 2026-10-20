@@ -2080,6 +2080,9 @@ export function App() {
             isRecording={isRecording}
             onRecordExercise={handleRecordExercise}
             onOpenRecordModal={() => setIsRecordModalOpen(true)}
+            onUpdateRecordComment={(id, comment) => {
+              setSessionRecords((prev) => updateSessionRecordComment(id, comment, prev));
+            }}
           />
         )}
 
@@ -2101,6 +2104,9 @@ export function App() {
             onOpenRecordModal={() => setIsRecordModalOpen(true)}
             recordedCount={sessionRecords.length}
             onRecordExercise={handleRecordExercise}
+            onUpdateRecordComment={(id, comment) => {
+              setSessionRecords((prev) => updateSessionRecordComment(id, comment, prev));
+            }}
           />
         )}
       </main>
