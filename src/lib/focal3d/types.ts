@@ -15,7 +15,7 @@ export type Focal3DShapeType =
 
 export type FocalAidMode = 'off' | 'line' | 'vertices';
 export type FocalVisionMode = 'all' | 'solution' | 'drawing' | 'off';
-export type FocalPracticeMode = 'single' | 'full_wheel';
+export type FocalPracticeMode = 'horizon' | 'single' | 'full_wheel';
 export type FocalWheelDensity = 'auto' | 'wheel8' | 'wheel4' | 'wheel2';
 
 export interface FocalRay {
@@ -53,7 +53,9 @@ export interface Focal3DChallenge {
   title: string;
   subtitle: string;
   seed: number;
-  mode: FocalPracticeMode; // 'single' (un sector por ronda) o 'full_wheel'
+  mode: FocalPracticeMode; // 'horizon' (1-2 figuras grandes arriba o abajo de la línea focal), 'single', 'full_wheel'
+  horizonSide?: 'upper' | 'lower'; // En modo horizonte, si las figuras están en la mitad superior o inferior
+  horizonLine?: { x1: number; y1: number; x2: number; y2: number };
   density: FocalWheelDensity; // 'auto', 'wheel8', 'wheel4', 'wheel2'
   activeShapeCount: number;
   shapeType: Focal3DShapeType;

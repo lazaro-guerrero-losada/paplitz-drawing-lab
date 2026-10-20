@@ -110,7 +110,7 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
 
         <div className="flex items-center gap-1">
           <span className="bg-black text-white px-1.5 py-0.5 text-[10px] font-mono font-black leading-none shadow-[1px_1px_0px_#000000]">
-            {practiceMode === 'full_wheel' ? `${activeShapeCount} Formas` : `Sector ${currentRound}/8`}
+            {practiceMode === 'horizon' ? 'Horizonte' : practiceMode === 'full_wheel' ? `${activeShapeCount} Formas` : `Sector ${currentRound}/8`}
           </span>
           <button
             onClick={() => setIsCollapsed(true)}
@@ -122,20 +122,35 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
         </div>
       </div>
 
-      {/* Selector de Modo de Práctica: Rueda Completa vs 1 Sector */}
+      {/* Selector de Modo de Práctica: Horizonte vs Rueda vs 1 Sector */}
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 font-bold">
           Modo de Ejercicio
         </span>
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-3 gap-1">
+          <button
+            type="button"
+            onClick={() => onChangePracticeMode('horizon')}
+            className={`py-1.5 px-1 text-[9px] font-mono font-bold uppercase border-2 border-black flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] ${
+              practiceMode === 'horizon'
+                ? 'bg-black text-white'
+                : 'bg-white hover:bg-neutral-100 text-black'
+            }`}
+            title="Vista Horizonte: 1 o 2 figuras grandes arriba o abajo de la línea focal (ideal para tablet)"
+          >
+            <Compass className="w-3 h-3" />
+            <span>Horizonte</span>
+          </button>
+
           <button
             type="button"
             onClick={() => onChangePracticeMode('full_wheel')}
-            className={`py-1.5 px-2 text-[10px] font-mono font-bold uppercase border-2 border-black flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] ${
+            className={`py-1.5 px-1 text-[9px] font-mono font-bold uppercase border-2 border-black flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] ${
               practiceMode === 'full_wheel'
                 ? 'bg-black text-white'
                 : 'bg-white hover:bg-neutral-100 text-black'
             }`}
+            title="Rueda 360°"
           >
             <Compass className="w-3 h-3" />
             <span>Rueda ({activeShapeCount})</span>
@@ -144,20 +159,21 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
           <button
             type="button"
             onClick={() => onChangePracticeMode('single')}
-            className={`py-1.5 px-2 text-[10px] font-mono font-bold uppercase border-2 border-black flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] ${
+            className={`py-1.5 px-1 text-[9px] font-mono font-bold uppercase border-2 border-black flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] ${
               practiceMode === 'single'
                 ? 'bg-black text-white'
                 : 'bg-white hover:bg-neutral-100 text-black'
             }`}
+            title="1 Sector por ronda"
           >
             <Target className="w-3 h-3" />
-            <span>Sector ({currentRound}/8)</span>
+            <span>Sector</span>
           </button>
         </div>
       </div>
 
       {/* Selector de Densidad / Adaptación a Pantalla (Tablets vs Desktop) */}
-      {practiceMode === 'full_wheel' && (
+      {(practiceMode === 'full_wheel' || practiceMode === 'horizon') && (
         <div className="flex flex-col gap-1 bg-neutral-50 border border-black p-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-600 font-bold">

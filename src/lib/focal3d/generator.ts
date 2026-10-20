@@ -77,7 +77,9 @@ function buildPrecalculatedShape(
   baseRadius: number,
   seed: number,
   scaleFactor = 1.0,
-  totalShapeCount = 8
+  totalShapeCount = 8,
+  customAngleDeg?: number,
+  customDist?: number
 ): PrecalculatedShape3D {
   // Variación pseudoaleatoria determinista según seed y sector
   const rnd1 = seededRandom(seed * 17 + sectorIndex * 73 + 1);
@@ -88,10 +90,10 @@ function buildPrecalculatedShape(
   // Distancia variable desde el punto focal para dar profundidad orgánica al conjunto.
   // En rueda de 8 formas adyacentes, la variación radial es suave (0.08) para evitar solapes entre esquinas.
   const distVariation = totalShapeCount >= 8 ? 0.08 : 0.16;
-  const shapeDist = baseRadius * (0.92 + rndDist * distVariation);
+  const shapeDist = customDist !== undefined ? customDist : baseRadius * (0.92 + rndDist * distVariation);
 
-  // Ángulo del sector centrado exactamente a la mitad entre los dos rayos delimitadores (+22.5°)
-  const angleDeg = (sectorIndex * 45 + 22.5) % 360;
+  // Ángulo del sector: personalizado si se pasa (modo horizonte), o centrado a (+22.5°) en la rueda
+  const angleDeg = customAngleDeg !== undefined ? customAngleDeg : (sectorIndex * 45 + 22.5) % 360;
   const angleRad = (angleDeg * Math.PI) / 180;
 
   // Centro de la cara frontal (más alejada del punto focal)
@@ -516,149 +518,327 @@ function shrinkShape(shape: PrecalculatedShape3D, factor = 0.88): void {
 }
 
 /**
+ * Ajusta y confina una forma precalculada dentro de los márgenes seguros de la pantalla,
+ * garantizando que nunca quede tapada por la barra inferior de botones ni por el menú superior.
+ */
+function clampShapeToSafeArea(
+  shape: PrecalculatedShape3D,
+  safeMinX: number,
+  safeMinY: number,
+  safeMaxX: number,
+  safeMaxY: number
+): void {
+  const bounds = getShapeBounds(shape);
+  let shiftX = 0;
+  let shiftY = 0;
+
+  if (bounds.minX < safeMinX) shiftX = safeMinX - bounds.minX;
+  else if (bounds.maxX > safeMaxX) shiftX = safeMaxX - bounds.maxX;
+
+  if (bounds.minY < safeMinY) shiftY = safeMinY - bounds.minY;
+  else if (bounds.maxY > safeMaxY) shiftY = safeMaxY - bounds.maxY;
+
+  if (shiftX !== 0 || shiftY !== 0) {
+    const shiftPoint = (p: Point2D): Point2D => ({
+      x: Math.round((p.x + shiftX) * 10) / 10,
+      y: Math.round((p.y + shiftY) * 10) / 10,
+    });
+
+    shape.centerPos = shiftPoint(shape.centerPos);
+    shape.frontVertices = shape.frontVertices.map(shiftPoint);
+    shape.anchorVertices = shape.anchorVertices.map(shiftPoint);
+    shape.frontCurves.forEach((crv) => {
+      crv.points = crv.points.map(shiftPoint);
+    });
+    shape.backCurves.forEach((crv) => {
+      crv.points = crv.points.map(shiftPoint);
+    });
+    shape.depthCurves.forEach((crv) => {
+      crv.points = crv.points.map(shiftPoint);
+    });
+    shape.anchorCurves.forEach((crv) => {
+      crv.points = crv.points.map(shiftPoint);
+    });
+    if (shape.axisCurve) shape.axisCurve.points = shape.axisCurve.points.map(shiftPoint);
+    if (shape.radiusCurve) shape.radiusCurve.points = shape.radiusCurve.points.map(shiftPoint);
+    shape.allCurves.forEach((crv) => {
+      crv.points = crv.points.map(shiftPoint);
+    });
+  }
+}
+
+/**
  * Genera un reto de perspectiva con 1 punto focal central y 8 líneas discontinuas,
  * adaptando el número y tamaño de las figuras según el espacio de pantalla (Tablet / Desktop)
  * y variando dinámicamente sus posiciones en diagonales y cuadrantes.
  */
 export function generateFocal3DChallenge(
   seed = Math.floor(Math.random() * 100000),
-  mode: FocalPracticeMode = 'full_wheel',
+  mode: FocalPracticeMode = 'horizon',
   forcedShapeType: Focal3DShapeType = 'CUBE',
   canvasWidth = 920,
   canvasHeight = 580,
   activeSectorIndex = 0,
   density: FocalWheelDensity = 'auto'
 ): Focal3DChallenge {
-  // 1. Punto focal en el centro exacto del paisaje
-  const focalPoint: Point2D = {
-    x: Math.round(canvasWidth / 2),
-    y: Math.round(canvasHeight / 2),
-  };
-
-  // 2. 8 Líneas discontinuas que trazan los rayos focales desde el punto central
-  const rayAngles = [0, 45, 90, 135, 180, 225, 270, 315];
-  const rayLabels = ['0° (Este)', '45° (Noreste)', '90° (Norte)', '135° (Noroeste)', '180° (Oeste)', '225° (Suroeste)', '270° (Sur)', '315° (Sureste)'];
+  const minDim = Math.min(canvasWidth, canvasHeight);
   const maxRayLen = Math.max(canvasWidth, canvasHeight) * 1.3;
 
-  const focalRays: FocalRay[] = rayAngles.map((ang, idx) => {
-    const rad = (ang * Math.PI) / 180;
-    return {
-      index: idx,
-      angleDeg: ang,
-      label: rayLabels[idx],
-      x1: focalPoint.x,
-      y1: focalPoint.y,
-      x2: Math.round(focalPoint.x + maxRayLen * Math.cos(rad)),
-      y2: Math.round(focalPoint.y + maxRayLen * Math.sin(rad)),
+  // LÍMITES SEGUROS DE DIBUJO:
+  // Garantizan que ninguna figura se dibuje detrás de la barra flotante de botones ni del menú superior
+  const SAFE_TOP = 50;
+  const SAFE_BOTTOM = canvasHeight - 95;
+  const SAFE_LEFT = 45;
+  const SAFE_RIGHT = canvasWidth - 45;
+
+  let focalPoint: Point2D;
+  let horizonLine: { x1: number; y1: number; x2: number; y2: number } | undefined;
+  let horizonSide: 'upper' | 'lower' | undefined;
+  let focalRays: FocalRay[] = [];
+  const shapes: PrecalculatedShape3D[] = [];
+
+  if (mode === 'horizon') {
+    // =========================================================================
+    // MODO HORIZONTE (1 o 2 FIGURAS GRANDES ARRIBA O ABAJO DE LA LÍNEA FOCAL)
+    // =========================================================================
+    // La pantalla dibuja la línea de horizonte horizontal.
+    // Solo se dibuja la mitad superior (cielo/aire) o inferior (tierra/suelo)
+    // con 1 o 2 figuras grandes, ideal para tablet con stylus.
+    horizonSide = (Math.abs(seed) % 2 === 0) ? 'upper' : 'lower';
+
+    // Altura de la línea horizontal de horizonte:
+    // Si 'upper': horizonte en 58% de altura (deja amplio espacio arriba para las figuras)
+    // Si 'lower': horizonte en 38% de altura (deja amplio espacio abajo sobre los botones)
+    const horizonY = horizonSide === 'upper'
+      ? Math.round(canvasHeight * 0.58)
+      : Math.round(canvasHeight * 0.38);
+
+    focalPoint = {
+      x: Math.round(canvasWidth / 2),
+      y: horizonY,
     };
-  });
 
-  // 3. Adaptación de resolución: en tablets o pantallas más pequeñas, se generan menos figuras
-  // para que sean notablemente más grandes y cómodas para dibujar con stylus/dedo
-  const minDim = Math.min(canvasWidth, canvasHeight);
-  let targetShapeCount = 8;
-  let scaleFactor = 1.05;
-  let sectorIndices: number[] = [0, 1, 2, 3, 4, 5, 6, 7];
+    horizonLine = {
+      x1: 0,
+      y1: horizonY,
+      x2: canvasWidth,
+      y2: horizonY,
+    };
 
-  if (density === 'wheel2') {
-    targetShapeCount = 2;
-    scaleFactor = 1.60;
-  } else if (density === 'wheel4') {
-    targetShapeCount = 4;
-    scaleFactor = 1.30;
-  } else if (density === 'wheel8') {
-    targetShapeCount = 8;
-    scaleFactor = 0.95;
-  } else {
-    // Modo 'auto': se adapta automáticamente al ancho y alto disponible
-    if (minDim < 520 || canvasWidth < 740) {
-      // Pantalla pequeña / Tablet vertical: 2 figuras grandes en diagonal
-      targetShapeCount = 2;
-      scaleFactor = 1.55;
-    } else if (minDim < 680 || canvasWidth < 960) {
-      // Tablet horizontal / pantalla media: 4 figuras grandes bien separadas
-      targetShapeCount = 4;
-      scaleFactor = 1.28;
+    // Rayos focales que convergen al punto focal en el hemisferio activo
+    const activeRayAngles = horizonSide === 'upper'
+      ? [195, 215, 235, 255, 270, 285, 305, 325, 345] // Semicírculo superior
+      : [15, 35, 55, 75, 90, 105, 125, 145, 165];     // Semicírculo inferior
+
+    focalRays = activeRayAngles.map((ang, idx) => {
+      const rad = (ang * Math.PI) / 180;
+      return {
+        index: idx,
+        angleDeg: ang,
+        label: `${ang}°`,
+        x1: focalPoint.x,
+        y1: focalPoint.y,
+        x2: Math.round(focalPoint.x + maxRayLen * Math.cos(rad)),
+        y2: Math.round(focalPoint.y + maxRayLen * Math.sin(rad)),
+      };
+    });
+
+    // Número de figuras: 1 o 2 figuras grandes
+    const shapeCount = (density === 'wheel4' || density === 'wheel8')
+      ? 2
+      : ((Math.abs(seed * 7) % 2 === 0) ? 1 : 2);
+
+    const scaleFactor = 1.95; // Figuras extra grandes y cómodas
+    const baseRadius = minDim * 0.40;
+    const horizonDist = minDim * (0.32 + (Math.abs(seed * 19) % 12) * 0.01);
+
+    if (shapeCount === 1) {
+      // 1 Figura Grande: ubicación aleatoria en el hemisferio activo
+      const angleVariance = ((Math.abs(seed * 31) % 64) - 32); // -32° a +32°
+      const baseCenterAngle = horizonSide === 'upper' ? 270 : 90;
+      const angleDeg = baseCenterAngle + angleVariance;
+
+      shapes.push(
+        buildPrecalculatedShape(
+          activeSectorIndex,
+          forcedShapeType,
+          focalPoint,
+          baseRadius,
+          seed,
+          scaleFactor,
+          1,
+          angleDeg,
+          horizonDist
+        )
+      );
     } else {
-      // Escritorio HD: 8 figuras
+      // 2 Figuras Grandes: Una a la izquierda del punto focal y otra a la derecha
+      const leftAngle = horizonSide === 'upper'
+        ? 232 + (Math.abs(seed * 23) % 20) // ~232° a 252° (arriba a la izquierda)
+        : 128 + (Math.abs(seed * 23) % 20); // ~128° a 148° (abajo a la izquierda)
+
+      const rightAngle = horizonSide === 'upper'
+        ? 288 + (Math.abs(seed * 47) % 20) // ~288° a 308° (arriba a la derecha)
+        : 32 + (Math.abs(seed * 47) % 20);  // ~32° a 52° (abajo a la derecha)
+
+      const distLeft = horizonDist * (0.92 + (Math.abs(seed * 11) % 14) * 0.01);
+      const distRight = horizonDist * (0.92 + (Math.abs(seed * 59) % 14) * 0.01);
+
+      shapes.push(
+        buildPrecalculatedShape(
+          activeSectorIndex,
+          forcedShapeType,
+          focalPoint,
+          baseRadius,
+          seed + 101,
+          scaleFactor,
+          2,
+          leftAngle,
+          distLeft
+        ),
+        buildPrecalculatedShape(
+          (activeSectorIndex + 1) % 8,
+          forcedShapeType === 'MIXED_WHEEL' ? 'CYLINDER' : forcedShapeType,
+          focalPoint,
+          baseRadius,
+          seed + 202,
+          scaleFactor,
+          2,
+          rightAngle,
+          distRight
+        )
+      );
+    }
+  } else {
+    // =========================================================================
+    // MODOS RUEDA 360° Y SECTOR INDIVIDUAL
+    // =========================================================================
+    // Punto focal centrado verticalmente en el área útil de dibujo (compensando la botonera inferior)
+    focalPoint = {
+      x: Math.round(canvasWidth / 2),
+      y: Math.round((SAFE_TOP + SAFE_BOTTOM) / 2),
+    };
+
+    horizonLine = {
+      x1: 0,
+      y1: focalPoint.y,
+      x2: canvasWidth,
+      y2: focalPoint.y,
+    };
+
+    const rayAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+    const rayLabels = ['0° (Este)', '45° (Noreste)', '90° (Norte)', '135° (Noroeste)', '180° (Oeste)', '225° (Suroeste)', '270° (Sur)', '315° (Sureste)'];
+
+    focalRays = rayAngles.map((ang, idx) => {
+      const rad = (ang * Math.PI) / 180;
+      return {
+        index: idx,
+        angleDeg: ang,
+        label: rayLabels[idx],
+        x1: focalPoint.x,
+        y1: focalPoint.y,
+        x2: Math.round(focalPoint.x + maxRayLen * Math.cos(rad)),
+        y2: Math.round(focalPoint.y + maxRayLen * Math.sin(rad)),
+      };
+    });
+
+    let targetShapeCount = 8;
+    let scaleFactor = 1.05;
+    let sectorIndices: number[] = [0, 1, 2, 3, 4, 5, 6, 7];
+
+    if (density === 'wheel2') {
+      targetShapeCount = 2;
+      scaleFactor = 1.60;
+    } else if (density === 'wheel4') {
+      targetShapeCount = 4;
+      scaleFactor = 1.30;
+    } else if (density === 'wheel8') {
       targetShapeCount = 8;
       scaleFactor = 0.95;
+    } else {
+      if (minDim < 520 || canvasWidth < 740) {
+        targetShapeCount = 2;
+        scaleFactor = 1.55;
+      } else if (minDim < 680 || canvasWidth < 960) {
+        targetShapeCount = 4;
+        scaleFactor = 1.28;
+      } else {
+        targetShapeCount = 8;
+        scaleFactor = 0.95;
+      }
+    }
+
+    if (targetShapeCount === 2) {
+      const pairs = [
+        [5, 1], // Diagonal SW -> NE
+        [3, 7], // Diagonal NW -> SE
+        [4, 0], // Transversal Oeste -> Este
+        [6, 2], // Transversal Sur -> Norte
+      ];
+      const pairIdx = Math.abs(seed) % pairs.length;
+      sectorIndices = pairs[pairIdx];
+    } else if (targetShapeCount === 4) {
+      const quadPatterns = [
+        [1, 3, 5, 7], // 4 Diagonales en X completa (NE, NW, SW, SE a 90°)
+        [0, 2, 4, 6], // 4 Ortogonales en cruz (+) (E, S, W, N a 90°)
+      ];
+      const qIdx = Math.abs(seed) % quadPatterns.length;
+      sectorIndices = quadPatterns[qIdx];
+    } else {
+      const rotOffset = Math.abs(seed) % 8;
+      sectorIndices = [0, 1, 2, 3, 4, 5, 6, 7].map((s) => (s + rotOffset) % 8);
+    }
+
+    const baseRadius = minDim * (targetShapeCount <= 4 ? 0.36 : 0.32);
+
+    if (mode === 'full_wheel') {
+      sectorIndices.forEach((s, idx) => {
+        let shapeTypeForSector: Focal3DShapeType = forcedShapeType;
+        if (forcedShapeType === 'MIXED_WHEEL') {
+          const mixedTypes: Focal3DShapeType[] = [
+            'CUBE',
+            'CYLINDER',
+            'TRIANGULAR_PRISM',
+            'PYRAMID',
+            'HEXAGON_PRISM',
+          ];
+          shapeTypeForSector = mixedTypes[(idx + Math.abs(seed)) % mixedTypes.length];
+        }
+        shapes.push(
+          buildPrecalculatedShape(
+            s,
+            shapeTypeForSector,
+            focalPoint,
+            baseRadius,
+            seed + idx * 79,
+            scaleFactor,
+            targetShapeCount
+          )
+        );
+      });
+    } else {
+      shapes.push(
+        buildPrecalculatedShape(
+          activeSectorIndex,
+          forcedShapeType,
+          focalPoint,
+          baseRadius,
+          seed,
+          1.55,
+          1
+        )
+      );
     }
   }
 
-  // 4. Posicionamiento dinámico variable: las figuras se distribuyen con máxima separación angular
-  // garantizando que nunca se produzcan interferencias entre formas contiguas
-  if (targetShapeCount === 2) {
-    // Pares diagonales / transversales opuestos a 180°
-    const pairs = [
-      [5, 1], // Diagonal SW -> NE
-      [3, 7], // Diagonal NW -> SE
-      [4, 0], // Transversal Oeste -> Este
-      [6, 2], // Transversal Sur -> Norte
-    ];
-    const pairIdx = Math.abs(seed) % pairs.length;
-    sectorIndices = pairs[pairIdx];
-  } else if (targetShapeCount === 4) {
-    // En 4 formas se usan EXCLUSIVAMENTE patrones simétricos separados por 90°
-    // (evitando agrupar figuras en sectores adyacentes a 45° que provocarían interferencia)
-    const quadPatterns = [
-      [1, 3, 5, 7], // 4 Diagonales en X completa (cuadrantes NE, NW, SW, SE a 90°)
-      [0, 2, 4, 6], // 4 Ortogonales en cruz (+) (E, S, W, N a 90°)
-    ];
-    const qIdx = Math.abs(seed) % quadPatterns.length;
-    sectorIndices = quadPatterns[qIdx];
-  } else {
-    // 8 sectores con rotación inicial variable
-    const rotOffset = Math.abs(seed) % 8;
-    sectorIndices = [0, 1, 2, 3, 4, 5, 6, 7].map((s) => (s + rotOffset) % 8);
-  }
+  // 6. CONFINAR TODAS LAS FIGURAS DENTRO DEL ÁREA SEGURA DE DIBUJO:
+  // Garantiza matemáticamente que ninguna figura quede tapada por la barra flotante inferior ni el menú superior
+  shapes.forEach((sh) => {
+    clampShapeToSafeArea(sh, SAFE_LEFT, SAFE_TOP, SAFE_RIGHT, SAFE_BOTTOM);
+  });
 
-  // 5. Generación de las formas precalculadas alrededor del punto focal
-  const shapes: PrecalculatedShape3D[] = [];
-  const baseRadius = minDim * (targetShapeCount <= 4 ? 0.38 : 0.35);
-
-  if (mode === 'full_wheel') {
-    sectorIndices.forEach((s, idx) => {
-      let shapeTypeForSector: Focal3DShapeType = forcedShapeType;
-      if (forcedShapeType === 'MIXED_WHEEL') {
-        const mixedTypes: Focal3DShapeType[] = [
-          'CUBE',
-          'CYLINDER',
-          'TRIANGULAR_PRISM',
-          'PYRAMID',
-          'HEXAGON_PRISM',
-        ];
-        shapeTypeForSector = mixedTypes[(idx + Math.abs(seed)) % mixedTypes.length];
-      }
-      shapes.push(
-        buildPrecalculatedShape(
-          s,
-          shapeTypeForSector,
-          focalPoint,
-          baseRadius,
-          seed + idx * 79,
-          scaleFactor,
-          targetShapeCount
-        )
-      );
-    });
-  } else {
-    // Modo Sector Individual: 1 figura grande en el sector activo
-    shapes.push(
-      buildPrecalculatedShape(
-        activeSectorIndex,
-        forcedShapeType,
-        focalPoint,
-        baseRadius,
-        seed,
-        1.55,
-        1
-      )
-    );
-  }
-
-  // 6. Verificación activa y resolución de interferencias entre formas:
-  // Garantiza matemáticamente que ningún par de formas se toque o se solape
+  // 7. VERIFICACIÓN ACTIVA Y RESOLUCIÓN DE INTERFERENCIAS ENTRE FORMAS:
+  // Garantiza que ningún par de formas se toque o se solape
   for (let pass = 0; pass < 3; pass++) {
     let hadInterference = false;
     for (let i = 0; i < shapes.length; i++) {
@@ -682,7 +862,9 @@ export function generateFocal3DChallenge(
     MIXED_WHEEL: 'Rueda Mixta de Formas 3D',
   };
 
-  const title = mode === 'full_wheel'
+  const title = mode === 'horizon'
+    ? `${shapeTypeLabels[forcedShapeType]} · Vista Horizonte (${horizonSide === 'upper' ? 'Arriba' : 'Abajo'}, ${shapes.length} ${shapes.length === 1 ? 'Figura Grande' : 'Figuras Grandes'})`
+    : mode === 'full_wheel'
     ? `${shapeTypeLabels[forcedShapeType]} · ${shapes.length} Formas`
     : `${shapeTypeLabels[forcedShapeType]} · Sector ${activeSectorIndex + 1}/8`;
 
@@ -695,9 +877,13 @@ export function generateFocal3DChallenge(
   return {
     id: `focal3d-${seed}-${mode}-${forcedShapeType}-${density}`,
     title,
-    subtitle: `${shapes.length} figuras en perspectiva cónica a 1 punto focal central`,
+    subtitle: mode === 'horizon'
+      ? `${shapes.length} ${shapes.length === 1 ? 'figura grande' : 'figuras grandes'} en perspectiva cónica con línea focal horizontal`
+      : `${shapes.length} figuras en perspectiva cónica a 1 punto focal central`,
     seed,
     mode,
+    horizonSide,
+    horizonLine,
     density,
     activeShapeCount: shapes.length,
     shapeType: forcedShapeType,

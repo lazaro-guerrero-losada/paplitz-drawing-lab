@@ -72,8 +72,8 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   const [sessionScores, setSessionScores] = useState<number[]>([]);
   const [isSessionComplete, setIsSessionComplete] = useState<boolean>(false);
 
-  // Modo de práctica: 'full_wheel' o 'single'
-  const [practiceMode, setPracticeMode] = useState<FocalPracticeMode>('full_wheel');
+  // Modo de práctica: 'horizon' (1-2 figuras grandes con línea focal horizontal), 'full_wheel' o 'single'
+  const [practiceMode, setPracticeMode] = useState<FocalPracticeMode>('horizon');
   // Densidad y adaptación a pantalla: 'auto' (2-4 en tablet, 8 en desktop), 'wheel8', 'wheel4', 'wheel2'
   const [density, setDensity] = useState<FocalWheelDensity>('auto');
   // Tipo de forma seleccionada
@@ -94,7 +94,7 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
 
   // Reto actual
   const [challenge, setChallenge] = useState<Focal3DChallenge>(() =>
-    generateFocal3DChallenge(Date.now(), 'full_wheel', 'CUBE', 960, 600, 0, 'auto')
+    generateFocal3DChallenge(Date.now(), 'horizon', 'CUBE', 960, 600, 0, 'auto')
   );
 
   // Trazos y evaluación
@@ -274,8 +274,8 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
 
     const fp = challenge.focalPoint;
 
-    // 1. DIBUJAR LAS 8 LÍNEAS DISCONTINUAS QUE CONVERGEN AL PUNTO FOCAL
-    if (showFocalGrid) {
+    // 1. DIBUJAR LÍNEAS DISCONTINUAS Y LÍNEA FOCAL HORIZONTAL (HORIZONTE)
+    if (showFocalGrid || challenge.mode === 'horizon') {
       ctx.save();
       ctx.strokeStyle = '#cbd5e1'; // Gris pizarra claro tenue
       ctx.lineWidth = 1.3;
@@ -287,6 +287,21 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
         ctx.lineTo(ray.x2, ray.y2);
         ctx.stroke();
       }
+
+      // LÍNEA FOCAL HORIZONTAL (Destacada de lado a lado del lienzo)
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.moveTo(0, fp.y);
+      ctx.lineTo(canvas.width, fp.y);
+      ctx.stroke();
+
+      // Etiqueta sutil de la línea horizontal
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('LÍNEA FOCAL HORIZONTAL', 14, fp.y - 6);
       ctx.restore();
     }
 
