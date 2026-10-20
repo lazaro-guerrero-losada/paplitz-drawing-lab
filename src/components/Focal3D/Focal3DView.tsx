@@ -29,7 +29,6 @@ import {
   AlertTriangle,
   Sparkles,
   PenTool,
-  Box,
   Trophy,
   X,
   Copy,
@@ -731,17 +730,6 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
             </span>
           </div>
         )}
-
-        {/* Tarjeta Informativa del Reto */}
-        <div className="pointer-events-auto bg-white border-2 border-black p-2 sm:p-2.5 shadow-[3px_3px_0px_#000000] font-mono max-w-[200px] hidden md:block">
-          <div className="flex items-center gap-1.5 text-xs font-bold uppercase mb-1">
-            <Box className="w-3.5 h-3.5" />
-            <span>1 Punto Focal</span>
-          </div>
-          <p className="text-[10px] text-neutral-600 leading-tight">
-            {challenge.tipText}
-          </p>
-        </div>
       </div>
 
       {/* 3. LIENZO PRINCIPAL INTERACTIVO CON DETALLES TÉCNICOS */}
