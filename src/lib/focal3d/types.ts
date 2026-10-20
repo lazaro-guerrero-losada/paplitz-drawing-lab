@@ -15,8 +15,8 @@ export type Focal3DShapeType =
 
 export type FocalAidMode = 'off' | 'line' | 'vertices';
 export type FocalVisionMode = 'all' | 'solution' | 'drawing' | 'off';
-export type FocalPracticeMode = 'horizon' | 'single' | 'full_wheel';
-export type FocalWheelDensity = 'auto' | 'wheel8' | 'wheel4' | 'wheel2';
+export type FocalPracticeMode = 'horizon';
+export type FocalWheelDensity = 'auto' | '1_figure' | '2_figures' | 'wheel8' | 'wheel4' | 'wheel2';
 
 export interface FocalRay {
   index: number; // 0 a 7
@@ -53,10 +53,10 @@ export interface Focal3DChallenge {
   title: string;
   subtitle: string;
   seed: number;
-  mode: FocalPracticeMode; // 'horizon' (1-2 figuras grandes arriba o abajo de la línea focal), 'single', 'full_wheel'
-  horizonSide?: 'upper' | 'lower'; // En modo horizonte, si las figuras están en la mitad superior o inferior
+  mode: FocalPracticeMode; // 'horizon' (1 o 2 figuras grandes con línea focal horizontal límite)
+  horizonSide?: 'upper' | 'lower'; // En modo horizonte, si las figuras están en la zona superior o inferior
   horizonLine?: { x1: number; y1: number; x2: number; y2: number };
-  density: FocalWheelDensity; // 'auto', 'wheel8', 'wheel4', 'wheel2'
+  density: FocalWheelDensity; // 'auto', '1_figure', '2_figures' (o compatibilidad wheel2, wheel4, wheel8)
   activeShapeCount: number;
   shapeType: Focal3DShapeType;
   focalPoint: Point2D;

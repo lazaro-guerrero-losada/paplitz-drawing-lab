@@ -4,8 +4,6 @@ import {
   SlidersHorizontal,
   ChevronLeft,
   ChevronRight,
-  Compass,
-  Target,
   Box,
   Cylinder,
   Triangle,
@@ -17,12 +15,13 @@ import {
 interface FocalSelectorPanelProps {
   currentType: Focal3DShapeType;
   onSelectType: (type: Focal3DShapeType) => void;
-  practiceMode: FocalPracticeMode;
-  onChangePracticeMode: (mode: FocalPracticeMode) => void;
   density: FocalWheelDensity;
   onChangeDensity: (density: FocalWheelDensity) => void;
   activeShapeCount: number;
   currentRound: number;
+  horizonSide?: 'upper' | 'lower';
+  practiceMode?: FocalPracticeMode;
+  onChangePracticeMode?: (mode: FocalPracticeMode) => void;
 }
 
 const SHAPE_CONFIG: Record<
@@ -60,7 +59,7 @@ const SHAPE_CONFIG: Record<
     icon: Hexagon,
   },
   MIXED_WHEEL: {
-    name: 'Rueda Mixta',
+    name: 'Formas Mixtas',
     tag: 'Variedad',
     description: 'Cubos, cilindros, prismas y pirámides variables',
     icon: Sparkles,
@@ -70,12 +69,11 @@ const SHAPE_CONFIG: Record<
 export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
   currentType,
   onSelectType,
-  practiceMode,
-  onChangePracticeMode,
   density,
   onChangeDensity,
   activeShapeCount,
   currentRound,
+  horizonSide,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
 
@@ -85,7 +83,7 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
       <button
         onClick={() => setIsCollapsed(false)}
         className="card-ink bg-white px-2.5 py-1.5 flex items-center gap-1.5 cursor-pointer shadow-[3px_3px_0px_#000000] hover:-translate-y-0.5 transition-all text-xs font-mono font-bold uppercase border-2 border-black"
-        title="Desplegar menú lateral de formas y modos 1-Punto Focal"
+        title="Desplegar menú lateral de formas y opciones 1-Punto Focal"
       >
         <SlidersHorizontal className="w-3.5 h-3.5 stroke-[2.2]" />
         <span>Formas Focal</span>
@@ -96,6 +94,10 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
       </button>
     );
   }
+
+  const isOneFigure = density === '1_figure';
+  const isTwoFigures = density === '2_figures' || density === 'wheel2' || density === 'wheel4' || density === 'wheel8';
+  const isAuto = density === 'auto';
 
   return (
     <div className="card-ink bg-white p-3 w-64 sm:w-72 shadow-[4px_4px_0px_#000000] flex flex-col gap-2.5 select-none border-2 border-black">
@@ -110,7 +112,7 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
 
         <div className="flex items-center gap-1">
           <span className="bg-black text-white px-1.5 py-0.5 text-[10px] font-mono font-black leading-none shadow-[1px_1px_0px_#000000]">
-            {practiceMode === 'horizon' ? 'Horizonte' : practiceMode === 'full_wheel' ? `${activeShapeCount} Formas` : `Sector ${currentRound}/8`}
+            R.{currentRound} · {horizonSide === 'upper' ? 'Cielo' : 'Suelo'} · {activeShapeCount} {activeShapeCount === 1 ? 'Fig.' : 'Figs.'}
           </span>
           <button
             onClick={() => setIsCollapsed(true)}
@@ -122,111 +124,49 @@ export const FocalSelectorPanel: React.FC<FocalSelectorPanelProps> = ({
         </div>
       </div>
 
-      {/* Selector de Modo de Práctica: Horizonte vs Rueda vs 1 Sector */}
-      <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 font-bold">
-          Modo de Ejercicio
-        </span>
+      {/* Selector de Cantidad de Figuras (1 o 2 Figuras Grandes) */}
+      <div className="flex flex-col gap-1 bg-neutral-50 border border-black p-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-600 font-bold">
+            Cantidad de Figuras
+          </span>
+          <span className="text-[9px] font-mono font-bold bg-white px-1 border border-neutral-300">
+            {activeShapeCount} {activeShapeCount === 1 ? 'figura' : 'figuras'}
+          </span>
+        </div>
         <div className="grid grid-cols-3 gap-1">
           <button
             type="button"
-            onClick={() => onChangePracticeMode('horizon')}
-            className={`py-1.5 px-1 text-[9px] font-mono font-bold uppercase border-2 border-black flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] ${
-              practiceMode === 'horizon'
-                ? 'bg-black text-white'
-                : 'bg-white hover:bg-neutral-100 text-black'
+            onClick={() => onChangeDensity('auto')}
+            className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
+              isAuto ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
             }`}
-            title="Vista Horizonte: 1 o 2 figuras grandes arriba o abajo de la línea focal (ideal para tablet)"
+            title="Aleatorio: 1 o 2 figuras grandes"
           >
-            <Compass className="w-3 h-3" />
-            <span>Horizonte</span>
+            Auto (1-2)
           </button>
-
           <button
             type="button"
-            onClick={() => onChangePracticeMode('full_wheel')}
-            className={`py-1.5 px-1 text-[9px] font-mono font-bold uppercase border-2 border-black flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] ${
-              practiceMode === 'full_wheel'
-                ? 'bg-black text-white'
-                : 'bg-white hover:bg-neutral-100 text-black'
+            onClick={() => onChangeDensity('1_figure')}
+            className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
+              isOneFigure ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
             }`}
-            title="Rueda 360°"
+            title="1 Figura extra grande"
           >
-            <Compass className="w-3 h-3" />
-            <span>Rueda ({activeShapeCount})</span>
+            1 Figura
           </button>
-
           <button
             type="button"
-            onClick={() => onChangePracticeMode('single')}
-            className={`py-1.5 px-1 text-[9px] font-mono font-bold uppercase border-2 border-black flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000000] ${
-              practiceMode === 'single'
-                ? 'bg-black text-white'
-                : 'bg-white hover:bg-neutral-100 text-black'
+            onClick={() => onChangeDensity('2_figures')}
+            className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
+              isTwoFigures ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
             }`}
-            title="1 Sector por ronda"
+            title="2 Figuras grandes (izquierda y derecha)"
           >
-            <Target className="w-3 h-3" />
-            <span>Sector</span>
+            2 Figuras
           </button>
         </div>
       </div>
-
-      {/* Selector de Densidad / Adaptación a Pantalla (Tablets vs Desktop) */}
-      {(practiceMode === 'full_wheel' || practiceMode === 'horizon') && (
-        <div className="flex flex-col gap-1 bg-neutral-50 border border-black p-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-600 font-bold">
-              Figuras en Pantalla
-            </span>
-            <span className="text-[9px] font-mono font-bold bg-white px-1 border border-neutral-300">
-              {activeShapeCount} formas
-            </span>
-          </div>
-          <div className="grid grid-cols-4 gap-1">
-            <button
-              type="button"
-              onClick={() => onChangeDensity('auto')}
-              className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
-                density === 'auto' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-              }`}
-              title="Adaptar automáticamente al tamaño de pantalla (Tablets: 2 a 4 figuras grandes, Desktop: 8)"
-            >
-              Auto
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeDensity('wheel4')}
-              className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
-                density === 'wheel4' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-              }`}
-              title="4 Figuras grandes (ideal para tablets o práctica cómoda)"
-            >
-              4 (Tab)
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeDensity('wheel2')}
-              className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
-                density === 'wheel2' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-              }`}
-              title="2 Figuras extra grandes en diagonal"
-            >
-              2 (Diag)
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeDensity('wheel8')}
-              className={`py-1 text-[9px] font-mono font-bold uppercase border border-black cursor-pointer transition-all ${
-                density === 'wheel8' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100 text-black'
-              }`}
-              title="8 Figuras completas"
-            >
-              8 (HD)
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Lista de Formas 3D Precalculadas */}
       <div className="flex flex-col gap-1">

@@ -301,7 +301,8 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
       ctx.fillStyle = '#94a3b8';
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText('LÍNEA FOCAL HORIZONTAL', 14, fp.y - 6);
+      const labelY = challenge.horizonSide === 'lower' ? fp.y + 14 : fp.y - 6;
+      ctx.fillText('LÍNEA FOCAL HORIZONTAL', 14, labelY);
       ctx.restore();
     }
 
@@ -324,7 +325,8 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
     ctx.fillStyle = '#64748b';
     ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('PUNTO FOCAL (1 PF)', fp.x, fp.y + 19);
+    const fpLabelY = challenge.horizonSide === 'upper' ? fp.y - 12 : fp.y + 18;
+    ctx.fillText('PUNTO FOCAL (1 PF)', fp.x, fpLabelY);
     ctx.restore();
 
     // 3. LÍNEAS Y PUNTOS DE ANCLAJE MÍNIMOS INDISPENSABLES (VISIBLES SIEMPRE, INCLUSO CON AYUDAS OFF)
@@ -706,6 +708,7 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
           }}
           activeShapeCount={challenge.activeShapeCount || challenge.shapes.length}
           currentRound={currentRound}
+          horizonSide={challenge.horizonSide}
         />
 
         {sessionScores.length > 0 && (

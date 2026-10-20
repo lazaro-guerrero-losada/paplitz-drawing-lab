@@ -114,10 +114,9 @@ function buildPrecalculatedShape(
     y: uRad.x,
   };
 
-  // Restricción angular transversal máxima de seguridad para evitar colisiones:
-  // En 8 formas (45° por sector), el semi-ángulo máximo seguro es 13.5° (dejando >= 18° de separación entre formas adyacentes).
-  // En 4 formas (90° por cuadrante), el semi-ángulo puede llegar a 24°.
-  const maxAngularDeg = totalShapeCount >= 8 ? 13.5 : 24.0;
+  // Restricción angular transversal máxima de seguridad:
+  // En 1 o 2 formas grandes, se amplía a 38° para permitir figuras de gran escala sin restricciones artificiales.
+  const maxAngularDeg = totalShapeCount >= 8 ? 13.5 : totalShapeCount >= 4 ? 24.0 : 38.0;
   const maxHalfW = shapeDist * Math.tan((maxAngularDeg * Math.PI) / 180);
 
   const frontCurves: CurveSegment2D[] = [];
@@ -134,12 +133,12 @@ function buildPrecalculatedShape(
 
   if (type === 'CUBE') {
     // CUBO / PRISMA RECTANGULAR:
-    // Dimensiones irregulares acotadas para no invadir sectores colindantes
-    const rawHalfW = Math.round((22 + rnd1 * 20) * scaleFactor);
+    // Dimensiones de gran formato y proporciones variables
+    const rawHalfW = Math.round((28 + rnd1 * 26) * scaleFactor);
     const halfW = Math.min(rawHalfW, Math.round(maxHalfW));
-    const rawHalfH = Math.round((20 + rnd2 * 18) * scaleFactor);
-    const halfH = Math.min(rawHalfH, Math.round(shapeDist * 0.22));
-    const depthFactor = 0.26 + rnd3 * 0.18; // 0.26 a 0.44
+    const rawHalfH = Math.round((26 + rnd2 * 24) * scaleFactor);
+    const halfH = Math.min(rawHalfH, Math.round(shapeDist * 0.44));
+    const depthFactor = 0.22 + rnd3 * 0.16;
 
     const v0: Point2D = { x: centerPos.x - halfW * vPerp.x - halfH * uRad.x, y: centerPos.y - halfW * vPerp.y - halfH * uRad.y };
     const v1: Point2D = { x: centerPos.x + halfW * vPerp.x - halfH * uRad.x, y: centerPos.y + halfW * vPerp.y - halfH * uRad.y };
@@ -207,12 +206,12 @@ function buildPrecalculatedShape(
     anchorVertices = [v0, v1, v3, backVerts[0]];
 
   } else if (type === 'CYLINDER') {
-    // CILINDRO: Dimensiones variables (radio transversal y escorzo)
-    const rawRadiusV = Math.round((22 + rnd1 * 18) * scaleFactor);
+    // CILINDRO: Dimensiones variables de gran escala
+    const rawRadiusV = Math.round((28 + rnd1 * 24) * scaleFactor);
     const radiusV = Math.min(rawRadiusV, Math.round(maxHalfW));
-    const rawRadiusU = Math.round((13 + rnd2 * 12) * scaleFactor);
-    const radiusU = Math.min(rawRadiusU, Math.round(shapeDist * 0.18));
-    const depthFactor = 0.26 + rnd3 * 0.18;
+    const rawRadiusU = Math.round((16 + rnd2 * 14) * scaleFactor);
+    const radiusU = Math.min(rawRadiusU, Math.round(shapeDist * 0.32));
+    const depthFactor = 0.22 + rnd3 * 0.16;
 
     frontCurves.push(makeEllipseCurve(`${prefix}-front-ellipse`, centerPos, vPerp, uRad, radiusV, radiusU, 'Elipse frontal base'));
 
@@ -254,12 +253,12 @@ function buildPrecalculatedShape(
     anchorVertices = [centerPos, tan1Front];
 
   } else if (type === 'TRIANGULAR_PRISM') {
-    // PRISMA TRIANGULAR: Proporciones variables
-    const rawHalfW = Math.round((22 + rnd1 * 18) * scaleFactor);
+    // PRISMA TRIANGULAR: Proporciones variables de gran formato
+    const rawHalfW = Math.round((28 + rnd1 * 26) * scaleFactor);
     const halfW = Math.min(rawHalfW, Math.round(maxHalfW));
-    const rawH = Math.round((26 + rnd2 * 20) * scaleFactor);
-    const h = Math.min(rawH, Math.round(shapeDist * 0.24));
-    const depthFactor = 0.26 + rnd3 * 0.18;
+    const rawH = Math.round((32 + rnd2 * 26) * scaleFactor);
+    const h = Math.min(rawH, Math.round(shapeDist * 0.46));
+    const depthFactor = 0.22 + rnd3 * 0.16;
 
     const v0: Point2D = { x: centerPos.x, y: centerPos.y - h * uRad.y };
     const v1: Point2D = { x: centerPos.x + halfW * vPerp.x + (h * 0.5) * uRad.x, y: centerPos.y + halfW * vPerp.y + (h * 0.5) * uRad.y };
@@ -298,12 +297,12 @@ function buildPrecalculatedShape(
     anchorVertices = [...frontVerts, backVerts[0]];
 
   } else if (type === 'PYRAMID') {
-    // PIRÁMIDE: Proporciones variables
-    const rawHalfW = Math.round((24 + rnd1 * 18) * scaleFactor);
+    // PIRÁMIDE: Proporciones variables de gran formato
+    const rawHalfW = Math.round((30 + rnd1 * 26) * scaleFactor);
     const halfW = Math.min(rawHalfW, Math.round(maxHalfW));
-    const rawHalfH = Math.round((20 + rnd2 * 18) * scaleFactor);
-    const halfH = Math.min(rawHalfH, Math.round(shapeDist * 0.22));
-    const depthFactor = 0.26 + rnd3 * 0.16;
+    const rawHalfH = Math.round((26 + rnd2 * 24) * scaleFactor);
+    const halfH = Math.min(rawHalfH, Math.round(shapeDist * 0.42));
+    const depthFactor = 0.22 + rnd3 * 0.16;
 
     const v0: Point2D = { x: centerPos.x - halfW * vPerp.x - halfH * 0.7 * uRad.x, y: centerPos.y - halfW * vPerp.y - halfH * 0.7 * uRad.y };
     const v1: Point2D = { x: centerPos.x + halfW * vPerp.x - halfH * 0.7 * uRad.x, y: centerPos.y + halfW * vPerp.y - halfH * 0.7 * uRad.y };
@@ -341,10 +340,10 @@ function buildPrecalculatedShape(
     anchorVertices = [...frontVerts, apex];
 
   } else {
-    // HEXAGON_PRISM: Proporciones variables
-    const rawR = Math.round((22 + rnd1 * 18) * scaleFactor);
+    // HEXAGON_PRISM: Proporciones variables de gran formato
+    const rawR = Math.round((28 + rnd1 * 26) * scaleFactor);
     const R = Math.min(rawR, Math.round(maxHalfW));
-    const depthFactor = 0.26 + rnd3 * 0.18;
+    const depthFactor = 0.22 + rnd3 * 0.16;
 
     const frontVerts: Point2D[] = [];
     for (let k = 0; k < 6; k++) {
@@ -568,13 +567,13 @@ function clampShapeToSafeArea(
 }
 
 /**
- * Genera un reto de perspectiva con 1 punto focal central y 8 líneas discontinuas,
- * adaptando el número y tamaño de las figuras según el espacio de pantalla (Tablet / Desktop)
- * y variando dinámicamente sus posiciones en diagonales y cuadrantes.
+ * Genera un reto de perspectiva con 1 punto focal sobre una línea horizontal extrema
+ * (cerca del límite superior o inferior para maximizar el área de dibujo),
+ * con 1 o 2 figuras grandes de posiciones y dimensiones aleatorias.
  */
 export function generateFocal3DChallenge(
   seed = Math.floor(Math.random() * 100000),
-  mode: FocalPracticeMode = 'horizon',
+  _mode: FocalPracticeMode = 'horizon',
   forcedShapeType: Focal3DShapeType = 'CUBE',
   canvasWidth = 920,
   canvasHeight = 580,
@@ -582,253 +581,155 @@ export function generateFocal3DChallenge(
   density: FocalWheelDensity = 'auto'
 ): Focal3DChallenge {
   const minDim = Math.min(canvasWidth, canvasHeight);
-  const maxRayLen = Math.max(canvasWidth, canvasHeight) * 1.3;
+  const maxRayLen = Math.max(canvasWidth, canvasHeight) * 1.5;
 
   // LÍMITES SEGUROS DE DIBUJO:
-  // Garantizan que ninguna figura se dibuje detrás de la barra flotante de botones ni del menú superior
+  // Garantizan matemáticamente que ninguna figura se dibuje detrás de la barra flotante de botones inferior ni del menú superior
   const SAFE_TOP = 50;
   const SAFE_BOTTOM = canvasHeight - 95;
   const SAFE_LEFT = 45;
   const SAFE_RIGHT = canvasWidth - 45;
 
-  let focalPoint: Point2D;
-  let horizonLine: { x1: number; y1: number; x2: number; y2: number } | undefined;
-  let horizonSide: 'upper' | 'lower' | undefined;
-  let focalRays: FocalRay[] = [];
+  // HORIZONTE AL LÍMITE SUPERIOR O INFERIOR:
+  // Si 'upper': las figuras se sitúan en la zona superior (cielo/altura),
+  // por lo que la línea focal horizontal se desplaza cerca del límite INFERIOR.
+  // Si 'lower': las figuras se sitúan en la zona inferior (suelo/tierra),
+  // por lo que la línea focal horizontal se desplaza cerca del límite SUPERIOR.
+  const horizonSide: 'upper' | 'lower' = (Math.abs(seed) % 2 === 0) ? 'upper' : 'lower';
+
+  // Posición Y de la línea horizontal de horizonte:
+  // Con esto se gana el máximo espacio posible para hacer las figuras mucho más grandes.
+  const horizonY = horizonSide === 'upper'
+    ? Math.max(canvasHeight - 110, SAFE_BOTTOM - 20)
+    : Math.min(80, SAFE_TOP + 30);
+
+  // Punto focal sobre la línea horizontal (centrado en X con leve variación orgánica)
+  const focalX = Math.round(canvasWidth / 2 + ((Math.abs(seed * 3) % 41) - 20));
+  const focalPoint: Point2D = {
+    x: focalX,
+    y: horizonY,
+  };
+
+  const horizonLine = {
+    x1: 0,
+    y1: horizonY,
+    x2: canvasWidth,
+    y2: horizonY,
+  };
+
+  // 8 rayos focales que parten del punto focal y abren hacia el campo de dibujo
+  const activeRayAngles = horizonSide === 'upper'
+    ? [195, 215, 235, 255, 270, 285, 305, 325, 345] // Rayos hacia arriba
+    : [15, 35, 55, 75, 90, 105, 125, 145, 165];     // Rayos hacia abajo
+
+  const focalRays: FocalRay[] = activeRayAngles.map((ang, idx) => {
+    const rad = (ang * Math.PI) / 180;
+    return {
+      index: idx,
+      angleDeg: ang,
+      label: `${ang}°`,
+      x1: focalPoint.x,
+      y1: focalPoint.y,
+      x2: Math.round(focalPoint.x + maxRayLen * Math.cos(rad)),
+      y2: Math.round(focalPoint.y + maxRayLen * Math.sin(rad)),
+    };
+  });
+
+  // Número de figuras: 1 o 2 figuras grandes (según densidad elegida o auto)
+  let shapeCount = 1;
+  if (density === '1_figure') {
+    shapeCount = 1;
+  } else if (density === '2_figures' || density === 'wheel2' || density === 'wheel4' || density === 'wheel8') {
+    shapeCount = 2;
+  } else {
+    shapeCount = (Math.abs(seed * 7) % 2 === 0) ? 1 : 2;
+  }
+
+  // Factor de escala extra grande gracias al espacio liberado por la línea límite
+  const scaleFactor = shapeCount === 1 ? 2.65 : 2.30;
+
+  // Espacio vertical disponible entre el horizonte y el límite seguro
+  const availHeight = horizonSide === 'upper'
+    ? (horizonY - 50) - SAFE_TOP
+    : SAFE_BOTTOM - (horizonY + 50);
+
   const shapes: PrecalculatedShape3D[] = [];
 
-  if (mode === 'horizon') {
-    // =========================================================================
-    // MODO HORIZONTE (1 o 2 FIGURAS GRANDES ARRIBA O ABAJO DE LA LÍNEA FOCAL)
-    // =========================================================================
-    // La pantalla dibuja la línea de horizonte horizontal.
-    // Solo se dibuja la mitad superior (cielo/aire) o inferior (tierra/suelo)
-    // con 1 o 2 figuras grandes, ideal para tablet con stylus.
-    horizonSide = (Math.abs(seed) % 2 === 0) ? 'upper' : 'lower';
+  const getShapeTypeForIndex = (idx: number): Focal3DShapeType => {
+    if (forcedShapeType !== 'MIXED_WHEEL') return forcedShapeType;
+    const mixedPool: Focal3DShapeType[] = [
+      'CUBE',
+      'CYLINDER',
+      'TRIANGULAR_PRISM',
+      'PYRAMID',
+      'HEXAGON_PRISM',
+    ];
+    return mixedPool[(Math.abs(seed + idx * 37)) % mixedPool.length];
+  };
 
-    // Altura de la línea horizontal de horizonte:
-    // Si 'upper': horizonte en 58% de altura (deja amplio espacio arriba para las figuras)
-    // Si 'lower': horizonte en 38% de altura (deja amplio espacio abajo sobre los botones)
-    const horizonY = horizonSide === 'upper'
-      ? Math.round(canvasHeight * 0.58)
-      : Math.round(canvasHeight * 0.38);
+  if (shapeCount === 1) {
+    // 1 FIGURA EXTRA GRANDE:
+    // Posición y dimensiones aleatorias en el campo abierto
+    const angleOffset = ((Math.abs(seed * 31) % 60) - 30); // -30° a +30°
+    const baseAngle = horizonSide === 'upper' ? 270 : 90;
+    const angleDeg = baseAngle + angleOffset;
 
-    focalPoint = {
-      x: Math.round(canvasWidth / 2),
-      y: horizonY,
-    };
+    const rndDist = seededRandom(seed * 53 + 1);
+    const distFromFocal = availHeight * (0.50 + rndDist * 0.28);
 
-    horizonLine = {
-      x1: 0,
-      y1: horizonY,
-      x2: canvasWidth,
-      y2: horizonY,
-    };
-
-    // Rayos focales que convergen al punto focal en el hemisferio activo
-    const activeRayAngles = horizonSide === 'upper'
-      ? [195, 215, 235, 255, 270, 285, 305, 325, 345] // Semicírculo superior
-      : [15, 35, 55, 75, 90, 105, 125, 145, 165];     // Semicírculo inferior
-
-    focalRays = activeRayAngles.map((ang, idx) => {
-      const rad = (ang * Math.PI) / 180;
-      return {
-        index: idx,
-        angleDeg: ang,
-        label: `${ang}°`,
-        x1: focalPoint.x,
-        y1: focalPoint.y,
-        x2: Math.round(focalPoint.x + maxRayLen * Math.cos(rad)),
-        y2: Math.round(focalPoint.y + maxRayLen * Math.sin(rad)),
-      };
-    });
-
-    // Número de figuras: 1 o 2 figuras grandes
-    const shapeCount = (density === 'wheel4' || density === 'wheel8')
-      ? 2
-      : ((Math.abs(seed * 7) % 2 === 0) ? 1 : 2);
-
-    const scaleFactor = 1.95; // Figuras extra grandes y cómodas
-    const baseRadius = minDim * 0.40;
-    const horizonDist = minDim * (0.32 + (Math.abs(seed * 19) % 12) * 0.01);
-
-    if (shapeCount === 1) {
-      // 1 Figura Grande: ubicación aleatoria en el hemisferio activo
-      const angleVariance = ((Math.abs(seed * 31) % 64) - 32); // -32° a +32°
-      const baseCenterAngle = horizonSide === 'upper' ? 270 : 90;
-      const angleDeg = baseCenterAngle + angleVariance;
-
-      shapes.push(
-        buildPrecalculatedShape(
-          activeSectorIndex,
-          forcedShapeType,
-          focalPoint,
-          baseRadius,
-          seed,
-          scaleFactor,
-          1,
-          angleDeg,
-          horizonDist
-        )
-      );
-    } else {
-      // 2 Figuras Grandes: Una a la izquierda del punto focal y otra a la derecha
-      const leftAngle = horizonSide === 'upper'
-        ? 232 + (Math.abs(seed * 23) % 20) // ~232° a 252° (arriba a la izquierda)
-        : 128 + (Math.abs(seed * 23) % 20); // ~128° a 148° (abajo a la izquierda)
-
-      const rightAngle = horizonSide === 'upper'
-        ? 288 + (Math.abs(seed * 47) % 20) // ~288° a 308° (arriba a la derecha)
-        : 32 + (Math.abs(seed * 47) % 20);  // ~32° a 52° (abajo a la derecha)
-
-      const distLeft = horizonDist * (0.92 + (Math.abs(seed * 11) % 14) * 0.01);
-      const distRight = horizonDist * (0.92 + (Math.abs(seed * 59) % 14) * 0.01);
-
-      shapes.push(
-        buildPrecalculatedShape(
-          activeSectorIndex,
-          forcedShapeType,
-          focalPoint,
-          baseRadius,
-          seed + 101,
-          scaleFactor,
-          2,
-          leftAngle,
-          distLeft
-        ),
-        buildPrecalculatedShape(
-          (activeSectorIndex + 1) % 8,
-          forcedShapeType === 'MIXED_WHEEL' ? 'CYLINDER' : forcedShapeType,
-          focalPoint,
-          baseRadius,
-          seed + 202,
-          scaleFactor,
-          2,
-          rightAngle,
-          distRight
-        )
-      );
-    }
+    shapes.push(
+      buildPrecalculatedShape(
+        activeSectorIndex,
+        getShapeTypeForIndex(0),
+        focalPoint,
+        minDim * 0.40,
+        seed,
+        scaleFactor,
+        1,
+        angleDeg,
+        distFromFocal
+      )
+    );
   } else {
-    // =========================================================================
-    // MODOS RUEDA 360° Y SECTOR INDIVIDUAL
-    // =========================================================================
-    // Punto focal centrado verticalmente en el área útil de dibujo (compensando la botonera inferior)
-    focalPoint = {
-      x: Math.round(canvasWidth / 2),
-      y: Math.round((SAFE_TOP + SAFE_BOTTOM) / 2),
-    };
+    // 2 FIGURAS GRANDES:
+    // Una a la izquierda del punto focal y otra a la derecha, con dimensiones y distancias aleatorias independientes
+    const angleLeft = horizonSide === 'upper'
+      ? 230 + ((Math.abs(seed * 23) % 24) - 12) // ~218° a 242° (arriba a la izquierda)
+      : 130 + ((Math.abs(seed * 23) % 24) - 12); // ~118° a 142° (abajo a la izquierda)
 
-    horizonLine = {
-      x1: 0,
-      y1: focalPoint.y,
-      x2: canvasWidth,
-      y2: focalPoint.y,
-    };
+    const angleRight = horizonSide === 'upper'
+      ? 310 + ((Math.abs(seed * 47) % 24) - 12) // ~298° a 322° (arriba a la derecha)
+      : 50 + ((Math.abs(seed * 47) % 24) - 12);  // ~38° a 62° (abajo a la derecha)
 
-    const rayAngles = [0, 45, 90, 135, 180, 225, 270, 315];
-    const rayLabels = ['0° (Este)', '45° (Noreste)', '90° (Norte)', '135° (Noroeste)', '180° (Oeste)', '225° (Suroeste)', '270° (Sur)', '315° (Sureste)'];
+    const rndDist1 = seededRandom(seed * 71 + 2);
+    const rndDist2 = seededRandom(seed * 97 + 3);
+    const distLeft = availHeight * (0.48 + rndDist1 * 0.26);
+    const distRight = availHeight * (0.48 + rndDist2 * 0.26);
 
-    focalRays = rayAngles.map((ang, idx) => {
-      const rad = (ang * Math.PI) / 180;
-      return {
-        index: idx,
-        angleDeg: ang,
-        label: rayLabels[idx],
-        x1: focalPoint.x,
-        y1: focalPoint.y,
-        x2: Math.round(focalPoint.x + maxRayLen * Math.cos(rad)),
-        y2: Math.round(focalPoint.y + maxRayLen * Math.sin(rad)),
-      };
-    });
-
-    let targetShapeCount = 8;
-    let scaleFactor = 1.05;
-    let sectorIndices: number[] = [0, 1, 2, 3, 4, 5, 6, 7];
-
-    if (density === 'wheel2') {
-      targetShapeCount = 2;
-      scaleFactor = 1.60;
-    } else if (density === 'wheel4') {
-      targetShapeCount = 4;
-      scaleFactor = 1.30;
-    } else if (density === 'wheel8') {
-      targetShapeCount = 8;
-      scaleFactor = 0.95;
-    } else {
-      if (minDim < 520 || canvasWidth < 740) {
-        targetShapeCount = 2;
-        scaleFactor = 1.55;
-      } else if (minDim < 680 || canvasWidth < 960) {
-        targetShapeCount = 4;
-        scaleFactor = 1.28;
-      } else {
-        targetShapeCount = 8;
-        scaleFactor = 0.95;
-      }
-    }
-
-    if (targetShapeCount === 2) {
-      const pairs = [
-        [5, 1], // Diagonal SW -> NE
-        [3, 7], // Diagonal NW -> SE
-        [4, 0], // Transversal Oeste -> Este
-        [6, 2], // Transversal Sur -> Norte
-      ];
-      const pairIdx = Math.abs(seed) % pairs.length;
-      sectorIndices = pairs[pairIdx];
-    } else if (targetShapeCount === 4) {
-      const quadPatterns = [
-        [1, 3, 5, 7], // 4 Diagonales en X completa (NE, NW, SW, SE a 90°)
-        [0, 2, 4, 6], // 4 Ortogonales en cruz (+) (E, S, W, N a 90°)
-      ];
-      const qIdx = Math.abs(seed) % quadPatterns.length;
-      sectorIndices = quadPatterns[qIdx];
-    } else {
-      const rotOffset = Math.abs(seed) % 8;
-      sectorIndices = [0, 1, 2, 3, 4, 5, 6, 7].map((s) => (s + rotOffset) % 8);
-    }
-
-    const baseRadius = minDim * (targetShapeCount <= 4 ? 0.36 : 0.32);
-
-    if (mode === 'full_wheel') {
-      sectorIndices.forEach((s, idx) => {
-        let shapeTypeForSector: Focal3DShapeType = forcedShapeType;
-        if (forcedShapeType === 'MIXED_WHEEL') {
-          const mixedTypes: Focal3DShapeType[] = [
-            'CUBE',
-            'CYLINDER',
-            'TRIANGULAR_PRISM',
-            'PYRAMID',
-            'HEXAGON_PRISM',
-          ];
-          shapeTypeForSector = mixedTypes[(idx + Math.abs(seed)) % mixedTypes.length];
-        }
-        shapes.push(
-          buildPrecalculatedShape(
-            s,
-            shapeTypeForSector,
-            focalPoint,
-            baseRadius,
-            seed + idx * 79,
-            scaleFactor,
-            targetShapeCount
-          )
-        );
-      });
-    } else {
-      shapes.push(
-        buildPrecalculatedShape(
-          activeSectorIndex,
-          forcedShapeType,
-          focalPoint,
-          baseRadius,
-          seed,
-          1.55,
-          1
-        )
-      );
-    }
+    shapes.push(
+      buildPrecalculatedShape(
+        activeSectorIndex,
+        getShapeTypeForIndex(0),
+        focalPoint,
+        minDim * 0.40,
+        seed + 101,
+        scaleFactor,
+        2,
+        angleLeft,
+        distLeft
+      ),
+      buildPrecalculatedShape(
+        (activeSectorIndex + 1) % 8,
+        getShapeTypeForIndex(1),
+        focalPoint,
+        minDim * 0.40,
+        seed + 202,
+        scaleFactor,
+        2,
+        angleRight,
+        distRight
+      )
+    );
   }
 
   // 6. CONFINAR TODAS LAS FIGURAS DENTRO DEL ÁREA SEGURA DE DIBUJO:
@@ -843,7 +744,7 @@ export function generateFocal3DChallenge(
     let hadInterference = false;
     for (let i = 0; i < shapes.length; i++) {
       for (let j = i + 1; j < shapes.length; j++) {
-        if (shapesInterfere(shapes[i], shapes[j], 24)) {
+        if (shapesInterfere(shapes[i], shapes[j], 26)) {
           hadInterference = true;
           shrinkShape(shapes[i], 0.88);
           shrinkShape(shapes[j], 0.88);
@@ -859,29 +760,23 @@ export function generateFocal3DChallenge(
     TRIANGULAR_PRISM: 'Prismas Triangulares (Aristas de Fuga)',
     PYRAMID: 'Pirámides en Perspectiva Cónica',
     HEXAGON_PRISM: 'Prismas Hexagonales',
-    MIXED_WHEEL: 'Rueda Mixta de Formas 3D',
+    MIXED_WHEEL: 'Formas 3D Mixtas en Perspectiva',
   };
 
-  const title = mode === 'horizon'
-    ? `${shapeTypeLabels[forcedShapeType]} · Vista Horizonte (${horizonSide === 'upper' ? 'Arriba' : 'Abajo'}, ${shapes.length} ${shapes.length === 1 ? 'Figura Grande' : 'Figuras Grandes'})`
-    : mode === 'full_wheel'
-    ? `${shapeTypeLabels[forcedShapeType]} · ${shapes.length} Formas`
-    : `${shapeTypeLabels[forcedShapeType]} · Sector ${activeSectorIndex + 1}/8`;
+  const title = `${shapeTypeLabels[forcedShapeType]} · Vista Horizonte (${horizonSide === 'upper' ? 'Arriba' : 'Abajo'}, ${shapes.length} ${shapes.length === 1 ? 'Figura Grande' : 'Figuras Grandes'})`;
 
   const tipText = forcedShapeType === 'CYLINDER'
     ? 'En el cilindro se proporciona el eje central y el radio. Traza las dos elipses y las generatrices tangentes.'
     : forcedShapeType === 'TRIANGULAR_PRISM'
-    ? 'Une los vértices frontales para crear el triángulo y proyecta sus aristas de profundidad hacia el punto focal central.'
-    : 'Usa las 3 aristas mínimas indispensables (ancho, alto y profundidad) para construir el cubo completo en perspectiva.';
+    ? 'Une los vértices frontales para crear el triángulo y proyecta sus aristas de profundidad hacia el punto focal.'
+    : 'Usa las 3 aristas mínimas indispensables (ancho, alto y profundidad) para construir el prisma completo en perspectiva.';
 
   return {
-    id: `focal3d-${seed}-${mode}-${forcedShapeType}-${density}`,
+    id: `focal3d-${seed}-horizon-${forcedShapeType}-${density}`,
     title,
-    subtitle: mode === 'horizon'
-      ? `${shapes.length} ${shapes.length === 1 ? 'figura grande' : 'figuras grandes'} en perspectiva cónica con línea focal horizontal`
-      : `${shapes.length} figuras en perspectiva cónica a 1 punto focal central`,
+    subtitle: `${shapes.length} ${shapes.length === 1 ? 'figura grande' : 'figuras grandes'} en perspectiva cónica con línea focal horizontal límite`,
     seed,
-    mode,
+    mode: 'horizon',
     horizonSide,
     horizonLine,
     density,
