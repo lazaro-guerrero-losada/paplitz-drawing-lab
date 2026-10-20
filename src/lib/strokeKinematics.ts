@@ -249,18 +249,18 @@ export function analyzeStrokeKinematics(
     }
   } else {
     // FASE 3: VELOCIDAD Y DISPARO BALÍSTICO
-    // Exige golpe decidido y rápido con buen impulso reflejo (≥340 px/s o 85% baseline, con un tope saludable de 520 px/s para evitar descontrol)
-    const targetFastSpeed = Math.min(520, Math.max(340, Math.round(userBaseline * 0.85)));
-    const maxDurationMs = Math.max(700, Math.round(totalLength * 1.8));
+    // Exige golpe decidido y rápido con buen impulso reflejo (≥260 px/s o 70% baseline, con tope saludable de 480 px/s)
+    const targetFastSpeed = Math.min(480, Math.max(260, Math.round(userBaseline * 0.70)));
+    const maxDurationMs = Math.max(850, Math.round(totalLength * 2.8));
     phaseRequirementText = `Fase 3: Trazo balístico rápido (≥${targetFastSpeed} px/s en ≤${maxDurationMs}ms)`;
     phasePassed = avgSpeedPxPerSec >= targetFastSpeed && durationMs <= maxDurationMs;
 
     if (phasePassed) {
       speedDiagnosisLabel = '¡Disparo balístico certero a gran velocidad!';
     } else if (avgSpeedPxPerSec < targetFastSpeed) {
-      speedDiagnosisLabel = `Velocidad insuficiente: vas a ${avgSpeedPxPerSec} px/s (requieres ≥${targetFastSpeed} px/s)`;
+      speedDiagnosisLabel = `Velocidad suave: vas a ${avgSpeedPxPerSec} px/s (objetivo ágil: ≥${targetFastSpeed} px/s)`;
     } else {
-      speedDiagnosisLabel = `Demasiado tiempo en el lienzo: ${durationMs}ms (requieres impulso rápido ≤${maxDurationMs}ms)`;
+      speedDiagnosisLabel = `Demasiado tiempo en el lienzo: ${durationMs}ms (objetivo ágil: ≤${maxDurationMs}ms)`;
     }
   }
 

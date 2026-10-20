@@ -289,8 +289,8 @@ export function calculateOpticalDensity(
  * Fase 2 (Fluidez y ritmo): ≥80%
  * Fase 3 (Velocidad sin guía visual): ≥82%
  */
-export function getPhasePassingThreshold(phase: 1 | 2 | 3 = 1): number {
-  return phase === 1 ? 80 : phase === 2 ? 80 : 82;
+export function getPhasePassingThreshold(_phase: 1 | 2 | 3 = 1): number {
+  return 80; // Umbral consistente y claro del 80% para todas las fases
 }
 
 /**
@@ -453,20 +453,15 @@ export function evaluateSingleStrokeSubmission(
     // Fase 1: Precisión pura de puntería y rectitud (umbral ≥80%)
     overallScore = geometricScore;
   } else if (activePhase === 2) {
-    // Fase 2: Fluidez (75% Geometría + 25% Fluidez cinemática, umbral ≥83%)
+    // Fase 2: Fluidez (75% Geometría + 25% Fluidez cinemática, umbral ≥80%)
     overallScore = Math.round(geometricScore * 0.75 + kinematics.fluencyScore * 0.25);
   } else {
-    // Fase 3: Velocidad Balística Sin Guía Visual (80% Geometría + 20% Velocidad Balística, umbral ≥85%)
-    const targetFastSpeed = Math.min(520, Math.max(340, Math.round(kinematics.userBaselineSpeedPxPerSec * 0.85)));
+    // Fase 3: Velocidad Balística Sin Guía Visual (80% Geometría + 20% Velocidad Balística, umbral ≥80%)
+    const targetFastSpeed = Math.min(480, Math.max(260, Math.round(kinematics.userBaselineSpeedPxPerSec * 0.70)));
     const speedRatio = kinematics.avgSpeedPxPerSec / targetFastSpeed;
     const speedScore = Math.min(100, Math.round(Math.max(0, speedRatio * 100)));
 
     overallScore = Math.round(geometricScore * 0.80 + speedScore * 0.20);
-
-    // La velocidad no puede rescatar una geometría insuficiente para la Fase 3
-    if (geometricScore < 80) {
-      overallScore = Math.min(overallScore, 82);
-    }
   }
 
   // Tolerancias máximas de anclaje según fase:
@@ -484,9 +479,11 @@ export function evaluateSingleStrokeSubmission(
     failedGateReason = 'endpoint_error';
   } else if (!isCurve && angleDiff > 20) {
     failedGateReason = 'angle_error';
-  } else if (!isCurve && straightnessScore < 60) {
+  } else if (!isCurve && straightnessScore < 55) {
     failedGateReason = 'straightness_error';
-  } else if (!kinematics.phasePassed) {
+  } else if (activePhase === 2 && kinematics.fluencyScore < 40) {
+    failedGateReason = 'kinematics_failed';
+  } else if (activePhase === 3 && kinematics.durationMs > 2800) {
     failedGateReason = 'kinematics_failed';
   }
 
@@ -503,9 +500,9 @@ export function evaluateSingleStrokeSubmission(
     passed = false;
     directionWarning = '⚠️ DIRECCIÓN INVERTIDA: Has trazado en sentido contrario (de ② hacia ①). Debes iniciar en ① y proyectar hacia ②.';
   } else if (!passed && overallScore >= targetThreshold) {
-    // Si la nota aritmética daba aprobada pero falló una compuerta estricta (ej. falta de velocidad, rectitud o diana no alcanzada),
-    // recortar la nota final visible para eliminar contradicciones visuales (ej. 91% pero con 'Reintentar')
-    overallScore = failedGateReason === 'endpoint_error' ? targetThreshold - 8 : targetThreshold - 3;
+    // Si la nota aritmética daba aprobada pero falló una compuerta geométrica estricta (ej. diana o ángulo),
+    // recortar la nota final visible para que no supere el umbral.
+    overallScore = failedGateReason === 'endpoint_error' ? targetThreshold - 8 : targetThreshold - 4;
   }
 
   let feedbackTitle = '¡Buen Trazo!';

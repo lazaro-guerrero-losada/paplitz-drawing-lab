@@ -198,7 +198,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
     }, [onEvaluationComplete]);
 
     const handleEvaluate = useCallback(() => {
-      if (strokes.length === 0) return;
+      if (strokes.length === 0 || evaluation) return;
       const res = evaluateStrokeSubmission(strokes, challenge);
       setEvaluation(res);
       const repMd = buildStrokeDebugReport(challenge, strokes, res);
@@ -208,7 +208,7 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
         reportMarkdown: repMd,
         reportJsonString: '',
       });
-    }, [strokes, challenge, onEvaluationComplete]);
+    }, [strokes, challenge, evaluation, onEvaluationComplete]);
 
     const handleNext = useCallback(() => {
       setAutoAdvanceCountdown(null);
@@ -1054,6 +1054,26 @@ export const StrokePracticeCanvas = forwardRef<StrokePracticeCanvasRef, StrokePr
       }
 
       if (currentStrokeRef.current.length > 1) {
+        // RECHAZO DE TOQUES ACCIDENTALES / PENCIL TILT / REBOTE DE CONTACTO:
+        // Si el trazo tiene una longitud menor a 16px o una duración menor a 55ms,
+        // se descarta como roce involuntario con la pantalla para no registrar un fallo de 0% ni romper la racha.
+        const pts = currentStrokeRef.current;
+        let strokeLength = 0;
+        for (let i = 1; i < pts.length; i++) {
+          strokeLength += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        }
+        const strokeDuration = pts[pts.length - 1].time - pts[0].time;
+
+        const minExpectedLength = challenge.targetLengthPx ? challenge.targetLengthPx * 0.12 : 16;
+        const minAllowedLength = Math.min(16, minExpectedLength);
+
+        if (strokeLength < minAllowedLength || (pts.length <= 5 && strokeDuration < 55)) {
+          // Descarte seguro de roce involuntario o inclinación de lápiz
+          currentStrokeRef.current = [];
+          renderCanvas();
+          return;
+        }
+
         const newStrokes = [...strokes, { points: [...currentStrokeRef.current] }];
         setStrokes(newStrokes);
 

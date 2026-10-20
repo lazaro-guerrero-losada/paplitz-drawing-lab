@@ -13,6 +13,7 @@ export interface LessonNode {
   forceSide?: 'left' | 'right';
   status: 'completed' | 'current' | 'locked';
   score?: number;
+  masteryLevel?: 1 | 2 | 3; // 1: Bronce (Precisión), 2: Plata (Fluidez), 3: Oro / Corona (Velocidad)
   xpReward: number;
   isShadowLevel?: boolean;
   hasGroundGrid?: boolean;
