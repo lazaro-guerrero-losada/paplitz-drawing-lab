@@ -76,7 +76,8 @@ function buildPrecalculatedShape(
   focalPoint: Point2D,
   baseRadius: number,
   seed: number,
-  scaleFactor = 1.0
+  scaleFactor = 1.0,
+  totalShapeCount = 8
 ): PrecalculatedShape3D {
   // Variación pseudoaleatoria determinista según seed y sector
   const rnd1 = seededRandom(seed * 17 + sectorIndex * 73 + 1);
@@ -84,11 +85,13 @@ function buildPrecalculatedShape(
   const rnd3 = seededRandom(seed * 41 + sectorIndex * 101 + 3);
   const rndDist = seededRandom(seed * 53 + sectorIndex * 113 + 4);
 
-  // Distancia variable desde el punto focal para dar profundidad orgánica al conjunto
-  const shapeDist = baseRadius * (0.90 + rndDist * 0.18);
+  // Distancia variable desde el punto focal para dar profundidad orgánica al conjunto.
+  // En rueda de 8 formas adyacentes, la variación radial es suave (0.08) para evitar solapes entre esquinas.
+  const distVariation = totalShapeCount >= 8 ? 0.08 : 0.16;
+  const shapeDist = baseRadius * (0.92 + rndDist * distVariation);
 
-  // Ángulo del sector con pequeño desfase orgánico (+14° a +22°)
-  const angleDeg = (sectorIndex * 45 + 18) % 360;
+  // Ángulo del sector centrado exactamente a la mitad entre los dos rayos delimitadores (+22.5°)
+  const angleDeg = (sectorIndex * 45 + 22.5) % 360;
   const angleRad = (angleDeg * Math.PI) / 180;
 
   // Centro de la cara frontal (más alejada del punto focal)
@@ -109,6 +112,12 @@ function buildPrecalculatedShape(
     y: uRad.x,
   };
 
+  // Restricción angular transversal máxima de seguridad para evitar colisiones:
+  // En 8 formas (45° por sector), el semi-ángulo máximo seguro es 13.5° (dejando >= 18° de separación entre formas adyacentes).
+  // En 4 formas (90° por cuadrante), el semi-ángulo puede llegar a 24°.
+  const maxAngularDeg = totalShapeCount >= 8 ? 13.5 : 24.0;
+  const maxHalfW = shapeDist * Math.tan((maxAngularDeg * Math.PI) / 180);
+
   const frontCurves: CurveSegment2D[] = [];
   const backCurves: CurveSegment2D[] = [];
   const depthCurves: CurveSegment2D[] = [];
@@ -123,10 +132,12 @@ function buildPrecalculatedShape(
 
   if (type === 'CUBE') {
     // CUBO / PRISMA RECTANGULAR:
-    // Dimensiones irregulares (varía ancho, alto y profundidad según el prisma)
-    const halfW = Math.round((28 + rnd1 * 26) * scaleFactor); // 28 a 54 px * scale
-    const halfH = Math.round((24 + rnd2 * 26) * scaleFactor); // 24 a 50 px * scale
-    const depthFactor = 0.28 + rnd3 * 0.22; // 0.28 a 0.50 (unos cubos más profundos que otros)
+    // Dimensiones irregulares acotadas para no invadir sectores colindantes
+    const rawHalfW = Math.round((22 + rnd1 * 20) * scaleFactor);
+    const halfW = Math.min(rawHalfW, Math.round(maxHalfW));
+    const rawHalfH = Math.round((20 + rnd2 * 18) * scaleFactor);
+    const halfH = Math.min(rawHalfH, Math.round(shapeDist * 0.22));
+    const depthFactor = 0.26 + rnd3 * 0.18; // 0.26 a 0.44
 
     const v0: Point2D = { x: centerPos.x - halfW * vPerp.x - halfH * uRad.x, y: centerPos.y - halfW * vPerp.y - halfH * uRad.y };
     const v1: Point2D = { x: centerPos.x + halfW * vPerp.x - halfH * uRad.x, y: centerPos.y + halfW * vPerp.y - halfH * uRad.y };
@@ -195,9 +206,11 @@ function buildPrecalculatedShape(
 
   } else if (type === 'CYLINDER') {
     // CILINDRO: Dimensiones variables (radio transversal y escorzo)
-    const radiusV = Math.round((26 + rnd1 * 22) * scaleFactor); // 26 a 48 px * scale
-    const radiusU = Math.round((15 + rnd2 * 14) * scaleFactor); // 15 a 29 px * scale
-    const depthFactor = 0.28 + rnd3 * 0.22;
+    const rawRadiusV = Math.round((22 + rnd1 * 18) * scaleFactor);
+    const radiusV = Math.min(rawRadiusV, Math.round(maxHalfW));
+    const rawRadiusU = Math.round((13 + rnd2 * 12) * scaleFactor);
+    const radiusU = Math.min(rawRadiusU, Math.round(shapeDist * 0.18));
+    const depthFactor = 0.26 + rnd3 * 0.18;
 
     frontCurves.push(makeEllipseCurve(`${prefix}-front-ellipse`, centerPos, vPerp, uRad, radiusV, radiusU, 'Elipse frontal base'));
 
@@ -240,9 +253,11 @@ function buildPrecalculatedShape(
 
   } else if (type === 'TRIANGULAR_PRISM') {
     // PRISMA TRIANGULAR: Proporciones variables
-    const halfW = Math.round((28 + rnd1 * 24) * scaleFactor);
-    const h = Math.round((32 + rnd2 * 28) * scaleFactor);
-    const depthFactor = 0.28 + rnd3 * 0.22;
+    const rawHalfW = Math.round((22 + rnd1 * 18) * scaleFactor);
+    const halfW = Math.min(rawHalfW, Math.round(maxHalfW));
+    const rawH = Math.round((26 + rnd2 * 20) * scaleFactor);
+    const h = Math.min(rawH, Math.round(shapeDist * 0.24));
+    const depthFactor = 0.26 + rnd3 * 0.18;
 
     const v0: Point2D = { x: centerPos.x, y: centerPos.y - h * uRad.y };
     const v1: Point2D = { x: centerPos.x + halfW * vPerp.x + (h * 0.5) * uRad.x, y: centerPos.y + halfW * vPerp.y + (h * 0.5) * uRad.y };
@@ -282,9 +297,11 @@ function buildPrecalculatedShape(
 
   } else if (type === 'PYRAMID') {
     // PIRÁMIDE: Proporciones variables
-    const halfW = Math.round((30 + rnd1 * 22) * scaleFactor);
-    const halfH = Math.round((26 + rnd2 * 22) * scaleFactor);
-    const depthFactor = 0.30 + rnd3 * 0.20;
+    const rawHalfW = Math.round((24 + rnd1 * 18) * scaleFactor);
+    const halfW = Math.min(rawHalfW, Math.round(maxHalfW));
+    const rawHalfH = Math.round((20 + rnd2 * 18) * scaleFactor);
+    const halfH = Math.min(rawHalfH, Math.round(shapeDist * 0.22));
+    const depthFactor = 0.26 + rnd3 * 0.16;
 
     const v0: Point2D = { x: centerPos.x - halfW * vPerp.x - halfH * 0.7 * uRad.x, y: centerPos.y - halfW * vPerp.y - halfH * 0.7 * uRad.y };
     const v1: Point2D = { x: centerPos.x + halfW * vPerp.x - halfH * 0.7 * uRad.x, y: centerPos.y + halfW * vPerp.y - halfH * 0.7 * uRad.y };
@@ -323,8 +340,9 @@ function buildPrecalculatedShape(
 
   } else {
     // HEXAGON_PRISM: Proporciones variables
-    const R = Math.round((28 + rnd1 * 22) * scaleFactor);
-    const depthFactor = 0.28 + rnd3 * 0.22;
+    const rawR = Math.round((22 + rnd1 * 18) * scaleFactor);
+    const R = Math.min(rawR, Math.round(maxHalfW));
+    const depthFactor = 0.26 + rnd3 * 0.18;
 
     const frontVerts: Point2D[] = [];
     for (let k = 0; k < 6; k++) {
@@ -401,6 +419,103 @@ function buildPrecalculatedShape(
 }
 
 /**
+ * Calcula la caja envolvente (AABB) de todos los vértices y puntos de control de una forma 3D
+ */
+function getShapeBounds(shape: PrecalculatedShape3D): { minX: number; maxX: number; minY: number; maxY: number } {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  const checkPt = (p: Point2D) => {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  };
+
+  shape.frontVertices.forEach(checkPt);
+  shape.anchorVertices.forEach(checkPt);
+  shape.allCurves.forEach((c) => c.points.forEach(checkPt));
+
+  return { minX, maxX, minY, maxY };
+}
+
+/**
+ * Comprueba si dos formas 3D interfieren, se solapan o guardan una distancia menor al margen de seguridad
+ */
+function shapesInterfere(shapeA: PrecalculatedShape3D, shapeB: PrecalculatedShape3D, minClearance = 24): boolean {
+  const bA = getShapeBounds(shapeA);
+  const bB = getShapeBounds(shapeB);
+
+  // Si las cajas delimitadoras con margen de holgura no se intersectan, están completamente libres
+  if (
+    bA.maxX + minClearance < bB.minX ||
+    bB.maxX + minClearance < bA.minX ||
+    bA.maxY + minClearance < bB.minY ||
+    bB.maxY + minClearance < bA.minY
+  ) {
+    return false;
+  }
+
+  // Verificación detallada de proximidad punto a punto
+  const ptsA: Point2D[] = [...shapeA.frontVertices, ...shapeA.anchorVertices];
+  shapeA.allCurves.forEach((c) => {
+    if (c.points.length > 0) {
+      ptsA.push(c.points[0], c.points[c.points.length - 1]);
+    }
+  });
+
+  const ptsB: Point2D[] = [...shapeB.frontVertices, ...shapeB.anchorVertices];
+  shapeB.allCurves.forEach((c) => {
+    if (c.points.length > 0) {
+      ptsB.push(c.points[0], c.points[c.points.length - 1]);
+    }
+  });
+
+  for (const pa of ptsA) {
+    for (const pb of ptsB) {
+      if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < minClearance) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Escala y retrae de manera homotética una forma hacia su centro para resolver interferencias
+ */
+function shrinkShape(shape: PrecalculatedShape3D, factor = 0.88): void {
+  const c = shape.centerPos;
+  const scalePoint = (p: Point2D): Point2D => ({
+    x: Math.round((c.x + (p.x - c.x) * factor) * 10) / 10,
+    y: Math.round((c.y + (p.y - c.y) * factor) * 10) / 10,
+  });
+
+  shape.frontVertices = shape.frontVertices.map(scalePoint);
+  shape.anchorVertices = shape.anchorVertices.map(scalePoint);
+  shape.frontCurves.forEach((crv) => {
+    crv.points = crv.points.map(scalePoint);
+  });
+  shape.backCurves.forEach((crv) => {
+    crv.points = crv.points.map(scalePoint);
+  });
+  shape.depthCurves.forEach((crv) => {
+    crv.points = crv.points.map(scalePoint);
+  });
+  shape.anchorCurves.forEach((crv) => {
+    crv.points = crv.points.map(scalePoint);
+  });
+  if (shape.axisCurve) shape.axisCurve.points = shape.axisCurve.points.map(scalePoint);
+  if (shape.radiusCurve) shape.radiusCurve.points = shape.radiusCurve.points.map(scalePoint);
+  shape.allCurves.forEach((crv) => {
+    crv.points = crv.points.map(scalePoint);
+  });
+}
+
+/**
  * Genera un reto de perspectiva con 1 punto focal central y 8 líneas discontinuas,
  * adaptando el número y tamaño de las figuras según el espacio de pantalla (Tablet / Desktop)
  * y variando dinámicamente sus posiciones en diagonales y cuadrantes.
@@ -447,48 +562,48 @@ export function generateFocal3DChallenge(
 
   if (density === 'wheel2') {
     targetShapeCount = 2;
-    scaleFactor = 1.65;
+    scaleFactor = 1.60;
   } else if (density === 'wheel4') {
     targetShapeCount = 4;
-    scaleFactor = 1.40;
+    scaleFactor = 1.30;
   } else if (density === 'wheel8') {
     targetShapeCount = 8;
-    scaleFactor = 1.05;
+    scaleFactor = 0.95;
   } else {
     // Modo 'auto': se adapta automáticamente al ancho y alto disponible
     if (minDim < 520 || canvasWidth < 740) {
       // Pantalla pequeña / Tablet vertical: 2 figuras grandes en diagonal
       targetShapeCount = 2;
-      scaleFactor = 1.60;
+      scaleFactor = 1.55;
     } else if (minDim < 680 || canvasWidth < 960) {
-      // Tablet horizontal / pantalla media: 4 figuras grandes
+      // Tablet horizontal / pantalla media: 4 figuras grandes bien separadas
       targetShapeCount = 4;
-      scaleFactor = 1.38;
+      scaleFactor = 1.28;
     } else {
-      // Escritorio HD
+      // Escritorio HD: 8 figuras
       targetShapeCount = 8;
-      scaleFactor = 1.05;
+      scaleFactor = 0.95;
     }
   }
 
-  // 4. Posicionamiento dinámico variable: las figuras no están siempre en los mismos sectores
-  // Varían sus trayectorias diagonales y tramos del lienzo
+  // 4. Posicionamiento dinámico variable: las figuras se distribuyen con máxima separación angular
+  // garantizando que nunca se produzcan interferencias entre formas contiguas
   if (targetShapeCount === 2) {
-    // Pares diagonales / transversales (ej. diagonal abajo-arriba izq-der, o arriba-abajo izq-der)
+    // Pares diagonales / transversales opuestos a 180°
     const pairs = [
-      [5, 1], // Diagonal SW -> NE ("de abajo arriba izquierda a derecha")
-      [3, 7], // Diagonal NW -> SE ("de arriba abajo izquierda a derecha")
+      [5, 1], // Diagonal SW -> NE
+      [3, 7], // Diagonal NW -> SE
       [4, 0], // Transversal Oeste -> Este
       [6, 2], // Transversal Sur -> Norte
     ];
     const pairIdx = Math.abs(seed) % pairs.length;
     sectorIndices = pairs[pairIdx];
   } else if (targetShapeCount === 4) {
+    // En 4 formas se usan EXCLUSIVAMENTE patrones simétricos separados por 90°
+    // (evitando agrupar figuras en sectores adyacentes a 45° que provocarían interferencia)
     const quadPatterns = [
-      [1, 3, 5, 7], // 4 Diagonales en X completa
-      [0, 2, 4, 6], // 4 Ortogonales en cruz (+)
-      [1, 2, 5, 6], // Mixto Diagonal + Vertical
-      [0, 3, 4, 7], // Mixto Diagonal + Horizontal
+      [1, 3, 5, 7], // 4 Diagonales en X completa (cuadrantes NE, NW, SW, SE a 90°)
+      [0, 2, 4, 6], // 4 Ortogonales en cruz (+) (E, S, W, N a 90°)
     ];
     const qIdx = Math.abs(seed) % quadPatterns.length;
     sectorIndices = quadPatterns[qIdx];
@@ -522,7 +637,8 @@ export function generateFocal3DChallenge(
           focalPoint,
           baseRadius,
           seed + idx * 79,
-          scaleFactor
+          scaleFactor,
+          targetShapeCount
         )
       );
     });
@@ -535,9 +651,26 @@ export function generateFocal3DChallenge(
         focalPoint,
         baseRadius,
         seed,
-        1.55
+        1.55,
+        1
       )
     );
+  }
+
+  // 6. Verificación activa y resolución de interferencias entre formas:
+  // Garantiza matemáticamente que ningún par de formas se toque o se solape
+  for (let pass = 0; pass < 3; pass++) {
+    let hadInterference = false;
+    for (let i = 0; i < shapes.length; i++) {
+      for (let j = i + 1; j < shapes.length; j++) {
+        if (shapesInterfere(shapes[i], shapes[j], 24)) {
+          hadInterference = true;
+          shrinkShape(shapes[i], 0.88);
+          shrinkShape(shapes[j], 0.88);
+        }
+      }
+    }
+    if (!hadInterference) break;
   }
 
   const shapeTypeLabels: Record<Focal3DShapeType, string> = {
