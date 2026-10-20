@@ -44,6 +44,7 @@ export interface PerspectiveGridLine {
 export interface CurveSegment2D {
   id: string;
   points: Point2D[];
+  points3D?: Vector3D[]; // Puntos 3D originales que generaron la proyección
   isGiven: boolean; // Si es parte del ancla inicial proporcionada
   label: string;
   style?: 'solid' | 'dashed' | 'faint';
@@ -123,5 +124,13 @@ export interface EvaluationResult3D {
   drawnCount: number;
   targetCount: number;
   curveDetails?: CurveEvaluationDetail[];
+}
+
+export interface UserStrokeWorld3D {
+  id: string;
+  points3D: Vector3D[];
+  isConstruction?: boolean;
+  accuracy?: number;
+  isMatched?: boolean;
 }
 

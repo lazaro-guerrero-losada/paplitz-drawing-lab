@@ -120,10 +120,12 @@ function sample3DCurveTo2D(
   isTangent?: boolean
 ): CurveSegment2D {
   const points2D: Point2D[] = [];
+  const validPoints3D: Vector3D[] = [];
   points3D.forEach((p3) => {
     const proj = project3DTo2D(p3, viewProjMatrix, width, height);
     if (!proj.isBehindCamera) {
       points2D.push(proj.point2D);
+      validPoints3D.push(p3);
     }
   });
 
@@ -135,6 +137,7 @@ function sample3DCurveTo2D(
   return {
     id,
     points: points2D,
+    points3D: validPoints3D,
     isGiven,
     label,
     style,

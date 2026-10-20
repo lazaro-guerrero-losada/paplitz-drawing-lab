@@ -31,7 +31,9 @@ import {
   FileText,
   Sparkles,
   PenTool,
+  Box,
 } from 'lucide-react';
+import { Lab3DRotationViewer } from './Lab3DRotationViewer';
 import { SessionRecordItem } from '../../lib/sessionRecorder';
 import {
   build3DDebugReport,
@@ -88,6 +90,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   const [redoStack, setRedoStack] = useState<UserStroke3D[]>([]);
   const [evaluation, setEvaluation] = useState<EvaluationResult3D | null>(null);
 
+  // Modo de visualización: 'draw' (Lienzo interactivo 2D) o 'rotate3d' (Visor orbital 360°)
+  const [viewMode, setViewMode] = useState<'draw' | 'rotate3d'>('draw');
+
   // Herramienta de trazo activa: 'ink' (tinta de forma) o 'construction' (línea guía fina gris discontinua)
   const [strokeTool, setStrokeTool] = useState<'ink' | 'construction'>('ink');
   // Visualización en modo corrección (3-4 etapas: 'all' [ambos], 'solution' [solo solución], 'drawing' [solo dibujo], 'off' [apagado])
@@ -129,6 +134,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       setRedoStack([]);
       setCurrentLiveStroke([]);
       setEvaluation(null);
+      setViewMode('draw');
       setStrokeTool('ink');
       setVisionMode('all');
       setCurrentRound(roundNum);
@@ -697,6 +703,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         return;
       }
 
+      if (viewMode === 'rotate3d') return;
+
       if (e.key === 'Enter') {
         e.preventDefault();
         handleSubmitOrNext();
@@ -710,6 +718,9 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
+      } else if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setViewMode('rotate3d');
       } else if (e.key.toLowerCase() === 'v' && evaluation) {
         e.preventDefault();
         setVisionMode((prev) => {
@@ -723,7 +734,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [evaluation, strokes, redoStack, challenge, isRecording, userNote, currentRound]);
+  }, [evaluation, strokes, redoStack, challenge, isRecording, userNote, currentRound, viewMode]);
 
   // Promedio de puntuación
   const averageScore =
@@ -735,53 +746,65 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     <div
       className="relative w-full h-[calc(100vh-65px)] min-h-[500px] bg-white flex flex-col overflow-hidden select-none"
     >
-      {/* PANEL FLOTANTE IZQUIERDO DE SELECCIÓN DE FORMAS 3D */}
-      <div className="absolute top-3 left-3 sm:left-5 z-20">
-        <PrimitiveSelectorPanel
-          selectedTypes={enabledPrimitives}
-          onChangeSelectedTypes={(newSelected) => {
-            setEnabledPrimitives(newSelected);
-            if (!newSelected.includes(challenge.type)) {
-              loadNewChallenge(currentRound, undefined, newSelected);
-            }
-          }}
-          onSelectImmediate={(type) => {
-            loadNewChallenge(currentRound, type);
-          }}
-          currentType={challenge.type}
+      {viewMode === 'rotate3d' ? (
+        <Lab3DRotationViewer
+          challenge={challenge}
+          strokes={strokes}
+          evaluation={evaluation}
+          onBackToDraw={() => setViewMode('draw')}
+          width={canvasDimensions.width}
+          height={canvasDimensions.height}
         />
-      </div>
-
-      {/* 2. TARJETA CON EL MODELO 3D OBJETIVO Y CUADRADITO DE NOTA (SUPERIOR DERECHA, COMO EN PRÁCTICA) */}
-      <div className="absolute top-3 right-4 sm:right-6 z-20 flex items-start gap-2 sm:gap-2.5 pointer-events-none">
-        {evaluation && (
-          <div className="pointer-events-auto bg-white border-2 border-black p-2 sm:p-2.5 shadow-[4px_4px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[88px] sm:min-w-[100px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
-            <span className="text-[10px] sm:text-xs font-bold uppercase text-neutral-500 tracking-wider">
-              Nota
-            </span>
-            <span className="text-2xl sm:text-3xl font-black leading-none my-1">
-              {Math.round(evaluation.score)}%
-            </span>
-            <span
-              className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 border border-black ${
-                evaluation.passed
-                  ? 'bg-black text-white'
-                  : 'bg-neutral-200 text-black'
-              }`}
-            >
-              {evaluation.passed ? 'Aprobado' : 'Reintentar'}
-            </span>
+      ) : (
+        <>
+          {/* PANEL FLOTANTE IZQUIERDO DE SELECCIÓN DE FORMAS 3D */}
+          <div className="absolute top-3 left-3 sm:left-5 z-20">
+            <PrimitiveSelectorPanel
+              selectedTypes={enabledPrimitives}
+              onChangeSelectedTypes={(newSelected) => {
+                setEnabledPrimitives(newSelected);
+                if (!newSelected.includes(challenge.type)) {
+                  loadNewChallenge(currentRound, undefined, newSelected);
+                }
+              }}
+              onSelectImmediate={(type) => {
+                loadNewChallenge(currentRound, type);
+              }}
+              currentType={challenge.type}
+            />
           </div>
-        )}
 
-        <div className="pointer-events-auto">
-          <Perspective3DPreviewCard
-            model={challenge.previewModel3D}
-            primitiveType={challenge.type}
-            title={challenge.name}
-          />
-        </div>
-      </div>
+          {/* 2. TARJETA CON EL MODELO 3D OBJETIVO Y CUADRADITO DE NOTA (SUPERIOR DERECHA, COMO EN PRÁCTICA) */}
+          <div className="absolute top-3 right-4 sm:right-6 z-20 flex items-start gap-2 sm:gap-2.5 pointer-events-none">
+            {evaluation && (
+              <div className="pointer-events-auto bg-white border-2 border-black p-2 sm:p-2.5 shadow-[4px_4px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[88px] sm:min-w-[100px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
+                <span className="text-[10px] sm:text-xs font-bold uppercase text-neutral-500 tracking-wider">
+                  Nota
+                </span>
+                <span className="text-2xl sm:text-3xl font-black leading-none my-1">
+                  {Math.round(evaluation.score)}%
+                </span>
+                <span
+                  className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 border border-black ${
+                    evaluation.passed
+                      ? 'bg-black text-white'
+                      : 'bg-neutral-200 text-black'
+                  }`}
+                >
+                  {evaluation.passed ? 'Aprobado' : 'Reintentar'}
+                </span>
+              </div>
+            )}
+
+            <div className="pointer-events-auto">
+              <Perspective3DPreviewCard
+                model={challenge.previewModel3D}
+                primitiveType={challenge.type}
+                title={challenge.name}
+                onOpen3DViewer={() => setViewMode('rotate3d')}
+              />
+            </div>
+          </div>
 
       {/* 4. LIENZO PRINCIPAL INTERACTIVO CON DETALLES TÉCNICOS PAPLITZ */}
       <div
@@ -864,6 +887,19 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                 </span>
               </button>
 
+              {/* Botón Giro 3D durante el dibujo */}
+              <button
+                type="button"
+                onClick={() => setViewMode('rotate3d')}
+                className="px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black bg-white hover:bg-neutral-100 text-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5"
+                title="Girar e inspeccionar el dibujo en 3D orbital (360°) [R]"
+              >
+                <Box className="w-4 h-4 stroke-[2.2]" />
+                <span className="hidden sm:inline text-[10px] uppercase tracking-wider font-mono">
+                  Giro 3D
+                </span>
+              </button>
+
               <div className="w-[2px] h-6 bg-black mx-0.5" />
             </>
           )}
@@ -906,6 +942,19 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                     : visionMode === 'drawing'
                     ? 'Visión: Dibujo'
                     : 'Visión: Off'}
+                </span>
+              </button>
+
+              {/* Botón Ver en 3D tras la evaluación */}
+              <button
+                type="button"
+                onClick={() => setViewMode('rotate3d')}
+                className="px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black bg-white hover:bg-neutral-100 text-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5"
+                title="Ver y rotar el dibujo corregido en 3D orbital (360°) [R]"
+              >
+                <Box className="w-4 h-4 stroke-[2.2]" />
+                <span className="text-[10px] uppercase tracking-wider font-mono">
+                  Ver en 3D
                 </span>
               </button>
 
@@ -1026,8 +1075,10 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           )}
         </div>
       </div>
+    </>
+  )}
 
-      {/* 6. MODAL DE RESUMEN FINAL TRAS COMPLETAR 8 RONDAS */}
+  {/* 6. MODAL DE RESUMEN FINAL TRAS COMPLETAR 8 RONDAS */}
       {isSessionComplete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="card-ink bg-white p-6 sm:p-8 max-w-md w-full text-center animate-in zoom-in-95 duration-200">
