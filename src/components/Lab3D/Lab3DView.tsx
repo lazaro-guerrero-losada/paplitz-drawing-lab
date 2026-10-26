@@ -6,6 +6,7 @@ import {
   Point2D,
   PrimitiveType,
   AidMode,
+  Vector3D,
 } from '../../lib/perspective3d/types';
 import { generate3DChallenge, ALL_PRIMITIVES, isTangentCurve } from '../../lib/perspective3d/primitives';
 import { evaluate3DSubmission } from '../../lib/perspective3d/evaluator3d';
@@ -31,15 +32,19 @@ import {
   FileText,
   Sparkles,
   PenTool,
-  Box,
 } from 'lucide-react';
-import { Lab3DRotationViewer } from './Lab3DRotationViewer';
 import { SessionRecordItem } from '../../lib/sessionRecorder';
 import {
   build3DDebugReport,
   copyReport3DToClipboard,
   downloadReport3DJson,
 } from '../../lib/perspective3d/debugReport3d';
+import {
+  unprojectUserStrokesTo3D,
+  getOriginalCameraOrbitAngles,
+  createOrbitViewProj,
+} from '../../lib/perspective3d/reconstruct3d';
+import { project3DTo2D } from '../../lib/perspective3d/math3d';
 
 interface Lab3DViewProps {
   onAwardXP?: (amount: number) => void;
@@ -86,12 +91,33 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   );
 
   // Estados del lienzo
+  const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number }>({
+    width: 800,
+    height: 600,
+  });
   const [strokes, setStrokes] = useState<UserStroke3D[]>([]);
   const [redoStack, setRedoStack] = useState<UserStroke3D[]>([]);
   const [evaluation, setEvaluation] = useState<EvaluationResult3D | null>(null);
 
-  // Modo de visualización: 'draw' (Lienzo interactivo 2D) o 'rotate3d' (Visor orbital 360°)
-  const [viewMode, setViewMode] = useState<'draw' | 'rotate3d'>('draw');
+  // Cámara orbital 3D para rotación directa en el lienzo al completar/evaluar el dibujo
+  const initialOrbit = useMemo(() => getOriginalCameraOrbitAngles(challenge.camera), [challenge.camera]);
+  const [azimuth, setAzimuth] = useState<number>(initialOrbit.azimuthRad);
+  const [elevation, setElevation] = useState<number>(initialOrbit.elevationRad);
+  const [distance, setDistance] = useState<number>(initialOrbit.distance);
+  const [target, setTarget] = useState<Vector3D>({ ...initialOrbit.target });
+
+  // Trazos 3D reconstruidos una vez evaluado
+  const reconstructedStrokes = useMemo(() => {
+    if (!evaluation || strokes.length === 0) return [];
+    return unprojectUserStrokesTo3D(
+      strokes,
+      challenge.camera,
+      canvasDimensions.width,
+      canvasDimensions.height,
+      challenge.targetCurves,
+      challenge.anchorCurves
+    );
+  }, [evaluation, strokes, challenge, canvasDimensions]);
 
   // Herramienta de trazo activa: 'ink' (tinta de forma) o 'construction' (línea guía fina gris discontinua)
   const [strokeTool, setStrokeTool] = useState<'ink' | 'construction'>('ink');
@@ -106,15 +132,11 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef<boolean>(false);
+  const isOrbitingRef = useRef<boolean>(false);
+  const lastOrbitPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const currentPointsRef = useRef<Point2D[]>([]);
   const activePointerIdRef = useRef<number | null>(null);
   const [currentLiveStroke, setCurrentLiveStroke] = useState<Point2D[]>([]);
-
-  // Redimensionar canvas manteniendo aspect ratio nítido
-  const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number }>({
-    width: 800,
-    height: 600,
-  });
 
   // Cargar nuevo reto
   const loadNewChallenge = useCallback(
@@ -130,11 +152,15 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         allowed
       );
       setChallenge(newCh);
+      const orig = getOriginalCameraOrbitAngles(newCh.camera);
+      setAzimuth(orig.azimuthRad);
+      setElevation(orig.elevationRad);
+      setDistance(orig.distance);
+      setTarget({ ...orig.target });
       setStrokes([]);
       setRedoStack([]);
       setCurrentLiveStroke([]);
       setEvaluation(null);
-      setViewMode('draw');
       setStrokeTool('ink');
       setVisionMode('all');
       setCurrentRound(roundNum);
@@ -156,15 +182,21 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       const h = Math.max(320, Math.floor(rect.height));
 
       setCanvasDimensions({ width: w, height: h });
-      setChallenge((prev) =>
-        generate3DChallenge(prev.seed, prev.type, w, h, enabledPrimitives)
-      );
+      setChallenge((prev) => {
+        const updated = generate3DChallenge(prev.seed, prev.type, w, h, enabledPrimitives);
+        const orig = getOriginalCameraOrbitAngles(updated.camera);
+        setAzimuth(orig.azimuthRad);
+        setElevation(orig.elevationRad);
+        setDistance(orig.distance);
+        setTarget({ ...orig.target });
+        return updated;
+      });
     };
 
     updateSize();
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
-  }, []);
+  }, [enabledPrimitives]);
 
   // ==========================================
   // Renderizado del Canvas 2D / 3D
@@ -178,8 +210,66 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     const { width, height } = canvasDimensions;
     ctx.clearRect(0, 0, width, height);
 
-    // 1. DIBUJAR GUÍAS Y REJILLA 3D (Si showGrid está activo, como en Screenshot 1)
-    if (showGrid && challenge.gridLines) {
+    // Matriz de proyección orbital (activa cuando se evalúa para rotación 3D directa)
+    const aspect = width / height;
+    const { viewProj: currentViewProj } = createOrbitViewProj(
+      azimuth,
+      elevation,
+      distance,
+      target,
+      challenge.camera.fov,
+      aspect,
+      challenge.camera.shiftY || 0
+    );
+
+    // Función auxiliar para dibujar polilíneas 3D en pantalla
+    const drawPolyline3D = (
+      points3D: Vector3D[],
+      strokeStyle: string,
+      lineWidth: number,
+      dash: number[] = [],
+      cap: CanvasLineCap = 'round'
+    ) => {
+      if (points3D.length < 2) return;
+      ctx.save();
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      ctx.setLineDash(dash);
+      ctx.lineCap = cap;
+      ctx.lineJoin = 'round';
+
+      let inPath = false;
+      for (let i = 0; i < points3D.length; i++) {
+        const proj = project3DTo2D(points3D[i], currentViewProj, width, height);
+        if (proj.isBehindCamera) {
+          if (inPath) {
+            ctx.stroke();
+            inPath = false;
+          }
+          continue;
+        }
+
+        if (!inPath) {
+          ctx.beginPath();
+          ctx.moveTo(proj.point2D.x, proj.point2D.y);
+          inPath = true;
+        } else {
+          ctx.lineTo(proj.point2D.x, proj.point2D.y);
+        }
+      }
+      if (inPath) {
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+
+    // 1. DIBUJAR GUÍAS Y REJILLA 3D (Si showGrid está activo)
+    // Cuando está evaluado, las guías 2D solo se muestran cerca del ángulo original para no interferir con el giro 3D
+    const isNearOriginalAngle =
+      Math.abs(azimuth - initialOrbit.azimuthRad) < 0.08 &&
+      Math.abs(elevation - initialOrbit.elevationRad) < 0.08;
+
+    if (showGrid && challenge.gridLines && (!evaluation || isNearOriginalAngle)) {
       // Líneas de perspectiva del suelo y paredes
       challenge.gridLines.forEach((line) => {
         ctx.beginPath();
@@ -236,33 +326,47 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     }
 
     // 2. DIBUJAR LÍNEAS ANCLA / BASE DADAS (Negras sólidas / grises posteriores / tangentes)
-    challenge.anchorCurves.forEach((curve) => {
-      if (curve.points.length < 2) return;
-      ctx.beginPath();
-      curve.points.forEach((pt, idx) => {
-        if (idx === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
+    if (evaluation) {
+      challenge.anchorCurves.forEach((curve) => {
+        if (!curve.points3D || curve.points3D.length < 2) return;
+        const isTangent = isTangentCurve(curve);
+        if (isTangent) {
+          drawPolyline3D(curve.points3D, '#94a3b8', 1.8, [16, 5, 2.5, 5]);
+        } else if (curve.style === 'faint') {
+          drawPolyline3D(curve.points3D, '#94a3b8', 1.4, [4, 4]);
+        } else {
+          drawPolyline3D(curve.points3D, '#09090b', 2.8, []);
+        }
       });
+    } else {
+      challenge.anchorCurves.forEach((curve) => {
+        if (curve.points.length < 2) return;
+        ctx.beginPath();
+        curve.points.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
 
-      const isTangent = isTangentCurve(curve);
-      if (isTangent) {
-        ctx.strokeStyle = '#94a3b8'; // Visiblemente gris (Slate-400)
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([16, 5, 2.5, 5]); // Trazo cadena largo diferenciado: 16px guión, 5px hueco, 2.5px punto, 5px hueco
-      } else if (curve.style === 'faint') {
-        ctx.strokeStyle = '#94a3b8'; // Mitad posterior tenue
-        ctx.lineWidth = 1.4;
-        ctx.setLineDash([4, 4]);
-      } else {
-        ctx.strokeStyle = '#09090b'; // Línea de tinta frontal sólida
-        ctx.lineWidth = 2.8;
+        const isTangent = isTangentCurve(curve);
+        if (isTangent) {
+          ctx.strokeStyle = '#94a3b8'; // Visiblemente gris (Slate-400)
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([16, 5, 2.5, 5]); // Trazo cadena largo diferenciado: 16px guión, 5px hueco, 2.5px punto, 5px hueco
+        } else if (curve.style === 'faint') {
+          ctx.strokeStyle = '#94a3b8'; // Mitad posterior tenue
+          ctx.lineWidth = 1.4;
+          ctx.setLineDash([4, 4]);
+        } else {
+          ctx.strokeStyle = '#09090b'; // Línea de tinta frontal sólida
+          ctx.lineWidth = 2.8;
+          ctx.setLineDash([]);
+        }
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
         ctx.setLineDash([]);
-      }
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-      ctx.setLineDash([]);
-    });
+      });
+    }
 
     // 3. AYUDAS VISUALES 3D (3 Estados: Off, Línea, Vértices)
     if (!evaluation) {
@@ -409,95 +513,64 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
     // 4. TRAZOS DEL USUARIO Y SOLUCIÓN DE EVALUACIÓN
     if (evaluation) {
-      // SI YA FUE EVALUADO:
       // Control de visibilidad según visionMode:
-      // - 'all': se dibuja el dibujo del usuario Y la solución técnica.
-      // - 'solution': se oculta el dibujo del usuario, se dibuja la solución técnica (oculta mi dibujo).
-      // - 'drawing': se dibuja el dibujo del usuario, se oculta la solución técnica.
-      // - 'off': se oculta tanto el dibujo como la solución técnica (lienzo limpio con guías 3D).
+      // - 'all': se dibuja el dibujo del usuario Y la solución técnica en 3D.
+      // - 'solution': se oculta el dibujo del usuario, se dibuja la solución técnica en 3D.
+      // - 'drawing': se dibuja el dibujo del usuario en 3D, se oculta la solución técnica.
+      // - 'off': se oculta tanto el dibujo como la solución técnica (solo base en 3D).
       const shouldDrawUserStrokes = visionMode === 'all' || visionMode === 'drawing';
       const shouldDrawSolution = visionMode === 'all' || visionMode === 'solution';
 
-      if (shouldDrawUserStrokes) {
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        strokes.forEach((stroke) => {
-          if (stroke.points.length < 2) return;
-          ctx.beginPath();
+      if (shouldDrawUserStrokes && reconstructedStrokes.length > 0) {
+        reconstructedStrokes.forEach((stroke) => {
+          if (!stroke.points3D || stroke.points3D.length < 2) return;
           if (stroke.isConstruction) {
-            ctx.strokeStyle = '#94a3b8'; // Gris técnico fino
-            ctx.lineWidth = 1.2;
-            ctx.setLineDash([4, 4]); // Discontinua
+            drawPolyline3D(stroke.points3D, '#94a3b8', 1.2, [4, 4]);
           } else {
-            ctx.strokeStyle = '#0f172a'; // Tinta negra sólida original sin colores
-            ctx.lineWidth = 2.4;
-            ctx.setLineDash([]);
+            drawPolyline3D(stroke.points3D, '#0f172a', 2.4, []);
           }
-          stroke.points.forEach((pt, idx) => {
-            if (idx === 0) ctx.moveTo(pt.x, pt.y);
-            else ctx.lineTo(pt.x, pt.y);
-          });
-          ctx.stroke();
-          ctx.setLineDash([]);
         });
       }
 
-      // SUPERPOSICIÓN DE EVALUACIÓN (SOLUCIÓN TÉCNICA MONOCROMÁTICA):
-      // Estética 100% sin colores: trazo discontinuo negro técnico para formas y trazo cadena gris pizarra para tangentes
       if (shouldDrawSolution) {
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
         challenge.targetCurves.forEach((curve) => {
-          if (curve.points.length < 2) return;
+          if (!curve.points3D || curve.points3D.length < 2) return;
           const isTangent = isTangentCurve(curve);
-
-          ctx.beginPath();
           if (isTangent) {
-            // Líneas tangentes: trazo cadena largo (dash-dot) y visiblemente más gris (#94a3b8)
-            ctx.strokeStyle = '#94a3b8'; // Slate-400 claramente gris técnico
-            ctx.lineWidth = 1.8;
-            ctx.setLineDash([16, 5, 2.5, 5]); // Trazo cadena largo diferenciado: 16px guión, 5px hueco, 2.5px punto, 5px hueco
+            drawPolyline3D(curve.points3D, '#94a3b8', 1.8, [16, 5, 2.5, 5]);
           } else {
-            // Curvas y aristas estándar de la forma: negro técnico discontinuo
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2.4;
-            ctx.setLineDash([6, 4]);
+            drawPolyline3D(curve.points3D, '#000000', 2.4, [6, 4]);
           }
-
-          curve.points.forEach((pt, idx) => {
-            if (idx === 0) ctx.moveTo(pt.x, pt.y);
-            else ctx.lineTo(pt.x, pt.y);
-          });
-          ctx.stroke();
         });
 
         // Vértices clave de referencia técnica con anillas blancas de borde negro
-        const keyVertices: Point2D[] = [];
-        const addKeyVertex = (p: Point2D) => {
-          if (!keyVertices.some((v) => Math.hypot(v.x - p.x, v.y - p.y) < 6)) {
-            keyVertices.push(p);
+        const keyVertices3D: Vector3D[] = [];
+        const addKeyVertex3D = (p: Vector3D) => {
+          if (!keyVertices3D.some((v) => Math.hypot(v.x - p.x, v.y - p.y, v.z - p.z) < 0.05)) {
+            keyVertices3D.push(p);
           }
         };
         challenge.targetCurves.forEach((curve) => {
-          if (curve.points.length >= 2) {
-            addKeyVertex(curve.points[0]);
-            addKeyVertex(curve.points[curve.points.length - 1]);
+          if (curve.points3D && curve.points3D.length >= 2) {
+            addKeyVertex3D(curve.points3D[0]);
+            addKeyVertex3D(curve.points3D[curve.points3D.length - 1]);
           }
         });
 
-        keyVertices.forEach((v) => {
-          ctx.beginPath();
-          ctx.arc(v.x, v.y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = '#ffffff';
-          ctx.fill();
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 1.8;
-          ctx.setLineDash([]);
-          ctx.stroke();
+        ctx.save();
+        keyVertices3D.forEach((v3) => {
+          const proj = project3DTo2D(v3, currentViewProj, width, height);
+          if (!proj.isBehindCamera) {
+            ctx.beginPath();
+            ctx.arc(proj.point2D.x, proj.point2D.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1.8;
+            ctx.setLineDash([]);
+            ctx.stroke();
+          }
         });
-
         ctx.restore();
       }
     } else {
@@ -544,7 +617,23 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         ctx.setLineDash([]);
       }
     }
-  }, [challenge, strokes, currentLiveStroke, evaluation, showGrid, aidMode, canvasDimensions, strokeTool, visionMode]);
+  }, [
+    challenge,
+    strokes,
+    currentLiveStroke,
+    evaluation,
+    showGrid,
+    aidMode,
+    canvasDimensions,
+    strokeTool,
+    visionMode,
+    azimuth,
+    elevation,
+    distance,
+    target,
+    reconstructedStrokes,
+    initialOrbit,
+  ]);
 
   // ==========================================
   // Manejadores de Eventos del Puntero (Stylus, Touch, Mouse) con Corrección de Escala
@@ -562,7 +651,16 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (evaluation) return; // Ya evaluado, no permitir dibujar hasta la siguiente ronda
+    if (evaluation) {
+      try {
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        // Ignorar si no es soportado
+      }
+      isOrbitingRef.current = true;
+      lastOrbitPosRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
     if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) {
       return; // Rechazo de toques secundarios / palma
     }
@@ -580,6 +678,17 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (evaluation) {
+      if (!isOrbitingRef.current) return;
+      const dx = e.clientX - lastOrbitPosRef.current.x;
+      const dy = e.clientY - lastOrbitPosRef.current.y;
+      lastOrbitPosRef.current = { x: e.clientX, y: e.clientY };
+
+      const rotSpeed = 0.007;
+      setAzimuth((prev) => prev - dx * rotSpeed);
+      setElevation((prev) => Math.max(-1.42, Math.min(1.42, prev + dy * rotSpeed)));
+      return;
+    }
     if (!isDrawingRef.current || (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId)) return;
     e.preventDefault();
     const pt = getCanvasCoords(e);
@@ -588,6 +697,15 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (evaluation) {
+      isOrbitingRef.current = false;
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // Ignorar
+      }
+      return;
+    }
     if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return;
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
@@ -605,6 +723,21 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     }
     currentPointsRef.current = [];
     setCurrentLiveStroke([]);
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    if (!evaluation) return;
+    const zoomFactor = e.deltaY > 0 ? 1.08 : 0.92;
+    setDistance((prev) => Math.max(1, Math.min(25, prev * zoomFactor)));
+  };
+
+  const handleDoubleClick = () => {
+    if (!evaluation) return;
+    const orig = getOriginalCameraOrbitAngles(challenge.camera);
+    setAzimuth(orig.azimuthRad);
+    setElevation(orig.elevationRad);
+    setDistance(orig.distance);
+    setTarget({ ...orig.target });
   };
 
   // ==========================================
@@ -703,8 +836,6 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
         return;
       }
 
-      if (viewMode === 'rotate3d') return;
-
       if (e.key === 'Enter') {
         e.preventDefault();
         handleSubmitOrNext();
@@ -718,9 +849,6 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
-      } else if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        setViewMode('rotate3d');
       } else if (e.key.toLowerCase() === 'v' && evaluation) {
         e.preventDefault();
         setVisionMode((prev) => {
@@ -734,7 +862,7 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [evaluation, strokes, redoStack, challenge, isRecording, userNote, currentRound, viewMode]);
+  }, [evaluation, strokes, redoStack, challenge, isRecording, userNote, currentRound]);
 
   // Promedio de puntuación
   const averageScore =
@@ -746,71 +874,69 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
     <div
       className="relative w-full h-[calc(100vh-65px)] min-h-[500px] bg-white flex flex-col overflow-hidden select-none"
     >
-      {viewMode === 'rotate3d' ? (
-        <Lab3DRotationViewer
-          challenge={challenge}
-          strokes={strokes}
-          evaluation={evaluation}
-          onBackToDraw={() => setViewMode('draw')}
-          width={canvasDimensions.width}
-          height={canvasDimensions.height}
+      {/* PANEL FLOTANTE IZQUIERDO DE SELECCIÓN DE FORMAS 3D */}
+      <div className="absolute top-3 left-3 sm:left-5 z-20">
+        <PrimitiveSelectorPanel
+          selectedTypes={enabledPrimitives}
+          onChangeSelectedTypes={(newSelected) => {
+            setEnabledPrimitives(newSelected);
+            if (!newSelected.includes(challenge.type)) {
+              loadNewChallenge(currentRound, undefined, newSelected);
+            }
+          }}
+          onSelectImmediate={(type) => {
+            loadNewChallenge(currentRound, type);
+          }}
+          currentType={challenge.type}
         />
-      ) : (
-        <>
-          {/* PANEL FLOTANTE IZQUIERDO DE SELECCIÓN DE FORMAS 3D */}
-          <div className="absolute top-3 left-3 sm:left-5 z-20">
-            <PrimitiveSelectorPanel
-              selectedTypes={enabledPrimitives}
-              onChangeSelectedTypes={(newSelected) => {
-                setEnabledPrimitives(newSelected);
-                if (!newSelected.includes(challenge.type)) {
-                  loadNewChallenge(currentRound, undefined, newSelected);
-                }
-              }}
-              onSelectImmediate={(type) => {
-                loadNewChallenge(currentRound, type);
-              }}
-              currentType={challenge.type}
-            />
-          </div>
+      </div>
 
-          {/* 2. TARJETA CON EL MODELO 3D OBJETIVO Y CUADRADITO DE NOTA (SUPERIOR DERECHA, COMO EN PRÁCTICA) */}
-          <div className="absolute top-3 right-4 sm:right-6 z-20 flex items-start gap-2 sm:gap-2.5 pointer-events-none">
-            {evaluation && (
-              <div className="pointer-events-auto bg-white border-2 border-black p-2 sm:p-2.5 shadow-[4px_4px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[88px] sm:min-w-[100px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
-                <span className="text-[10px] sm:text-xs font-bold uppercase text-neutral-500 tracking-wider">
-                  Nota
-                </span>
-                <span className="text-2xl sm:text-3xl font-black leading-none my-1">
-                  {Math.round(evaluation.score)}%
-                </span>
-                <span
-                  className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 border border-black ${
-                    evaluation.passed
-                      ? 'bg-black text-white'
-                      : 'bg-neutral-200 text-black'
-                  }`}
-                >
-                  {evaluation.passed ? 'Aprobado' : 'Reintentar'}
-                </span>
-              </div>
-            )}
-
-            <div className="pointer-events-auto">
-              <Perspective3DPreviewCard
-                model={challenge.previewModel3D}
-                primitiveType={challenge.type}
-                title={challenge.name}
-                onOpen3DViewer={() => setViewMode('rotate3d')}
-              />
-            </div>
+      {/* 2. TARJETA CON EL MODELO 3D OBJETIVO Y CUADRADITO DE NOTA (SUPERIOR DERECHA, COMO EN PRÁCTICA) */}
+      <div className="absolute top-3 right-4 sm:right-6 z-20 flex items-start gap-2 sm:gap-2.5 pointer-events-none">
+        {evaluation && (
+          <div className="pointer-events-auto bg-white border-2 border-black p-2 sm:p-2.5 shadow-[4px_4px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[88px] sm:min-w-[100px] aspect-square animate-in fade-in zoom-in-95 duration-150 select-none">
+            <span className="text-[10px] sm:text-xs font-bold uppercase text-neutral-500 tracking-wider">
+              Nota
+            </span>
+            <span className="text-2xl sm:text-3xl font-black leading-none my-1">
+              {Math.round(evaluation.score)}%
+            </span>
+            <span
+              className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 border border-black ${
+                evaluation.passed
+                  ? 'bg-black text-white'
+                  : 'bg-neutral-200 text-black'
+              }`}
+            >
+              {evaluation.passed ? 'Aprobado' : 'Reintentar'}
+            </span>
           </div>
+        )}
+
+        <div className="pointer-events-auto">
+          <Perspective3DPreviewCard
+            model={challenge.previewModel3D}
+            primitiveType={challenge.type}
+            title={challenge.name}
+          />
+        </div>
+      </div>
 
       {/* 4. LIENZO PRINCIPAL INTERACTIVO CON DETALLES TÉCNICOS PAPLITZ */}
       <div
         ref={canvasContainerRef}
-        className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center cursor-crosshair"
+        className={`relative flex-1 w-full h-full overflow-hidden flex items-center justify-center ${
+          evaluation ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'
+        }`}
       >
+        {/* Indicador de Rotación 3D directa tras evaluar */}
+        {evaluation && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 text-[10px] font-mono font-bold uppercase bg-white border border-black px-2.5 py-1 pointer-events-none shadow-[2px_2px_0px_#000000] z-10 flex items-center gap-1.5 animate-in fade-in duration-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+            <span>Giro 3D: Arrastra para rotar · Doble clic para resetear · Zoom con rueda</span>
+          </div>
+        )}
+
         {/* Indicador de 6 Paredes Inferior Izquierdo */}
         <div className="absolute bottom-3 left-3 text-[9px] font-mono font-bold uppercase bg-white border border-black px-1.5 py-0.5 pointer-events-none shadow-[1px_1px_0px_#000000] z-10 opacity-75 hidden sm:block">
           <span>6 PAREDES · VP X, Y, Z</span>
@@ -824,6 +950,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          onWheel={handleWheel}
+          onDoubleClick={handleDoubleClick}
           className="touch-none block w-full h-full select-none"
         />
       </div>
@@ -887,19 +1015,6 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                 </span>
               </button>
 
-              {/* Botón Giro 3D durante el dibujo */}
-              <button
-                type="button"
-                onClick={() => setViewMode('rotate3d')}
-                className="px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black bg-white hover:bg-neutral-100 text-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5"
-                title="Girar e inspeccionar el dibujo en 3D orbital (360°) [R]"
-              >
-                <Box className="w-4 h-4 stroke-[2.2]" />
-                <span className="hidden sm:inline text-[10px] uppercase tracking-wider font-mono">
-                  Giro 3D
-                </span>
-              </button>
-
               <div className="w-[2px] h-6 bg-black mx-0.5" />
             </>
           )}
@@ -942,19 +1057,6 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
                     : visionMode === 'drawing'
                     ? 'Visión: Dibujo'
                     : 'Visión: Off'}
-                </span>
-              </button>
-
-              {/* Botón Ver en 3D tras la evaluación */}
-              <button
-                type="button"
-                onClick={() => setViewMode('rotate3d')}
-                className="px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black bg-white hover:bg-neutral-100 text-black cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5"
-                title="Ver y rotar el dibujo corregido en 3D orbital (360°) [R]"
-              >
-                <Box className="w-4 h-4 stroke-[2.2]" />
-                <span className="text-[10px] uppercase tracking-wider font-mono">
-                  Ver en 3D
                 </span>
               </button>
 
@@ -1075,10 +1177,8 @@ export const Lab3DView: React.FC<Lab3DViewProps> = ({
           )}
         </div>
       </div>
-    </>
-  )}
 
-  {/* 6. MODAL DE RESUMEN FINAL TRAS COMPLETAR 8 RONDAS */}
+      {/* 6. MODAL DE RESUMEN FINAL TRAS COMPLETAR 8 RONDAS */}
       {isSessionComplete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="card-ink bg-white p-6 sm:p-8 max-w-md w-full text-center animate-in zoom-in-95 duration-200">

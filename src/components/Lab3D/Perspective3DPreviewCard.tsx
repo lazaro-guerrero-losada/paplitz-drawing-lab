@@ -6,14 +6,12 @@ interface Perspective3DPreviewCardProps {
   model: WireframeModel3D;
   primitiveType: PrimitiveType;
   title: string;
-  onOpen3DViewer?: () => void;
 }
 
 export const Perspective3DPreviewCard: React.FC<Perspective3DPreviewCardProps> = ({
   model,
   primitiveType,
   title,
-  onOpen3DViewer,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [rotation, setRotation] = useState<{ x: number; y: number }>({ x: 0.35, y: -0.45 });
@@ -152,33 +150,13 @@ export const Perspective3DPreviewCard: React.FC<Perspective3DPreviewCardProps> =
           height={120}
           className="w-full h-full block"
         />
-        {onOpen3DViewer ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen3DViewer();
-            }}
-            className="absolute top-0 right-0 text-[9px] font-mono font-bold text-neutral-600 bg-neutral-100 hover:bg-black hover:text-white border border-black px-1.5 py-0.5 leading-none shadow-[1px_1px_0px_#000000] cursor-pointer transition-colors"
-            title="Abrir visor 3D interactivo a pantalla completa"
-          >
-            3D ⛶
-          </button>
-        ) : (
-          <span className="absolute top-0 right-0 text-[9px] font-mono font-bold text-neutral-400 bg-neutral-100 border border-black px-1 leading-none shadow-[1px_1px_0px_#000000]">
-            3D
-          </span>
-        )}
+        <span className="absolute top-0 right-0 text-[9px] font-mono font-bold text-neutral-400 bg-neutral-100 border border-black px-1 leading-none shadow-[1px_1px_0px_#000000]">
+          3D
+        </span>
       </div>
 
       {/* Badge negro inferior con el nombre exacto de la figura al estilo Paplitz */}
-      <div
-        onClick={onOpen3DViewer}
-        className={`mt-1.5 w-full bg-black text-white text-center py-0.5 px-2 border border-black text-[10px] sm:text-xs font-mono font-black tracking-widest uppercase shadow-[1px_1px_0px_#000000] ${
-          onOpen3DViewer ? 'cursor-pointer hover:bg-neutral-800' : ''
-        }`}
-        title={onOpen3DViewer ? "Clic para ver en 3D" : undefined}
-      >
+      <div className="mt-1.5 w-full bg-black text-white text-center py-0.5 px-2 border border-black text-[10px] sm:text-xs font-mono font-black tracking-widest uppercase shadow-[1px_1px_0px_#000000]">
         {title || primitiveType}
       </div>
     </div>
