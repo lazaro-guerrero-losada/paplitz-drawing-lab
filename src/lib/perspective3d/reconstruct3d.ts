@@ -169,9 +169,13 @@ export function unprojectUserStrokesTo3D(
     };
   });
 
-  // Vértices de ancla dados en 3D (para que las uniones con la base dada cierren con precisión)
+  // Vértices de ancla dados en 3D (exclusivamente geometría de forma dada, descartando ejes de construcción)
   const anchorVertices: { p2D: Point2D; zCam: number }[] = [];
   anchorCurves.forEach((c) => {
+    // Descartar ejes auxiliares o líneas de construcción internas para no falsear la profundidad
+    if (c.role === 'construction' || c.style === 'faint' || c.id.includes('axis') || c.id.includes('tick')) {
+      return;
+    }
     if (!c.points || !c.points3D) return;
     const cnt = Math.min(c.points.length, c.points3D.length);
     for (let i = 0; i < cnt; i++) {
@@ -188,13 +192,18 @@ export function unprojectUserStrokesTo3D(
     stroke: UserStroke3D;
     zCams: number[];
     rays: CameraRay[];
+    bestMeta: RefCurveMeta | null;
+    vStart_3D?: Vector3D;
+    vEnd_3D?: Vector3D;
+    snapStart?: boolean;
+    snapEnd?: boolean;
   }
 
   const strokeAnalyses: StrokeAnalysis[] = strokes.map((s, strokeIdx) => {
     const pts = s.points || [];
     const n = pts.length;
     if (n === 0) {
-      return { id: s.id || `stroke_${strokeIdx}`, stroke: s, zCams: [], rays: [] };
+      return { id: s.id || `stroke_${strokeIdx}`, stroke: s, zCams: [], rays: [], bestMeta: null };
     }
 
     const pStart = pts[0];
@@ -205,6 +214,8 @@ export function unprojectUserStrokesTo3D(
     const uDirX = sLen > 0.001 ? sDirX / sLen : 1;
     const uDirY = sLen > 0.001 ? sDirY / sLen : 0;
 
+    const isUserConstruction = !!s.isConstruction;
+
     // Emparejar el trazo completo contra la curva de referencia con mayor alineación y proximidad
     let bestMeta: RefCurveMeta | null = null;
     let bestScore = -1;
@@ -212,6 +223,16 @@ export function unprojectUserStrokesTo3D(
     for (const meta of curvesMeta) {
       const c = meta.curve;
       if (!c.points || c.points.length < 2 || !c.points3D) continue;
+
+      // Si el trazo del alumno es de contorno/forma, nunca debe emparejarse con líneas de construcción internas
+      const isCurveConstruction =
+        c.role === 'construction' || c.style === 'faint' || c.id.includes('axis') || c.id.includes('tick');
+      if (!isUserConstruction && isCurveConstruction) {
+        continue;
+      }
+
+      // Bonificación de prioridad a curvas objetivo que el alumno debía dibujar
+      const priorityFactor = c.isGiven ? 1.0 : 1.25;
 
       let totalDist = 0;
       let totalAlign = 0;
@@ -248,7 +269,7 @@ export function unprojectUserStrokesTo3D(
 
       const avgDist = totalDist / sampleCount;
       const avgAlign = totalAlign / sampleCount;
-      const score = avgAlign / (1.0 + avgDist / 35.0);
+      const score = (avgAlign / (1.0 + avgDist / 35.0)) * priorityFactor;
 
       if (score > bestScore) {
         bestScore = score;
@@ -258,28 +279,64 @@ export function unprojectUserStrokesTo3D(
 
     const zCams = new Array<number>(n);
     const rays = new Array<CameraRay>(n);
+    let vStart_3D: Vector3D | undefined;
+    let vEnd_3D: Vector3D | undefined;
+    let snapStart = false;
+    let snapEnd = false;
 
     if (bestMeta && bestMeta.isStraight && bestScore >= 0.15 && bestMeta.clen2 > 1.0) {
-      // Arista recta 3D: interpolación paramétrica con extensión suave en extremos (overshoot natural)
-      const { pA_3D, pB_3D, pA_2D, cdx, cdy, clen2 } = bestMeta;
+      // Arista recta 3D: detección de sentido (forward / backward) y sellado de vértices
+      const { pA_3D, pB_3D, pA_2D, pB_2D, cdx, cdy, clen2 } = bestMeta;
+
+      const dStartA = Math.hypot(pStart.x - pA_2D.x, pStart.y - pA_2D.y);
+      const dStartB = Math.hypot(pStart.x - pB_2D.x, pStart.y - pB_2D.y);
+      const dEndA = Math.hypot(pEnd.x - pA_2D.x, pEnd.y - pA_2D.y);
+      const dEndB = Math.hypot(pEnd.x - pB_2D.x, pEnd.y - pB_2D.y);
+
+      const isForward = (dStartA + dEndB) <= (dStartB + dEndA);
+      vStart_3D = isForward ? pA_3D : pB_3D;
+      vEnd_3D = isForward ? pB_3D : pA_3D;
+      const pStart_target2D = isForward ? pA_2D : pB_2D;
+      const pEnd_target2D = isForward ? pB_2D : pA_2D;
+
+      const dStart = Math.hypot(pStart.x - pStart_target2D.x, pStart.y - pStart_target2D.y);
+      const dEnd = Math.hypot(pEnd.x - pEnd_target2D.x, pEnd.y - pEnd_target2D.y);
+
+      // Umbral de aproximación para dibujo libre a mano alzada (hasta 65px en pantallas grandes / tabletas)
+      const SNAP_GESTURE_PX = 65.0;
+      snapStart = dStart <= SNAP_GESTURE_PX;
+      snapEnd = dEnd <= SNAP_GESTURE_PX;
+
+      const zStartCam = vDot(vSub(vStart_3D, camera.eye), camForward);
+      const zEndCam = vDot(vSub(vEnd_3D, camera.eye), camForward);
 
       for (let i = 0; i < n; i++) {
         const pt2D = pts[i];
         rays[i] = getCameraRay(pt2D, camera, width, height);
 
-        const u = Math.max(-0.25, Math.min(1.25, ((pt2D.x - pA_2D.x) * cdx + (pt2D.y - pA_2D.y) * cdy) / clen2));
-        const ref3D: Vector3D = {
-          x: pA_3D.x + u * (pB_3D.x - pA_3D.x),
-          y: pA_3D.y + u * (pB_3D.y - pA_3D.y),
-          z: pA_3D.z + u * (pB_3D.z - pA_3D.z),
-        };
-        zCams[i] = vDot(vSub(ref3D, camera.eye), camForward);
+        const uIdx = n > 1 ? i / (n - 1) : 0;
+        const uProj = ((pt2D.x - pA_2D.x) * cdx + (pt2D.y - pA_2D.y) * cdy) / clen2;
+        const uRaw = Math.max(0, Math.min(1, isForward ? uProj : 1.0 - uProj));
+
+        let u = uIdx;
+        if (snapStart && snapEnd) {
+          u = 0.65 * uIdx + 0.35 * uRaw;
+        } else if (snapStart) {
+          u = Math.max(0, uRaw);
+        } else if (snapEnd) {
+          u = Math.min(1, uRaw);
+        } else {
+          u = Math.max(-0.2, Math.min(1.2, uRaw));
+        }
+
+        zCams[i] = (1 - u) * zStartCam + u * zEndCam;
       }
     } else {
       // Curvas (elipses, arcos, siluetas) o trazos sin correspondencia unívoca
       const candidateSegments: Ref3DSegment[] = [];
       const addCurveSegments = (c: CurveSegment2D) => {
         if (!c.points || !c.points3D) return;
+        if (c.role === 'construction' || c.style === 'faint' || c.id.includes('axis') || c.id.includes('tick')) return;
         const cnt = Math.min(c.points.length, c.points3D.length);
         for (let i = 0; i < cnt - 1; i++) {
           candidateSegments.push({
@@ -334,6 +391,11 @@ export function unprojectUserStrokesTo3D(
       stroke: s,
       zCams,
       rays,
+      bestMeta,
+      vStart_3D,
+      vEnd_3D,
+      snapStart,
+      snapEnd,
     };
   });
 
@@ -379,18 +441,20 @@ export function unprojectUserStrokesTo3D(
       }
     }
 
-    // Comprobar si el cluster coincide con un vértice base/ancla dado
+    // Comprobar si el cluster coincide con un vértice base/ancla dado (buscando la distancia mínima exacta)
     let targetZ = 0;
     let hasAnchor = false;
+    let minAnchorDist = SNAP_THRESHOLD_PX;
+
     for (const ep of cluster) {
       for (const av of anchorVertices) {
-        if (Math.hypot(ep.pt2D.x - av.p2D.x, ep.pt2D.y - av.p2D.y) <= SNAP_THRESHOLD_PX) {
+        const d = Math.hypot(ep.pt2D.x - av.p2D.x, ep.pt2D.y - av.p2D.y);
+        if (d < minAnchorDist) {
+          minAnchorDist = d;
           targetZ = av.zCam;
           hasAnchor = true;
-          break;
         }
       }
-      if (hasAnchor) break;
     }
 
     if (!hasAnchor) {
@@ -442,11 +506,28 @@ export function unprojectUserStrokesTo3D(
     }
 
     const points3D: Vector3D[] = new Array<Vector3D>(n);
+    const blendCount = Math.min(8, Math.max(2, Math.floor(n / 4)));
+
     for (let i = 0; i < n; i++) {
       const ray = sa.rays[i];
       const rayFwd = vDot(ray.direction, camForward);
       const t = Math.max(0.1, smoothZCams[i] / Math.max(0.001, rayFwd));
-      points3D[i] = vAdd(camera.eye, vScale(ray.direction, t));
+      let pt3D = vAdd(camera.eye, vScale(ray.direction, t));
+
+      // Anclaje al vértice 3D inicial si se detectó intención de unión
+      if (sa.snapStart && sa.vStart_3D && i < blendCount) {
+        const w = Math.pow(1.0 - i / blendCount, 2);
+        pt3D = vAdd(vScale(sa.vStart_3D, w), vScale(pt3D, 1.0 - w));
+      }
+
+      // Anclaje al vértice 3D final si se detectó intención de unión
+      if (sa.snapEnd && sa.vEnd_3D && i >= n - blendCount) {
+        const k = n - 1 - i;
+        const w = Math.pow(1.0 - k / blendCount, 2);
+        pt3D = vAdd(vScale(sa.vEnd_3D, w), vScale(pt3D, 1.0 - w));
+      }
+
+      points3D[i] = pt3D;
     }
 
     return {

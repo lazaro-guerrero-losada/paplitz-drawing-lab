@@ -196,8 +196,8 @@ export function evaluate3DSubmission(
       curve.role === 'construction';
 
     return {
-      matchThreshold: isCurved ? 20.0 : 16.0,
-      minAlignmentCos: isCurved ? 0.65 : 0.72,
+      matchThreshold: isCurved ? 24.0 : 22.0,
+      minAlignmentCos: isCurved ? 0.60 : 0.65,
     };
   });
 
@@ -355,19 +355,17 @@ export function evaluate3DSubmission(
     const curveCoverage = Math.min(rawCoverage, maxPossibleCoverage);
     const curveAvgDist = curveMatchedCount > 0 ? curveDistanceErrorSum / curveMatchedCount : matchThreshold;
 
-    // Precisión no lineal calibrada:
-    // Trazos a < 3px obtienen precisión >= 0.90
-    // Trazos a ~6px obtienen precisión ~0.75
-    // Trazos a > 10px decaen bruscamente (< 0.50), penalizando fugas que no convergen a los puntos de fuga
-    const curvePrecision = Math.max(0, 1 - Math.pow(curveAvgDist / matchThreshold, 1.3));
+    // Precisión no lineal calibrada para trazo manual libre en pantalla táctil / tableta:
+    // Trazos precisos (< 5px) obtienen precisión >= 0.85
+    // Trazos con leve oscilación manual (~8-11px) obtienen precisión ~0.60 - 0.75
+    // Trazos que se desvían de la perspectiva real (> 16px) decaen a < 0.40
+    const curvePrecision = Math.max(0, 1 - Math.pow(curveAvgDist / matchThreshold, 1.25));
 
     // Puntuación de la curva (0 - 100):
-    // La precisión modula directamente la nota: una arista con precisión 0.45 (11px desviada)
-    // puntuará ~35-40% (No Superado), mientras que una línea precisa (< 3px) puntuará 90-97%.
-    const curveScore = curveCoverage * 100 * Math.pow(curvePrecision, 1.15);
+    const curveScore = curveCoverage * 100 * Math.pow(curvePrecision, 1.05);
 
-    // Se considera completada si tiene al menos 60% de cobertura y 50% de precisión geométrica
-    const isCompleted = curveCoverage >= 0.60 && curvePrecision >= 0.50;
+    // Se considera completada si tiene al menos 55% de cobertura y 40% de precisión geométrica
+    const isCompleted = curveCoverage >= 0.55 && curvePrecision >= 0.40;
 
     curveDetails.push({
       id: curve.id,
@@ -459,7 +457,7 @@ export function evaluate3DSubmission(
     }
   } else if (hasConstruction && avgConstructionScore < 40) {
     feedbackMessage = 'Forma dibujada. Traza las líneas de construcción (meridianos / secciones) para consolidar el volumen 3D.';
-  } else if (avgPrecision < 0.55) {
+  } else if (avgPrecision < 0.50) {
     feedbackMessage = 'Perspectiva desalineada: los trazos no convergen correctamente a los puntos de fuga.';
   } else if (overallCoverage < 0.70) {
     feedbackMessage = 'Figura parcial: completa el recorrido entero de cada contorno en perspectiva.';
