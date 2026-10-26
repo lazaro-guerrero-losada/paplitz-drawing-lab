@@ -81,10 +81,23 @@ interface Ref3DSegment {
   isGiven: boolean;
 }
 
+interface RefCurveMeta {
+  curve: CurveSegment2D;
+  isStraight: boolean;
+  pA_3D: Vector3D;
+  pB_3D: Vector3D;
+  pA_2D: Point2D;
+  pB_2D: Point2D;
+  cdx: number;
+  cdy: number;
+  clen2: number;
+}
+
 /**
- * Reconstruye y eleva los trazos 2D del usuario al espacio 3D (World Coordinates),
- * encontrando la profundidad óptima t para cada punto a lo largo del rayo de la cámara
- * y aplicando un filtro de suavizado de profundidad a lo largo de cada trazo.
+ * Reconstruye y eleva los trazos 2D del usuario al espacio 3D (World Coordinates).
+ * Utiliza correspondencia estructural a nivel de trazo con las primitivas del modelo 3D,
+ * interpolación de profundidad lineal continua a lo largo de aristas y generatrices,
+ * y ajuste automático de vértices en las uniones y esquinas compartidas.
  */
 export function unprojectUserStrokesTo3D(
   strokes: UserStroke3D[],
@@ -94,123 +107,352 @@ export function unprojectUserStrokesTo3D(
   targetCurves: CurveSegment2D[],
   anchorCurves: CurveSegment2D[]
 ): UserStrokeWorld3D[] {
-  // 1. Recopilar segmentos de referencia 3D -> 2D
-  const refSegments: Ref3DSegment[] = [];
-
-  const addCurveToRef = (curve: CurveSegment2D) => {
-    if (!curve.points || !curve.points3D) return;
-    const count = Math.min(curve.points.length, curve.points3D.length);
-    for (let i = 0; i < count - 1; i++) {
-      refSegments.push({
-        p1_2D: curve.points[i],
-        p2_2D: curve.points[i + 1],
-        p1_3D: curve.points3D[i],
-        p2_3D: curve.points3D[i + 1],
-        curveId: curve.id,
-        isGiven: curve.isGiven,
-      });
-    }
-  };
-
-  targetCurves.forEach(addCurveToRef);
-  anchorCurves.forEach(addCurveToRef);
-
-  // Distancia por defecto (centro del objeto)
+  const allRefCurves = [...targetCurves, ...anchorCurves];
+  const camForward = vNorm(vSub(camera.target, camera.eye));
   const defaultDepth = Math.max(0.1, vLen(vSub(camera.eye, camera.target)));
 
-  // 2. Procesar cada trazo del usuario
-  return strokes.map((stroke, strokeIdx) => {
-    if (!stroke.points || stroke.points.length === 0) {
-      return {
-        id: stroke.id || `stroke_${strokeIdx}`,
-        points3D: [],
-        isConstruction: stroke.isConstruction,
-      };
-    }
+  // 1. Preanalizar curvas de referencia para saber cuáles son aristas/segmentos rectos en 3D
+  const curvesMeta: RefCurveMeta[] = allRefCurves.map((c) => {
+    const pts3D = c.points3D || [];
+    const pts2D = c.points || [];
+    const n3 = pts3D.length;
+    const n2 = pts2D.length;
 
-    const n = stroke.points.length;
-    const rawDepths: number[] = new Array(n);
-    const rays: CameraRay[] = new Array(n);
+    let isStraight = false;
+    let pA_3D: Vector3D = { x: 0, y: 0, z: 0 };
+    let pB_3D: Vector3D = { x: 0, y: 0, z: 0 };
+    let pA_2D: Point2D = { x: 0, y: 0 };
+    let pB_2D: Point2D = { x: 0, y: 0 };
+    let cdx = 0;
+    let cdy = 0;
+    let clen2 = 0;
 
-    // Calcular profundidad para cada punto del trazo
-    for (let i = 0; i < n; i++) {
-      const pt2D = stroke.points[i];
-      const ray = getCameraRay(pt2D, camera, width, height);
-      rays[i] = ray;
+    if (n3 >= 2 && n2 >= 2) {
+      pA_3D = pts3D[0];
+      pB_3D = pts3D[n3 - 1];
+      pA_2D = pts2D[0];
+      pB_2D = pts2D[n2 - 1];
+      cdx = pB_2D.x - pA_2D.x;
+      cdy = pB_2D.y - pA_2D.y;
+      clen2 = cdx * cdx + cdy * cdy;
 
-      let bestDist = Infinity;
-      let bestDepth = defaultDepth;
-
-      for (let s = 0; s < refSegments.length; s++) {
-        const seg = refSegments[s];
-        const dx = seg.p2_2D.x - seg.p1_2D.x;
-        const dy = seg.p2_2D.y - seg.p1_2D.y;
-        const len2 = dx * dx + dy * dy;
-
-        let alpha = 0;
-        if (len2 > 0.0001) {
-          alpha = Math.max(
-            0,
-            Math.min(1, ((pt2D.x - seg.p1_2D.x) * dx + (pt2D.y - seg.p1_2D.y) * dy) / len2)
-          );
-        }
-
-        const projX = seg.p1_2D.x + alpha * dx;
-        const projY = seg.p1_2D.y + alpha * dy;
-        const dist2D = Math.sqrt((pt2D.x - projX) * (pt2D.x - projX) + (pt2D.y - projY) * (pt2D.y - projY));
-
-        if (dist2D < bestDist) {
-          bestDist = dist2D;
-          // Punto 3D interpolado en el segmento
-          const m3D: Vector3D = {
-            x: (1 - alpha) * seg.p1_3D.x + alpha * seg.p2_3D.x,
-            y: (1 - alpha) * seg.p1_3D.y + alpha * seg.p2_3D.y,
-            z: (1 - alpha) * seg.p1_3D.z + alpha * seg.p2_3D.z,
-          };
-          // Proyección escalar sobre el rayo: t = (M3D - Eye) · RayDir
-          const t = vDot(vSub(m3D, camera.eye), ray.direction);
-          if (t > 0.1) {
-            bestDepth = t;
+      if (n3 === 2) {
+        isStraight = true;
+      } else {
+        const delta = vSub(pB_3D, pA_3D);
+        const len3D = vLen(delta);
+        if (len3D > 0.001) {
+          const dir3D = vScale(delta, 1 / len3D);
+          isStraight = true;
+          for (let k = 1; k < n3 - 1; k++) {
+            const diff = vSub(pts3D[k], pA_3D);
+            const perp = vCross(diff, dir3D);
+            if (vLen(perp) > 0.02) {
+              isStraight = false;
+              break;
+            }
           }
         }
       }
-
-      // Mezcla de suavizado si está un poco lejos del segmento (evita saltos bruscos)
-      let finalDepth = bestDepth;
-      const MAX_SNAP = 150;
-      const MIN_SNAP = 40;
-      if (bestDist > MAX_SNAP) {
-        finalDepth = defaultDepth;
-      } else if (bestDist > MIN_SNAP) {
-        const factor = (MAX_SNAP - bestDist) / (MAX_SNAP - MIN_SNAP);
-        finalDepth = factor * bestDepth + (1 - factor) * defaultDepth;
-      }
-
-      rawDepths[i] = Math.max(0.1, finalDepth);
-    }
-
-    // 3. Suavizado de profundidad a lo largo del trazo (filtro de 3 tomas)
-    const smoothDepths: number[] = new Array(n);
-    for (let i = 0; i < n; i++) {
-      if (n <= 2) {
-        smoothDepths[i] = rawDepths[i];
-      } else {
-        const prev = i > 0 ? rawDepths[i - 1] : rawDepths[i];
-        const next = i < n - 1 ? rawDepths[i + 1] : rawDepths[i];
-        smoothDepths[i] = 0.25 * prev + 0.5 * rawDepths[i] + 0.25 * next;
-      }
-    }
-
-    // 4. Generar los puntos 3D finales: P_3D = Eye + t * ray.direction
-    const points3D: Vector3D[] = new Array(n);
-    for (let i = 0; i < n; i++) {
-      points3D[i] = vAdd(camera.eye, vScale(rays[i].direction, smoothDepths[i]));
     }
 
     return {
-      id: stroke.id || `stroke_${strokeIdx}`,
+      curve: c,
+      isStraight,
+      pA_3D,
+      pB_3D,
+      pA_2D,
+      pB_2D,
+      cdx,
+      cdy,
+      clen2,
+    };
+  });
+
+  // Vértices de ancla dados en 3D (para que las uniones con la base dada cierren con precisión)
+  const anchorVertices: { p2D: Point2D; zCam: number }[] = [];
+  anchorCurves.forEach((c) => {
+    if (!c.points || !c.points3D) return;
+    const cnt = Math.min(c.points.length, c.points3D.length);
+    for (let i = 0; i < cnt; i++) {
+      anchorVertices.push({
+        p2D: c.points[i],
+        zCam: vDot(vSub(c.points3D[i], camera.eye), camForward),
+      });
+    }
+  });
+
+  // 2. Primera pasada: emparejar cada trazo del alumno y calcular el perfil de profundidad zCam
+  interface StrokeAnalysis {
+    id: string;
+    stroke: UserStroke3D;
+    zCams: number[];
+    rays: CameraRay[];
+  }
+
+  const strokeAnalyses: StrokeAnalysis[] = strokes.map((s, strokeIdx) => {
+    const pts = s.points || [];
+    const n = pts.length;
+    if (n === 0) {
+      return { id: s.id || `stroke_${strokeIdx}`, stroke: s, zCams: [], rays: [] };
+    }
+
+    const pStart = pts[0];
+    const pEnd = pts[n - 1];
+    const sDirX = pEnd.x - pStart.x;
+    const sDirY = pEnd.y - pStart.y;
+    const sLen = Math.hypot(sDirX, sDirY);
+    const uDirX = sLen > 0.001 ? sDirX / sLen : 1;
+    const uDirY = sLen > 0.001 ? sDirY / sLen : 0;
+
+    // Emparejar el trazo completo contra la curva de referencia con mayor alineación y proximidad
+    let bestMeta: RefCurveMeta | null = null;
+    let bestScore = -1;
+
+    for (const meta of curvesMeta) {
+      const c = meta.curve;
+      if (!c.points || c.points.length < 2 || !c.points3D) continue;
+
+      let totalDist = 0;
+      let totalAlign = 0;
+      const sampleCount = Math.min(7, n);
+
+      for (let k = 0; k < sampleCount; k++) {
+        const pt = pts[Math.floor((k / (sampleCount - 1)) * (n - 1))];
+        let minDist = Infinity;
+        let segDirX = 1;
+        let segDirY = 0;
+
+        for (let j = 0; j < c.points.length - 1; j++) {
+          const a = c.points[j];
+          const b = c.points[j + 1];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const l2 = dx * dx + dy * dy;
+          const alpha = l2 > 0.0001 ? Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / l2)) : 0;
+          const projX = a.x + alpha * dx;
+          const projY = a.y + alpha * dy;
+          const d = Math.hypot(pt.x - projX, pt.y - projY);
+          if (d < minDist) {
+            minDist = d;
+            const l = Math.sqrt(l2);
+            if (l > 0.001) {
+              segDirX = dx / l;
+              segDirY = dy / l;
+            }
+          }
+        }
+        totalDist += minDist;
+        totalAlign += Math.abs(uDirX * segDirX + uDirY * segDirY);
+      }
+
+      const avgDist = totalDist / sampleCount;
+      const avgAlign = totalAlign / sampleCount;
+      const score = avgAlign / (1.0 + avgDist / 35.0);
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMeta = meta;
+      }
+    }
+
+    const zCams = new Array<number>(n);
+    const rays = new Array<CameraRay>(n);
+
+    if (bestMeta && bestMeta.isStraight && bestScore >= 0.15 && bestMeta.clen2 > 1.0) {
+      // Arista recta 3D: interpolación paramétrica con extensión suave en extremos (overshoot natural)
+      const { pA_3D, pB_3D, pA_2D, cdx, cdy, clen2 } = bestMeta;
+
+      for (let i = 0; i < n; i++) {
+        const pt2D = pts[i];
+        rays[i] = getCameraRay(pt2D, camera, width, height);
+
+        const u = Math.max(-0.25, Math.min(1.25, ((pt2D.x - pA_2D.x) * cdx + (pt2D.y - pA_2D.y) * cdy) / clen2));
+        const ref3D: Vector3D = {
+          x: pA_3D.x + u * (pB_3D.x - pA_3D.x),
+          y: pA_3D.y + u * (pB_3D.y - pA_3D.y),
+          z: pA_3D.z + u * (pB_3D.z - pA_3D.z),
+        };
+        zCams[i] = vDot(vSub(ref3D, camera.eye), camForward);
+      }
+    } else {
+      // Curvas (elipses, arcos, siluetas) o trazos sin correspondencia unívoca
+      const candidateSegments: Ref3DSegment[] = [];
+      const addCurveSegments = (c: CurveSegment2D) => {
+        if (!c.points || !c.points3D) return;
+        const cnt = Math.min(c.points.length, c.points3D.length);
+        for (let i = 0; i < cnt - 1; i++) {
+          candidateSegments.push({
+            p1_2D: c.points[i],
+            p2_2D: c.points[i + 1],
+            p1_3D: c.points3D[i],
+            p2_3D: c.points3D[i + 1],
+            curveId: c.id,
+            isGiven: c.isGiven,
+          });
+        }
+      };
+
+      if (bestMeta && bestScore >= 0.15) {
+        addCurveSegments(bestMeta.curve);
+      } else {
+        allRefCurves.forEach(addCurveSegments);
+      }
+
+      for (let i = 0; i < n; i++) {
+        const pt2D = pts[i];
+        rays[i] = getCameraRay(pt2D, camera, width, height);
+
+        let bestDist = Infinity;
+        let bestZ = defaultDepth;
+
+        for (const seg of candidateSegments) {
+          const dx = seg.p2_2D.x - seg.p1_2D.x;
+          const dy = seg.p2_2D.y - seg.p1_2D.y;
+          const l2 = dx * dx + dy * dy;
+          const alpha = l2 > 0.0001 ? Math.max(0, Math.min(1, ((pt2D.x - seg.p1_2D.x) * dx + (pt2D.y - seg.p1_2D.y) * dy) / l2)) : 0;
+          const projX = seg.p1_2D.x + alpha * dx;
+          const projY = seg.p1_2D.y + alpha * dy;
+          const d = Math.hypot(pt2D.x - projX, pt2D.y - projY);
+
+          if (d < bestDist) {
+            bestDist = d;
+            const m3D: Vector3D = {
+              x: (1 - alpha) * seg.p1_3D.x + alpha * seg.p2_3D.x,
+              y: (1 - alpha) * seg.p1_3D.y + alpha * seg.p2_3D.y,
+              z: (1 - alpha) * seg.p1_3D.z + alpha * seg.p2_3D.z,
+            };
+            bestZ = vDot(vSub(m3D, camera.eye), camForward);
+          }
+        }
+        zCams[i] = bestZ;
+      }
+    }
+
+    return {
+      id: s.id || `stroke_${strokeIdx}`,
+      stroke: s,
+      zCams,
+      rays,
+    };
+  });
+
+  // 3. Segunda pasada: Agrupación y sellado de vértices en las uniones (Corner Junction Snapping)
+  interface EndpointRef {
+    strokeIdx: number;
+    isEnd: boolean;
+    pt2D: Point2D;
+    zCam: number;
+  }
+
+  const endpoints: EndpointRef[] = [];
+  strokeAnalyses.forEach((sa, idx) => {
+    if (sa.zCams.length === 0) return;
+    endpoints.push({
+      strokeIdx: idx,
+      isEnd: false,
+      pt2D: sa.stroke.points[0],
+      zCam: sa.zCams[0],
+    });
+    endpoints.push({
+      strokeIdx: idx,
+      isEnd: true,
+      pt2D: sa.stroke.points[sa.stroke.points.length - 1],
+      zCam: sa.zCams[sa.zCams.length - 1],
+    });
+  });
+
+  const SNAP_THRESHOLD_PX = 24.0;
+  const visited = new Set<number>();
+
+  for (let i = 0; i < endpoints.length; i++) {
+    if (visited.has(i)) continue;
+    const cluster = [endpoints[i]];
+    visited.add(i);
+
+    for (let j = i + 1; j < endpoints.length; j++) {
+      if (visited.has(j)) continue;
+      const d = Math.hypot(endpoints[i].pt2D.x - endpoints[j].pt2D.x, endpoints[i].pt2D.y - endpoints[j].pt2D.y);
+      if (d <= SNAP_THRESHOLD_PX) {
+        cluster.push(endpoints[j]);
+        visited.add(j);
+      }
+    }
+
+    // Comprobar si el cluster coincide con un vértice base/ancla dado
+    let targetZ = 0;
+    let hasAnchor = false;
+    for (const ep of cluster) {
+      for (const av of anchorVertices) {
+        if (Math.hypot(ep.pt2D.x - av.p2D.x, ep.pt2D.y - av.p2D.y) <= SNAP_THRESHOLD_PX) {
+          targetZ = av.zCam;
+          hasAnchor = true;
+          break;
+        }
+      }
+      if (hasAnchor) break;
+    }
+
+    if (!hasAnchor) {
+      const sum = cluster.reduce((acc, ep) => acc + ep.zCam, 0);
+      targetZ = sum / cluster.length;
+    }
+
+    // Suavizado de entrada hacia la unión para no deformar el resto del trazo
+    for (const ep of cluster) {
+      const zCams = strokeAnalyses[ep.strokeIdx].zCams;
+      const n = zCams.length;
+      const blendCount = Math.min(12, Math.max(2, Math.floor(n / 4)));
+
+      if (!ep.isEnd) {
+        for (let k = 0; k < blendCount; k++) {
+          const w = 1.0 - k / blendCount;
+          zCams[k] = (1 - w) * zCams[k] + w * targetZ;
+        }
+      } else {
+        for (let k = 0; k < blendCount; k++) {
+          const idx = n - 1 - k;
+          const w = 1.0 - k / blendCount;
+          zCams[idx] = (1 - w) * zCams[idx] + w * targetZ;
+        }
+      }
+    }
+  }
+
+  // 4. Tercera pasada: Filtro de suavizado de profundidad y cálculo de coordenadas 3D finales
+  return strokeAnalyses.map((sa) => {
+    const n = sa.zCams.length;
+    if (n === 0) {
+      return {
+        id: sa.id,
+        points3D: [],
+        isConstruction: sa.stroke.isConstruction,
+      };
+    }
+
+    const smoothZCams = new Array<number>(n);
+    for (let i = 0; i < n; i++) {
+      if (n <= 2) {
+        smoothZCams[i] = sa.zCams[i];
+      } else {
+        const prev = i > 0 ? sa.zCams[i - 1] : sa.zCams[i];
+        const next = i < n - 1 ? sa.zCams[i + 1] : sa.zCams[i];
+        smoothZCams[i] = 0.25 * prev + 0.5 * sa.zCams[i] + 0.25 * next;
+      }
+    }
+
+    const points3D: Vector3D[] = new Array<Vector3D>(n);
+    for (let i = 0; i < n; i++) {
+      const ray = sa.rays[i];
+      const rayFwd = vDot(ray.direction, camForward);
+      const t = Math.max(0.1, smoothZCams[i] / Math.max(0.001, rayFwd));
+      points3D[i] = vAdd(camera.eye, vScale(ray.direction, t));
+    }
+
+    return {
+      id: sa.id,
       points3D,
-      isConstruction: stroke.isConstruction,
+      isConstruction: sa.stroke.isConstruction,
     };
   });
 }
