@@ -4,7 +4,7 @@ import { vRotateX, vRotateY } from '../../lib/perspective3d/math3d';
 
 interface Perspective3DPreviewCardProps {
   model: WireframeModel3D;
-  primitiveType: PrimitiveType;
+  primitiveType: PrimitiveType | string;
   title: string;
 }
 

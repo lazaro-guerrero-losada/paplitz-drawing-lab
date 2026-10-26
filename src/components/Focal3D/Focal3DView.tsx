@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Point2D,
   UserStroke3D,
+  Vector3D,
 } from '../../lib/perspective3d/types';
 import {
   Focal3DShapeType,
@@ -15,6 +16,16 @@ import {
 import { generateFocal3DChallenge } from '../../lib/focal3d/generator';
 import { evaluateFocal3DSubmission } from '../../lib/focal3d/evaluator';
 import { FocalSelectorPanel } from './FocalSelectorPanel';
+import { Perspective3DPreviewCard } from '../Lab3D/Perspective3DPreviewCard';
+import {
+  getFocal3DWireframeModel,
+  unprojectFocalStrokesTo3D,
+} from '../../lib/focal3d/focal3dModels';
+import {
+  v3,
+  vRotateX,
+  vRotateY,
+} from '../../lib/perspective3d/math3d';
 import {
   Undo2,
   Redo2,
@@ -35,6 +46,7 @@ import {
   Download,
   FileText,
   Check,
+  Box,
 } from 'lucide-react';
 import { SessionRecordItem } from '../../lib/sessionRecorder';
 import {
@@ -122,6 +134,25 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   const activePointerIdRef = useRef<number | null>(null);
   const [currentLiveStroke, setCurrentLiveStroke] = useState<Point2D[]>([]);
 
+  // Modo Visor 3D orbital interactivo (Giro 3D directo tras evaluar o con el botón "Ver en 3D")
+  const [is3DViewActive, setIs3DViewActive] = useState<boolean>(false);
+  const [rotX, setRotX] = useState<number>(0.35);
+  const [rotY, setRotY] = useState<number>(-0.45);
+  const [zoom3D, setZoom3D] = useState<number>(1.0);
+  const isOrbitingRef = useRef<boolean>(false);
+  const lastOrbitPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Modelo alámbrico 3D de la forma para el visor orbital y la tarjeta de previsualización
+  const previewModel3D = React.useMemo(() => {
+    const shapeType = challenge.shapes[0]?.type || challenge.shapeType;
+    return getFocal3DWireframeModel(shapeType);
+  }, [challenge]);
+
+  // Trazos del usuario elevados a coordenadas 3D para rotación orbital
+  const unprojectedStrokes = React.useMemo(() => {
+    return unprojectFocalStrokesTo3D(strokes, challenge);
+  }, [strokes, challenge]);
+
   // Ajustar tamaño del canvas al contenedor manteniendo nitidez HD
   useEffect(() => {
     const updateDimensions = () => {
@@ -165,6 +196,10 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
       setEvaluation(null);
       setCurrentLiveStroke([]);
       setVisionMode('all');
+      setIs3DViewActive(false);
+      setRotX(0.35);
+      setRotY(-0.45);
+      setZoom3D(1.0);
       setCurrentRound(roundNum);
       setUserNote('');
       setShowReportModal(false);
@@ -271,6 +306,156 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
     // Fondo blanco nítido
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (is3DViewActive) {
+      // ==========================================
+      // VISOR 3D ORBITAL INTERACTIVO
+      // ==========================================
+      const { width, height } = canvasDimensions;
+      const cx = width / 2;
+      const cy = height / 2;
+      const baseScale = Math.min(width, height) * 0.28 * zoom3D;
+
+      const project3D = (v: Vector3D) => {
+        let r = vRotateY(v, rotY);
+        r = vRotateX(r, rotX);
+        return {
+          x: cx + r.x * baseScale,
+          y: cy - r.y * baseScale, // Invertir Y para orientación estándar 3D
+          z: r.z,
+        };
+      };
+
+      // 1. Rejilla técnica 3D de suelo (Ground plane grid)
+      ctx.save();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.0;
+      const gridExtent = 1.8;
+      const gridSteps = 6;
+      const groundY = -1.2;
+      for (let i = -gridSteps; i <= gridSteps; i++) {
+        const val = (i / gridSteps) * gridExtent;
+        // Líneas paralelas a Z
+        const p1 = project3D(v3(val, groundY, -gridExtent));
+        const p2 = project3D(v3(val, groundY, gridExtent));
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+
+        // Líneas paralelas a X
+        const p3 = project3D(v3(-gridExtent, groundY, val));
+        const p4 = project3D(v3(gridExtent, groundY, val));
+        ctx.beginPath();
+        ctx.moveTo(p3.x, p3.y);
+        ctx.lineTo(p4.x, p4.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // 2. Modelo Alámbrico 3D (Solución Técnica)
+      const shouldDrawSolution3D = visionMode === 'all' || visionMode === 'solution';
+      if (shouldDrawSolution3D && previewModel3D) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Aristas rectas
+        if (previewModel3D.vertices && previewModel3D.edges) {
+          previewModel3D.edges.forEach(([i1, i2]) => {
+            const p1 = project3D(previewModel3D.vertices[i1]);
+            const p2 = project3D(previewModel3D.vertices[i2]);
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = '#09090b';
+            ctx.lineWidth = 2.4;
+            ctx.setLineDash([6, 4]); // Solución técnica punteada
+            ctx.stroke();
+          });
+
+          // Marcadores de vértices clave
+          previewModel3D.vertices.forEach((v) => {
+            const p = project3D(v);
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        // Anillos y aristas curvas (ej. cilindros)
+        if (previewModel3D.rings) {
+          previewModel3D.rings.forEach((ring, rIdx) => {
+            if (ring.length < 2) return;
+            ctx.beginPath();
+            ring.forEach((pt, idx) => {
+              const p = project3D(pt);
+              if (idx === 0) ctx.moveTo(p.x, p.y);
+              else ctx.lineTo(p.x, p.y);
+            });
+            ctx.strokeStyle = rIdx === 0 ? '#0f172a' : '#475569';
+            ctx.lineWidth = rIdx === 0 ? 2.2 : 1.6;
+            ctx.setLineDash([5, 4]);
+            ctx.stroke();
+          });
+        }
+
+        // Aristas tangenciales (cilindro)
+        if (previewModel3D.tangentRings) {
+          previewModel3D.tangentRings.forEach((ring) => {
+            if (ring.length < 2) return;
+            ctx.beginPath();
+            ring.forEach((pt, idx) => {
+              const p = project3D(pt);
+              if (idx === 0) ctx.moveTo(p.x, p.y);
+              else ctx.lineTo(p.x, p.y);
+            });
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([12, 4, 2, 4]);
+            ctx.stroke();
+          });
+        }
+        ctx.restore();
+      }
+
+      // 3. Trazos del Usuario en 3D
+      const shouldDrawUserStrokes3D = visionMode === 'all' || visionMode === 'drawing';
+      if (shouldDrawUserStrokes3D && unprojectedStrokes.length > 0) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        unprojectedStrokes.forEach((s) => {
+          if (!s.points3D || s.points3D.length < 2) return;
+          ctx.beginPath();
+          s.points3D.forEach((pt, idx) => {
+            const p = project3D(pt);
+            if (idx === 0) ctx.moveTo(p.x, p.y);
+            else ctx.lineTo(p.x, p.y);
+          });
+
+          if (s.isConstruction) {
+            ctx.strokeStyle = '#94a3b8'; // Trazo de construcción en gris punteado
+            ctx.lineWidth = 1.4;
+            ctx.setLineDash([4, 4]);
+          } else {
+            ctx.strokeStyle = '#0f172a'; // Tinta del usuario en negro sólido
+            ctx.lineWidth = 2.6;
+            ctx.setLineDash([]);
+          }
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+
+      return;
+    }
 
     const fp = challenge.focalPoint;
 
@@ -626,6 +811,12 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
     strokeTool,
     visionMode,
     canvasDimensions,
+    is3DViewActive,
+    rotX,
+    rotY,
+    zoom3D,
+    previewModel3D,
+    unprojectedStrokes,
   ]);
 
   // Manejadores de puntero
@@ -642,6 +833,15 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (is3DViewActive) {
+      e.preventDefault();
+      try {
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {}
+      isOrbitingRef.current = true;
+      lastOrbitPosRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
     if (evaluation) return;
     if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return;
     e.preventDefault();
@@ -656,6 +856,16 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (is3DViewActive) {
+      if (!isOrbitingRef.current) return;
+      e.preventDefault();
+      const dx = e.clientX - lastOrbitPosRef.current.x;
+      const dy = e.clientY - lastOrbitPosRef.current.y;
+      lastOrbitPosRef.current = { x: e.clientX, y: e.clientY };
+      setRotY((prev) => prev + dx * 0.008);
+      setRotX((prev) => Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, prev + dy * 0.008)));
+      return;
+    }
     if (!isDrawingRef.current || (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId)) return;
     e.preventDefault();
     const pt = getCanvasCoords(e);
@@ -664,6 +874,13 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (is3DViewActive) {
+      isOrbitingRef.current = false;
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      return;
+    }
     if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return;
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
@@ -681,6 +898,20 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
     }
     currentPointsRef.current = [];
     setCurrentLiveStroke([]);
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    if (!is3DViewActive) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setZoom3D((prev) => Math.max(0.4, Math.min(2.5, prev * delta)));
+  };
+
+  const handleDoubleClick = () => {
+    if (!is3DViewActive) return;
+    setRotX(0.35);
+    setRotY(-0.45);
+    setZoom3D(1.0);
   };
 
   // Atajos de teclado
@@ -706,12 +937,15 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
           if (prev === 'drawing') return 'off';
           return 'all';
         });
+      } else if (e.key.toLowerCase() === 'r' && evaluation) {
+        e.preventDefault();
+        setIs3DViewActive((prev) => !prev);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [evaluation, strokes, redoStack, challenge, currentRound]);
+  }, [evaluation, strokes, redoStack, challenge, currentRound, is3DViewActive]);
 
   const averageScore =
     sessionScores.length > 0
@@ -761,7 +995,7 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
         )}
       </div>
 
-      {/* 2. TARJETA DE NOTA Y PROGRESO (SUPERIOR DERECHA) */}
+      {/* 2. TARJETA DE NOTA Y PREVIEW 3D (SUPERIOR DERECHA) */}
       <div className="absolute top-3 right-4 sm:right-6 z-20 flex items-start gap-2 sm:gap-2.5 pointer-events-none">
         {evaluation && (
           <div className="pointer-events-auto bg-white border-2 border-black p-2 sm:p-2.5 shadow-[4px_4px_0px_#000000] font-mono flex flex-col items-center justify-center min-w-[88px] sm:min-w-[100px] aspect-square select-none animate-in fade-in zoom-in-95 duration-150">
@@ -780,15 +1014,33 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
             </span>
           </div>
         )}
+
+        <div className="pointer-events-auto">
+          <Perspective3DPreviewCard
+            model={previewModel3D}
+            primitiveType={challenge.shapes[0]?.type || challenge.shapeType}
+            title={challenge.shapes[0]?.title || challenge.title}
+          />
+        </div>
       </div>
 
       {/* 3. LIENZO PRINCIPAL INTERACTIVO CON DETALLES TÉCNICOS */}
       <div
         ref={canvasContainerRef}
-        className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center cursor-crosshair"
+        className={`relative flex-1 w-full h-full overflow-hidden flex items-center justify-center ${
+          is3DViewActive ? 'cursor-grab active:cursor-grabbing' : evaluation ? 'cursor-default' : 'cursor-crosshair'
+        }`}
       >
+        {/* Banner de Giro 3D activo */}
+        {is3DViewActive && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 text-[10px] font-mono font-bold uppercase bg-white border border-black px-2.5 py-1 pointer-events-none shadow-[2px_2px_0px_#000000] z-10 flex items-center gap-1.5 animate-in fade-in duration-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+            <span>Giro 3D: Arrastra para rotar 360° · Doble clic resetear · Rueda zoom</span>
+          </div>
+        )}
+
         <div className="absolute bottom-3 left-3 text-[9px] font-mono font-bold uppercase bg-white border border-black px-1.5 py-0.5 pointer-events-none shadow-[1px_1px_0px_#000000] z-10 opacity-75 hidden sm:block">
-          <span>8 LÍNEAS FOCALES DISCONTINUAS · 1 FOCAL POINT</span>
+          <span>{is3DViewActive ? 'ESPACIO 3D ORBITAL · 360°' : '8 LÍNEAS FOCALES DISCONTINUAS · 1 FOCAL POINT'}</span>
         </div>
 
         <canvas
@@ -799,7 +1051,11 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          className="touch-none block w-full h-full select-none"
+          onWheel={handleWheel}
+          onDoubleClick={handleDoubleClick}
+          className={`touch-none block w-full h-full select-none ${
+            is3DViewActive ? 'cursor-grab active:cursor-grabbing' : evaluation ? 'cursor-default' : 'cursor-crosshair'
+          }`}
         />
       </div>
 
@@ -863,9 +1119,26 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
             </>
           )}
 
-          {/* MODO CORRECCIÓN: Visión Cíclica */}
+          {/* MODO CORRECCIÓN: Visión Cíclica y Visor 3D Orbital */}
           {evaluation && (
             <>
+              {/* Botón Ver en 3D / Volver a 2D */}
+              <button
+                type="button"
+                onClick={() => setIs3DViewActive((prev) => !prev)}
+                className={`px-2.5 py-1.5 text-xs font-mono font-bold border-2 border-black transition-all cursor-pointer shadow-[1px_1px_0px_#000000] flex items-center gap-1.5 ${
+                  is3DViewActive ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+                title={is3DViewActive ? 'Volver a vista 2D del reto (R)' : 'Ver tu dibujo y la figura en 3D interactivo 360° (R)'}
+              >
+                <Box className="w-4 h-4 stroke-[2.2]" />
+                <span className="text-[10px] uppercase tracking-wider font-mono">
+                  {is3DViewActive ? 'Volver 2D' : 'Ver en 3D'}
+                </span>
+              </button>
+
+              <div className="w-[2px] h-6 bg-black mx-0.5" />
+
               <button
                 type="button"
                 onClick={() => {
