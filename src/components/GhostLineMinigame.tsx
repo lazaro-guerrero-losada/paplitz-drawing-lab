@@ -175,62 +175,131 @@ function evaluateGhostStroke(userPts: Point[], ghostPts: Point[]): GhostEvaluati
   };
 }
 
-// Plantillas predeterminadas de trazos
-export type GhostPreset = 'custom' | 'horizontal' | 'diagonal' | 'arc_c' | 'wave_s' | 'chevron';
+// Plantillas predeterminadas de trazos ampliadas por todo el lienzo
+export type GhostPreset =
+  | 'custom'
+  | 'horizontal'
+  | 'vertical'
+  | 'diagonal'
+  | 'arc_c'
+  | 'wave_s'
+  | 'chevron'
+  | 'circle'
+  | 'box';
 
 function generatePresetGhost(type: GhostPreset): Point[] {
   const pts: Point[] = [];
-  const H = 540;
 
   if (type === 'horizontal') {
-    const y = H * 0.5;
-    for (let x = 100; x <= 500; x += 10) {
+    // Trazo horizontal completo de hombro de lado a lado (528px)
+    const y = 270;
+    for (let x = 36; x <= 564; x += 10) {
+      pts.push({ x, y, pressure: 0.5 });
+    }
+  } else if (type === 'vertical') {
+    // Trazo vertical ascendente completo (390px)
+    const x = 300;
+    for (let y = 475; y >= 85; y -= 10) {
       pts.push({ x, y, pressure: 0.5 });
     }
   } else if (type === 'diagonal') {
-    const startX = 150;
-    const startY = 390;
-    const endX = 450;
-    const endY = 160;
-    for (let i = 0; i <= 40; i++) {
-      const t = i / 40;
+    // Gran diagonal ascendente de esquina a esquina (510px x 380px)
+    const startX = 45;
+    const startY = 475;
+    const endX = 555;
+    const endY = 95;
+    for (let i = 0; i <= 50; i++) {
+      const t = i / 50;
       pts.push({
-        x: startX + (endX - startX) * t,
-        y: startY + (endY - startY) * t,
+        x: Math.round(startX + (endX - startX) * t),
+        y: Math.round(startY + (endY - startY) * t),
         pressure: 0.5,
       });
     }
   } else if (type === 'arc_c') {
-    const startX = 120;
-    const endX = 480;
-    const baseY = 360;
-    const apexY = 170;
-    for (let i = 0; i <= 50; i++) {
-      const t = i / 50;
-      const x = startX + (endX - startX) * t;
+    // Gran arco parabólico en bóveda aprovechando la anchura y altura (510px x 365px)
+    const startX = 45;
+    const endX = 555;
+    const baseY = 460;
+    const apexY = 95;
+    for (let i = 0; i <= 60; i++) {
+      const t = i / 60;
+      const x = Math.round(startX + (endX - startX) * t);
       const arch = 4 * t * (1 - t);
-      const y = baseY - (baseY - apexY) * arch;
+      const y = Math.round(baseY - (baseY - apexY) * arch);
       pts.push({ x, y, pressure: 0.5 });
     }
   } else if (type === 'wave_s') {
-    const startX = 100;
-    const endX = 500;
-    const centerY = 270;
-    const amp = 85;
-    for (let i = 0; i <= 60; i++) {
-      const t = i / 60;
-      const x = startX + (endX - startX) * t;
-      const y = centerY - Math.sin(t * Math.PI * 2) * amp;
+    // Gran onda en S biomecánica de extremo a extremo (510px x 290px)
+    const startX = 45;
+    const endX = 555;
+    const centerY = 285;
+    const amp = 145;
+    for (let i = 0; i <= 70; i++) {
+      const t = i / 70;
+      const x = Math.round(startX + (endX - startX) * t);
+      const y = Math.round(centerY - Math.sin(t * Math.PI * 2) * amp);
       pts.push({ x, y, pressure: 0.5 });
     }
   } else if (type === 'chevron') {
-    for (let i = 0; i <= 25; i++) {
-      const t = i / 25;
-      pts.push({ x: 120 + t * 180, y: 190 + t * 160, pressure: 0.5 });
+    // Quiebro angular amplio en V aprovechando toda la anchura y altura
+    const leftX = 45;
+    const midX = 300;
+    const rightX = 555;
+    const topY = 120;
+    const bottomY = 475;
+    for (let i = 0; i <= 30; i++) {
+      const t = i / 30;
+      pts.push({
+        x: Math.round(leftX + (midX - leftX) * t),
+        y: Math.round(topY + (bottomY - topY) * t),
+        pressure: 0.5,
+      });
     }
-    for (let i = 1; i <= 25; i++) {
-      const t = i / 25;
-      pts.push({ x: 300 + t * 180, y: 350 - t * 160, pressure: 0.5 });
+    for (let i = 1; i <= 30; i++) {
+      const t = i / 30;
+      pts.push({
+        x: Math.round(midX + (rightX - midX) * t),
+        y: Math.round(bottomY - (bottomY - topY) * t),
+        pressure: 0.5,
+      });
+    }
+  } else if (type === 'circle') {
+    // Gran forma oval / elíptica suave continua (450px x 350px)
+    const cx = 300;
+    const cy = 290;
+    const rx = 225;
+    const ry = 175;
+    const N = 72;
+    for (let i = 0; i <= N; i++) {
+      const angle = (i / N) * Math.PI * 2 - Math.PI / 2;
+      pts.push({
+        x: Math.round(cx + Math.cos(angle) * rx),
+        y: Math.round(cy + Math.sin(angle) * ry),
+        pressure: 0.5,
+      });
+    }
+  } else if (type === 'box') {
+    // Gran marco rectangular cerrado (500px x 370px)
+    const minX = 50;
+    const maxX = 550;
+    const minY = 105;
+    const maxY = 475;
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20;
+      pts.push({ x: Math.round(minX + (maxX - minX) * t), y: minY, pressure: 0.5 });
+    }
+    for (let i = 1; i <= 16; i++) {
+      const t = i / 16;
+      pts.push({ x: maxX, y: Math.round(minY + (maxY - minY) * t), pressure: 0.5 });
+    }
+    for (let i = 1; i <= 20; i++) {
+      const t = i / 20;
+      pts.push({ x: Math.round(maxX - (maxX - minX) * t), y: maxY, pressure: 0.5 });
+    }
+    for (let i = 1; i <= 16; i++) {
+      const t = i / 16;
+      pts.push({ x: minX, y: Math.round(maxY - (maxY - minY) * t), pressure: 0.5 });
     }
   }
 
@@ -252,6 +321,7 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
   // Estado del Fantasma actual
   const [ghostStroke, setGhostStroke] = useState<Point[] | null>(() => generatePresetGhost('horizontal'));
   const [isSettingCustomGhost, setIsSettingCustomGhost] = useState<boolean>(false);
+  const [mutateGhost, setMutateGhost] = useState<boolean>(true);
 
   // Trazos actuales del usuario
   const [userStroke, setUserStroke] = useState<Point[] | null>(null);
@@ -456,18 +526,21 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
       ctx.textBaseline = 'middle';
       ctx.fillText('1', startP.x, startP.y);
 
-      // Nodo de fin ② del fantasma
+      // Nodo de fin ② del fantasma (solo si no coincide prácticamente con el de inicio, e.g. formas cerradas)
       const endP = ghostStroke[ghostStroke.length - 1];
-      ctx.fillStyle = '#FFFFFF';
-      ctx.strokeStyle = '#A1A1AA';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(endP.x, endP.y, 6.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      const isClosed = Math.hypot(endP.x - startP.x, endP.y - startP.y) < 14;
+      if (!isClosed) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#A1A1AA';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(endP.x, endP.y, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
 
-      ctx.fillStyle = '#71717A';
-      ctx.fillText('2', endP.x, endP.y);
+        ctx.fillStyle = '#71717A';
+        ctx.fillText('2', endP.x, endP.y);
+      }
 
       // Etiqueta tenue FANTASMA
       const midP = ghostStroke[Math.floor(ghostStroke.length / 2)];
@@ -650,9 +723,11 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
     }
     setTimeout(() => setFlashMessage(null), 1500);
 
-    // MECÁNICA CLAVE: La línea que el usuario acaba de dibujar SE CONVIERTE EN EL NUEVO FANTASMA
-    // Así el usuario puede trazar sucesivamente la siguiente línea de forma rápida y fluida
-    setGhostStroke(recorded);
+    // MECÁNICA: Si está activada la mutación, el trazo del usuario se convierte en el nuevo fantasma
+    // Si la plantilla es fija, se conserva intacta para permitir calcos repetidos
+    if (mutateGhost) {
+      setGhostStroke(recorded);
+    }
     setUserStroke(null);
     renderCanvas();
   };
@@ -674,7 +749,7 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
       <div
         className="absolute top-2.5 sm:top-3 z-20 flex items-start justify-between pointer-events-none px-2 sm:px-0"
         style={{
-          width: 'min(calc(100% - 130px), 600px, calc((100dvh - 180px) * (600 / 540)))',
+          width: 'min(calc(100% - 130px), 840px, calc((100dvh - 90px) * (600 / 540)))',
         }}
       >
         {/* Tira compacta a la izquierda */}
@@ -695,6 +770,14 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
               Media: {averageScore}%
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => restartGame(selectedPreset)}
+            className="p-1 border border-black hover:bg-neutral-100 cursor-pointer shadow-[1px_1px_0px_#000000] active:scale-95 transition-transform"
+            title="Reiniciar plantilla fantasma"
+          >
+            <RotateCcw className="w-3 h-3 stroke-[2.5]" />
+          </button>
         </div>
 
         {/* A la derecha del dibujo: Cuadradito compacto con la nota (a la misma altura) */}
@@ -776,16 +859,19 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
               </div>
             </div>
 
-            {/* SELECTOR DE PLANTILLA FANTASMA INICIAL */}
+            {/* SELECTOR DE PLANTILLA FANTASMA */}
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-bold text-neutral-500">Fantasma Inicial:</span>
+              <span className="text-[10px] uppercase font-bold text-neutral-500">Plantilla Fantasma:</span>
               <div className="grid grid-cols-2 gap-1 p-1 border-2 border-black bg-neutral-100 shadow-[2px_2px_0px_#000000]">
                 {[
-                  { id: 'horizontal' as const, label: 'Horizontal' },
-                  { id: 'diagonal' as const, label: 'Diagonal' },
-                  { id: 'arc_c' as const, label: 'Arco C' },
-                  { id: 'wave_s' as const, label: 'Onda S' },
-                  { id: 'chevron' as const, label: 'Quiebro V' },
+                  { id: 'horizontal' as const, label: 'Horizontal (→)' },
+                  { id: 'vertical' as const, label: 'Vertical (↑)' },
+                  { id: 'diagonal' as const, label: 'Diagonal (↗)' },
+                  { id: 'arc_c' as const, label: 'Arco C (⌒)' },
+                  { id: 'wave_s' as const, label: 'Onda S (〜)' },
+                  { id: 'chevron' as const, label: 'Quiebro V (✓)' },
+                  { id: 'circle' as const, label: 'Óvalo (◯)' },
+                  { id: 'box' as const, label: 'Caja (▢)' },
                   { id: 'custom' as const, label: 'Dibujar Libre' },
                 ].map((p) => (
                   <button
@@ -803,6 +889,42 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
                     {p.label}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* MODO DE COMPORTAMIENTO TRAS EL CALCO */}
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase font-bold text-neutral-500">Dinámica de Calco:</span>
+              <div className="grid grid-cols-2 gap-1 p-1 border-2 border-black bg-neutral-100 shadow-[2px_2px_0px_#000000]">
+                <button
+                  type="button"
+                  onClick={() => setMutateGhost(true)}
+                  className={`py-1 px-1.5 text-[10px] font-bold border border-black cursor-pointer transition-colors ${
+                    mutateGhost
+                      ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                      : 'bg-white text-black hover:bg-neutral-200'
+                  }`}
+                  title="El último trazo que dibujes se convierte en el nuevo fantasma continuo"
+                >
+                  Mutación
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMutateGhost(false);
+                    if (selectedPreset !== 'custom') {
+                      setGhostStroke(generatePresetGhost(selectedPreset));
+                    }
+                  }}
+                  className={`py-1 px-1.5 text-[10px] font-bold border border-black cursor-pointer transition-colors ${
+                    !mutateGhost
+                      ? 'bg-black text-white shadow-[1px_1px_0px_#000000]'
+                      : 'bg-white text-black hover:bg-neutral-200'
+                  }`}
+                  title="Conserva la plantilla fija en pantalla para calcar una y otra vez"
+                >
+                  Plantilla Fija
+                </button>
               </div>
             </div>
 
@@ -897,9 +1019,9 @@ export const GhostLineMinigame: React.FC<GhostLineMinigameProps> = ({
 
       {/* 3. ÁREA CENTRAL: LIENZO 100% INTEGRADO CON EL FONDO */}
       <div
-        className="relative aspect-[600/540] max-w-[min(calc(100%-24px),600px)] max-h-[calc(100%-125px)] flex items-center justify-center pointer-events-none"
+        className="relative aspect-[600/540] max-w-[min(calc(100%-24px),840px)] max-h-[calc(100%-70px)] flex items-center justify-center pointer-events-none"
         style={{
-          width: 'min(calc(100% - 24px), 600px, calc((100dvh - 180px) * (600 / 540)))',
+          width: 'min(calc(100% - 24px), 840px, calc((100dvh - 90px) * (600 / 540)))',
           height: 'auto',
           aspectRatio: '600 / 540',
         }}
