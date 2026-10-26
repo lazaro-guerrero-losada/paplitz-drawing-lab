@@ -145,12 +145,12 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
   // Modelo alámbrico 3D de la forma para el visor orbital y la tarjeta de previsualización
   const previewModel3D = React.useMemo(() => {
     const shapeType = challenge.shapes[0]?.type || challenge.shapeType;
-    return getFocal3DWireframeModel(shapeType);
+    return getFocal3DWireframeModel(shapeType, challenge.shapes[0]);
   }, [challenge]);
 
   // Trazos del usuario elevados a coordenadas 3D para rotación orbital
   const unprojectedStrokes = React.useMemo(() => {
-    return unprojectFocalStrokesTo3D(strokes, challenge);
+    return unprojectFocalStrokesTo3D(strokes, challenge, challenge.shapes[0]);
   }, [strokes, challenge]);
 
   // Ajustar tamaño del canvas al contenedor manteniendo nitidez HD
@@ -374,17 +374,17 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
             ctx.stroke();
           });
 
-          // Marcadores de vértices clave
+          // Marcadores de vértices clave (estilo técnico Lab 3D)
           previewModel3D.vertices.forEach((v) => {
             const p = project3D(v);
-            ctx.fillStyle = '#000000';
             ctx.beginPath();
             ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-            ctx.fill();
             ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
             ctx.fill();
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1.8;
+            ctx.setLineDash([]);
+            ctx.stroke();
           });
         }
 
