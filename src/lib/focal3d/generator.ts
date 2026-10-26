@@ -153,53 +153,50 @@ function buildPrecalculatedShape(
       y: v.y + depthFactor * (focalPoint.y - v.y),
     }));
 
-    // 4 Aristas frontales completas (solución para evaluación y ayudas)
+    // 4 Aristas frontales (f0 y f3 son aristas ocultas/constructivas concurrentes en el vértice v0)
     frontCurves.push(
-      makeLineCurve(`${prefix}-f0`, frontVerts[0], frontVerts[1], 'Arista frontal 1'),
-      makeLineCurve(`${prefix}-f1`, frontVerts[1], frontVerts[2], 'Arista frontal 2'),
-      makeLineCurve(`${prefix}-f2`, frontVerts[2], frontVerts[3], 'Arista frontal 3'),
-      makeLineCurve(`${prefix}-f3`, frontVerts[3], frontVerts[0], 'Arista frontal 4')
+      makeLineCurve(`${prefix}-f0`, frontVerts[0], frontVerts[1], 'Arista oculta de ancho (construcción)', 'construction', 'dashed'),
+      makeLineCurve(`${prefix}-f1`, frontVerts[1], frontVerts[2], 'Arista frontal visible 1', 'form', 'solid'),
+      makeLineCurve(`${prefix}-f2`, frontVerts[2], frontVerts[3], 'Arista frontal visible 2', 'form', 'solid'),
+      makeLineCurve(`${prefix}-f3`, frontVerts[3], frontVerts[0], 'Arista oculta de alto (construcción)', 'construction', 'dashed')
     );
 
-    // 3 aristas de profundidad visibles hacia el punto focal
-    const orderedIndices = [0, 1, 2, 3].sort((a, b) => dist(frontVerts[a], focalPoint) - dist(frontVerts[b], focalPoint));
-    const visibleDepthIndices = orderedIndices.slice(0, 3);
+    // Aristas de profundidad convergentes hacia el punto focal:
+    // v2 y v3 son las aristas visibles del cuerpo sólido; v0 y v1 son líneas de fuga constructivas/ocultas
+    depthCurves.push(
+      makeLineCurve(`${prefix}-d0`, frontVerts[3], backVerts[3], 'Línea de fuga visible 1', 'form', 'solid'),
+      makeLineCurve(`${prefix}-d1`, frontVerts[2], backVerts[2], 'Línea de fuga visible 2', 'form', 'solid'),
+      makeLineCurve(`${prefix}-d2`, frontVerts[0], backVerts[0], 'Línea de fuga oculta en v0 (construcción)', 'construction', 'dashed'),
+      makeLineCurve(`${prefix}-d3`, frontVerts[1], backVerts[1], 'Línea de fuga constructiva en v1', 'construction', 'dashed')
+    );
 
-    visibleDepthIndices.forEach((idx, i) => {
-      depthCurves.push(
-        makeLineCurve(
-          `${prefix}-d${i}`,
-          frontVerts[idx],
-          backVerts[idx],
-          `Línea de fuga ${i + 1} al punto focal`
-        )
-      );
-      // Rayo guía prolongado hasta el punto focal (para cuando se activan las ayudas)
+    // Rayos guía prolongados de cada vértice hasta el punto focal
+    for (let i = 0; i < 4; i++) {
       guidelinesToFocal.push(
         makeLineCurve(
           `${prefix}-guide-${i}`,
-          frontVerts[idx],
+          frontVerts[i],
           focalPoint,
           `Guía de convergencia ${i + 1}`,
           'construction',
           'dashed'
         )
       );
-    });
+    }
 
+    // 4 Aristas traseras: b0 (entre v2 y v3 traseros) es la visible; las otras 3 son aristas constructivas/ocultas
     backCurves.push(
-      makeLineCurve(`${prefix}-b0`, backVerts[visibleDepthIndices[0]], backVerts[visibleDepthIndices[1]], 'Arista trasera 1'),
-      makeLineCurve(`${prefix}-b1`, backVerts[visibleDepthIndices[1]], backVerts[visibleDepthIndices[2]], 'Arista trasera 2')
+      makeLineCurve(`${prefix}-b0`, backVerts[2], backVerts[3], 'Arista trasera visible', 'form', 'solid'),
+      makeLineCurve(`${prefix}-b1`, backVerts[0], backVerts[1], 'Arista trasera oculta 1', 'construction', 'dashed'),
+      makeLineCurve(`${prefix}-b2`, backVerts[1], backVerts[2], 'Arista trasera oculta 2', 'construction', 'dashed'),
+      makeLineCurve(`${prefix}-b3`, backVerts[3], backVerts[0], 'Arista trasera oculta 3', 'construction', 'dashed')
     );
 
-    // MÍNIMA INFORMACIÓN INDISPENSABLE SIN AYUDAS (3 ARISTAS EN UN VÉRTICE: ANCHO, ALTO Y PROFUNDIDAD)
-    // El usuario tiene exactamente las 3 aristas concurrentes necesarias para construir el prisma:
-    // 1. Arista de ancho (v0 -> v1)
-    // 2. Arista de alto (v0 -> v3)
-    // 3. Arista de profundidad (v0 -> backVerts[0]) con guía hacia el punto focal
+    // MÍNIMA INFORMACIÓN INDISPENSABLE SIN AYUDAS (3 ARISTAS EN VÉRTICE v0: ANCHO, ALTO Y PROFUNDIDAD)
+    // El usuario tiene las 3 aristas concurrentes para construir el prisma como líneas guía constructivas:
     anchorCurves.push(
-      makeLineCurve(`${prefix}-anc-w`, v0, v1, 'Arista de ancho', 'construction', 'solid'),
-      makeLineCurve(`${prefix}-anc-h`, v0, v3, 'Arista de alto', 'construction', 'solid'),
+      makeLineCurve(`${prefix}-anc-w`, v0, v1, 'Arista de ancho (constructiva)', 'construction', 'dashed'),
+      makeLineCurve(`${prefix}-anc-h`, v0, v3, 'Arista de alto (constructiva)', 'construction', 'dashed'),
       makeLineCurve(`${prefix}-anc-d`, v0, backVerts[0], 'Arista de profundidad', 'construction', 'dashed'),
       makeLineCurve(`${prefix}-anc-ray`, backVerts[0], focalPoint, 'Guía de fuga al punto focal', 'construction', 'dashed')
     );

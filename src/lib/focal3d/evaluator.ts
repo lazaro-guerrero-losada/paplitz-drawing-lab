@@ -111,6 +111,122 @@ function evaluateSingleCurve(
 }
 
 /**
+ * Evalúa las líneas de construcción dibujadas por el alumno según su rectitud y paralelismo/convergencia.
+ * La longitud NO penaliza porque las líneas de construcción son para orientar.
+ */
+function evaluateConstructionStrokes(
+  strokes: UserStroke3D[],
+  challenge: Focal3DChallenge
+): { constructionScore: number; count: number; avgStraightness: number; avgAlignment: number } {
+  const cStrokes = strokes.filter((s) => s.isConstruction);
+  if (cStrokes.length === 0) {
+    return { constructionScore: 100, count: 0, avgStraightness: 1, avgAlignment: 1 };
+  }
+
+  let sumStraightness = 0;
+  let sumAlignment = 0;
+  let validCount = 0;
+
+  for (const s of cStrokes) {
+    const pts = s.points;
+    if (pts.length < 2) continue;
+    const a = pts[0];
+    const b = pts[pts.length - 1];
+    const len = dist(a, b);
+    if (len < 15) continue; // Descartar microtoques o ruido
+
+    // 1. Rectitud: desviación media de los puntos respecto a la cuerda recta entre extremos
+    let sumDev = 0;
+    for (let i = 1; i < pts.length - 1; i++) {
+      sumDev += pointToSegmentDistance(pts[i], a, b);
+    }
+    const avgDev = pts.length > 2 ? sumDev / (pts.length - 2) : 0;
+    const straightness = Math.max(0, Math.min(1, 1 - avgDev / 5.5));
+
+    // 2. Paralelismo / Alineación con rayos hacia el punto focal o aristas constructivas (sin penalizar longitud)
+    const dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+
+    // Comparar contra rayo directo al punto focal
+    const dFocal = dist(mid, challenge.focalPoint);
+    let bestAlign = 0;
+    if (dFocal > 1) {
+      const uFocal = { x: (challenge.focalPoint.x - mid.x) / dFocal, y: (challenge.focalPoint.y - mid.y) / dFocal };
+      const cosF = Math.abs(dir.x * uFocal.x + dir.y * uFocal.y);
+      const lineDist = Math.abs((b.x - a.x) * (a.y - challenge.focalPoint.y) - (a.x - challenge.focalPoint.x) * (b.y - a.y)) / len;
+      if (cosF >= 0.85 && lineDist <= 40) {
+        bestAlign = cosF * Math.max(0, 1 - lineDist / 40);
+      }
+    }
+
+    // Comparar contra aristas constructivas y guías de las figuras del reto
+    for (const shape of challenge.shapes) {
+      const targetCurves = [
+        ...shape.guidelinesToFocal,
+        ...shape.anchorCurves,
+        ...shape.depthCurves,
+        ...shape.backCurves,
+        ...shape.frontCurves,
+      ];
+      for (const tc of targetCurves) {
+        const tp0 = tc.points[0];
+        const tpn = tc.points[tc.points.length - 1];
+        const tLen = dist(tp0, tpn);
+        if (tLen < 1) continue;
+        const tDir = { x: (tpn.x - tp0.x) / tLen, y: (tpn.y - tp0.y) / tLen };
+        const cosT = Math.abs(dir.x * tDir.x + dir.y * tDir.y);
+        if (cosT >= 0.85) {
+          const dSeg = pointToSegmentDistance(mid, tp0, tpn);
+          if (dSeg <= 40) {
+            const scoreT = cosT * Math.max(0, 1 - dSeg / 40);
+            if (scoreT > bestAlign) bestAlign = scoreT;
+          }
+        }
+      }
+    }
+
+    sumStraightness += straightness;
+    sumAlignment += bestAlign;
+    validCount++;
+  }
+
+  const avgStraightness = validCount > 0 ? sumStraightness / validCount : 1;
+  const avgAlignment = validCount > 0 ? sumAlignment / validCount : 1;
+  const constructionScore = Math.round((avgStraightness * 0.5 + avgAlignment * 0.5) * 100);
+
+  return { constructionScore, count: validCount, avgStraightness, avgAlignment };
+}
+
+/**
+ * Comprueba si una curva o rayo de profundidad ha sido satisfecho por un trazo de construcción
+ */
+function isCurveMatchedByConstruction(curve: CurveSegment2D, strokes: UserStroke3D[]): boolean {
+  const cStrokes = strokes.filter((s) => s.isConstruction);
+  const cp0 = curve.points[0];
+  const cpn = curve.points[curve.points.length - 1];
+  const cLen = dist(cp0, cpn);
+  if (cLen < 1) return false;
+  const cDir = { x: (cpn.x - cp0.x) / cLen, y: (cpn.y - cp0.y) / cLen };
+
+  for (const s of cStrokes) {
+    const pts = s.points;
+    if (pts.length < 2) continue;
+    const a = pts[0];
+    const b = pts[pts.length - 1];
+    const len = dist(a, b);
+    if (len < 15) continue;
+    const sDir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+    const cosVal = Math.abs(sDir.x * cDir.x + sDir.y * cDir.y);
+    if (cosVal >= 0.82) {
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const d = pointToSegmentDistance(mid, cp0, cpn);
+      if (d <= 35) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Validador principal para retos de perspectiva con 1 punto focal central
  */
 export function evaluateFocal3DSubmission(
@@ -119,7 +235,9 @@ export function evaluateFocal3DSubmission(
 ): FocalEvaluationResult {
   // 1. Validar lienzo vacío
   const inkStrokes = strokes.filter((s) => !s.isConstruction);
-  if (inkStrokes.length === 0) {
+  const constructionStrokes = strokes.filter((s) => s.isConstruction);
+
+  if (inkStrokes.length === 0 && constructionStrokes.length === 0) {
     return {
       score: 0,
       passed: false,
@@ -132,17 +250,23 @@ export function evaluateFocal3DSubmission(
       tipMessage: 'Usa las 8 líneas discontinuas como guía visual hacia el punto focal.',
       shapeDetails: [],
       matchedCurves: [],
-      missingCurves: challenge.shapes.flatMap((s) => s.allCurves.map((c) => ({ points: c.points }))),
+      missingCurves: challenge.shapes.flatMap((s) =>
+        s.allCurves.filter((c) => c.role !== 'construction').map((c) => ({ points: c.points }))
+      ),
       drawnCount: 0,
-      targetCount: challenge.shapes.reduce((acc, s) => acc + s.allCurves.length, 0),
+      targetCount: challenge.shapes.reduce(
+        (acc, s) => acc + s.allCurves.filter((c) => c.role !== 'construction').length,
+        0
+      ),
     };
   }
 
   const userSegments = extractUserSegments(strokes);
+  const constEval = evaluateConstructionStrokes(strokes, challenge);
 
   // 2. Evaluar cada forma precalculada
   const shapeDetails: ShapeEvaluationDetail[] = [];
-  const matchedCurves: { points: Point2D[]; accuracy: number }[] = [];
+  const matchedCurves: { points: Point2D[]; accuracy: number; role?: 'form' | 'construction'; style?: 'solid' | 'dashed' }[] = [];
   const missingCurves: { points: Point2D[] }[] = [];
 
   let sumCoverage = 0;
@@ -155,36 +279,58 @@ export function evaluateFocal3DSubmission(
 
     // A. Evaluar caras frontales
     let frontOk = 0;
+    let visibleFrontCount = 0;
     for (const c of shape.frontCurves) {
-      const res = evaluateSingleCurve(c, userSegments);
-      sumCoverage += res.coverage;
-      sumPrecision += res.precision;
-      totalEvaluatedCurves++;
-      if (res.isCompleted) {
-        shapeCompletedCurves++;
-        frontOk++;
-        matchedCurves.push({ points: c.points, accuracy: res.precision });
+      if (c.role !== 'construction') {
+        visibleFrontCount++;
+        const res = evaluateSingleCurve(c, userSegments);
+        sumCoverage += res.coverage;
+        sumPrecision += res.precision;
+        totalEvaluatedCurves++;
+        if (res.isCompleted) {
+          shapeCompletedCurves++;
+          frontOk++;
+          matchedCurves.push({ points: c.points, accuracy: res.precision, role: 'form', style: 'solid' });
+        } else {
+          missingCurves.push({ points: c.points });
+        }
       } else {
-        missingCurves.push({ points: c.points });
+        // Aristas ocultas constructivas: NO penalizan si faltan; si se dibujan se registran
+        if (isCurveMatchedByConstruction(c, strokes)) {
+          matchedCurves.push({ points: c.points, accuracy: 0.90, role: 'construction', style: 'dashed' });
+        }
       }
     }
-    if (frontOk < shape.frontCurves.length * 0.5) {
+    if (visibleFrontCount > 0 && frontOk < visibleFrontCount * 0.5) {
       missingParts.push('Cara frontal incompleta');
     }
 
     // B. Evaluar líneas de fuga hacia el punto focal
     let depthOk = 0;
     for (const c of shape.depthCurves) {
-      const res = evaluateSingleCurve(c, userSegments);
-      sumCoverage += res.coverage;
-      sumPrecision += res.precision;
-      totalEvaluatedCurves++;
-      if (res.isCompleted) {
-        shapeCompletedCurves++;
-        depthOk++;
-        matchedCurves.push({ points: c.points, accuracy: res.precision });
+      if (c.role !== 'construction') {
+        const res = evaluateSingleCurve(c, userSegments);
+        sumCoverage += res.coverage;
+        sumPrecision += res.precision;
+        totalEvaluatedCurves++;
+        if (res.isCompleted) {
+          shapeCompletedCurves++;
+          depthOk++;
+          matchedCurves.push({ points: c.points, accuracy: res.precision, role: 'form', style: 'solid' });
+        } else if (isCurveMatchedByConstruction(c, strokes)) {
+          // Satisfecha mediante línea constructiva hacia el punto focal
+          shapeCompletedCurves++;
+          depthOk++;
+          matchedCurves.push({ points: c.points, accuracy: 0.90, role: 'construction', style: 'dashed' });
+        } else {
+          missingCurves.push({ points: c.points });
+        }
       } else {
-        missingCurves.push({ points: c.points });
+        // Línea de fuga oculta/constructiva (ej. arista oculta desde v0 al punto focal)
+        if (isCurveMatchedByConstruction(c, strokes)) {
+          depthOk++;
+          matchedCurves.push({ points: c.points, accuracy: 0.90, role: 'construction', style: 'dashed' });
+        }
       }
     }
 
@@ -198,43 +344,50 @@ export function evaluateFocal3DSubmission(
     // C. Requisitos específicos de CILINDRO (Eje central y Radio)
     if (shape.axisCurve) {
       const axisRes = evaluateSingleCurve(shape.axisCurve, userSegments);
-      sumCoverage += axisRes.coverage;
-      sumPrecision += axisRes.precision;
-      totalEvaluatedCurves++;
       if (axisRes.isCompleted) {
         shapeCompletedCurves++;
-        matchedCurves.push({ points: shape.axisCurve.points, accuracy: axisRes.precision });
+        matchedCurves.push({ points: shape.axisCurve.points, accuracy: axisRes.precision, role: 'form', style: 'solid' });
+      } else if (isCurveMatchedByConstruction(shape.axisCurve, strokes)) {
+        shapeCompletedCurves++;
+        matchedCurves.push({ points: shape.axisCurve.points, accuracy: 0.90, role: 'construction', style: 'dashed' });
       }
     }
 
     if (shape.radiusCurve) {
       const radiusRes = evaluateSingleCurve(shape.radiusCurve, userSegments);
-      sumCoverage += radiusRes.coverage;
-      sumPrecision += radiusRes.precision;
-      totalEvaluatedCurves++;
       if (radiusRes.isCompleted) {
         shapeCompletedCurves++;
-        matchedCurves.push({ points: shape.radiusCurve.points, accuracy: radiusRes.precision });
+        matchedCurves.push({ points: shape.radiusCurve.points, accuracy: radiusRes.precision, role: 'form', style: 'solid' });
+      } else if (isCurveMatchedByConstruction(shape.radiusCurve, strokes)) {
+        shapeCompletedCurves++;
+        matchedCurves.push({ points: shape.radiusCurve.points, accuracy: 0.90, role: 'construction', style: 'dashed' });
       }
     }
 
     // D. Evaluar caras traseras
     for (const c of shape.backCurves) {
-      const res = evaluateSingleCurve(c, userSegments);
-      sumCoverage += res.coverage;
-      sumPrecision += res.precision;
-      totalEvaluatedCurves++;
-      if (res.isCompleted) {
-        shapeCompletedCurves++;
-        matchedCurves.push({ points: c.points, accuracy: res.precision });
+      if (c.role !== 'construction') {
+        const res = evaluateSingleCurve(c, userSegments);
+        sumCoverage += res.coverage;
+        sumPrecision += res.precision;
+        totalEvaluatedCurves++;
+        if (res.isCompleted) {
+          shapeCompletedCurves++;
+          matchedCurves.push({ points: c.points, accuracy: res.precision, role: 'form', style: 'solid' });
+        } else {
+          missingCurves.push({ points: c.points });
+        }
       } else {
-        missingCurves.push({ points: c.points });
+        // Aristas traseras constructivas/ocultas
+        if (isCurveMatchedByConstruction(c, strokes)) {
+          matchedCurves.push({ points: c.points, accuracy: 0.90, role: 'construction', style: 'dashed' });
+        }
       }
     }
 
-    const totalShapeCurves = shape.allCurves.length;
-    const shapeCoverage = totalShapeCurves > 0 ? shapeCompletedCurves / totalShapeCurves : 0;
-    const shapeScore = Math.round(shapeCoverage * 100);
+    const visibleShapeCurvesCount = shape.allCurves.filter((c) => c.role !== 'construction').length;
+    const shapeCoverage = visibleShapeCurvesCount > 0 ? shapeCompletedCurves / visibleShapeCurvesCount : 0;
+    const shapeScore = Math.min(100, Math.round(shapeCoverage * 100));
 
     shapeDetails.push({
       shapeId: shape.id,
@@ -253,13 +406,17 @@ export function evaluateFocal3DSubmission(
 
   const coverageScore = Math.round(rawCoverage * 100);
   const precisionScore = Math.round(rawPrecision * 100);
-  const focalConvergenceScore = Math.round((precisionScore * 0.6 + coverageScore * 0.4));
+  const formScore = Math.round(precisionScore * 0.50 + coverageScore * 0.50);
 
-  // La nota depende estrechamente de la proximidad a las líneas precalculadas (tal como pidió el usuario)
-  const finalScore = Math.max(
-    0,
-    Math.min(100, Math.round(precisionScore * 0.50 + coverageScore * 0.50))
-  );
+  let focalConvergenceScore = Math.round(precisionScore * 0.60 + coverageScore * 0.40);
+  let finalScore = formScore;
+
+  // Integración de las líneas de construcción (rectitud y paralelismo sin penalizar longitud)
+  if (constEval.count > 0) {
+    const cScore = constEval.constructionScore;
+    finalScore = Math.max(0, Math.min(100, Math.round(formScore * 0.80 + cScore * 0.20)));
+    focalConvergenceScore = Math.round(focalConvergenceScore * 0.70 + cScore * 0.30);
+  }
 
   const passed = finalScore >= 70;
 
@@ -303,5 +460,7 @@ export function evaluateFocal3DSubmission(
     missingCurves,
     drawnCount: matchedCurves.length,
     targetCount: totalEvaluatedCurves,
+    constructionScore: constEval.count > 0 ? constEval.constructionScore : undefined,
+    constructionStrokesCount: constEval.count > 0 ? constEval.count : undefined,
   };
 }

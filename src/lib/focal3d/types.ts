@@ -87,8 +87,10 @@ export interface FocalEvaluationResult {
   feedbackMessage: string;
   tipMessage: string;
   shapeDetails: ShapeEvaluationDetail[];
-  matchedCurves: { points: Point2D[]; accuracy: number }[];
+  matchedCurves: { points: Point2D[]; accuracy: number; role?: 'form' | 'construction'; style?: 'solid' | 'dashed' }[];
   missingCurves: { points: Point2D[] }[];
   drawnCount: number;
   targetCount: number;
+  constructionScore?: number;
+  constructionStrokesCount?: number;
 }

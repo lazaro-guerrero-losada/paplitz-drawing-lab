@@ -492,30 +492,62 @@ export const Focal3DView: React.FC<Focal3DViewProps> = ({
     // 4. MODO CORRECCIÓN: SUPERPOSICIÓN DE EVALUACIÓN (SOLUCIÓN, MATCHED Y MISSING)
     if (evaluation && (visionMode === 'all' || visionMode === 'solution')) {
       ctx.save();
-      // Curvas faltantes en rojo suave punteado
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
-      ctx.lineWidth = 2.0;
-      ctx.setLineDash([4, 4]);
-      for (const mc of evaluation.missingCurves) {
-        ctx.beginPath();
-        mc.points.forEach((pt, i) => {
-          if (i === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
-        });
-        ctx.stroke();
-      }
 
-      // Curvas acertadas en verde esmeralda
-      ctx.strokeStyle = 'rgba(16, 185, 129, 0.75)';
-      ctx.lineWidth = 2.4;
-      ctx.setLineDash([]);
-      for (const m of evaluation.matchedCurves) {
-        ctx.beginPath();
-        m.points.forEach((pt, i) => {
-          if (i === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
-        });
-        ctx.stroke();
+      if (visionMode === 'solution') {
+        // En VISIÓN: SOLUCIÓN, dibuja la solución ideal completa:
+        // Aristas visibles en verde esmeralda sólido, y aristas ocultas/constructivas en verde punteado
+        for (const shape of challenge.shapes) {
+          for (const c of shape.allCurves) {
+            ctx.beginPath();
+            if (c.role === 'construction' || c.style === 'dashed') {
+              ctx.strokeStyle = 'rgba(16, 185, 129, 0.55)'; // Arista oculta / constructiva punteada
+              ctx.lineWidth = 1.6;
+              ctx.setLineDash([4, 4]);
+            } else {
+              ctx.strokeStyle = 'rgba(16, 185, 129, 0.85)'; // Arista visible sólida
+              ctx.lineWidth = 2.4;
+              ctx.setLineDash([]);
+            }
+            c.points.forEach((pt, i) => {
+              if (i === 0) ctx.moveTo(pt.x, pt.y);
+              else ctx.lineTo(pt.x, pt.y);
+            });
+            ctx.stroke();
+          }
+        }
+      } else {
+        // En VISIÓN: AMBOS, superpone curvas faltantes en rojo y acertadas en verde
+        // Curvas faltantes (solo aristas visibles de forma) en rojo suave punteado
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
+        ctx.lineWidth = 2.0;
+        ctx.setLineDash([4, 4]);
+        for (const mc of evaluation.missingCurves) {
+          ctx.beginPath();
+          mc.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
+        }
+
+        // Curvas acertadas: sólidas si son de forma, punteadas si son líneas constructivas
+        for (const m of evaluation.matchedCurves) {
+          ctx.beginPath();
+          if (m.role === 'construction' || m.style === 'dashed') {
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.60)';
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([4, 4]);
+          } else {
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.75)';
+            ctx.lineWidth = 2.4;
+            ctx.setLineDash([]);
+          }
+          m.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
+        }
       }
 
       // Rayos de fuga ideales en gris
