@@ -148,6 +148,70 @@ function evaluateUserStrokeAgainstLine(userPts: Point[], linePts: Point[]): { sc
   };
 }
 
+// --- FUNCIONES GEOMÉTRICAS DE COLISIÓN Y DISTANCIA ENTRE TRAZOS ---
+function ccw(p1: Point, p2: Point, p3: Point): number {
+  return (p3.y - p1.y) * (p2.x - p1.x) - (p2.y - p1.y) * (p3.x - p1.x);
+}
+
+function doSegmentsIntersect(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
+  if (
+    Math.max(p1.x, p2.x) < Math.min(p3.x, p4.x) ||
+    Math.max(p3.x, p4.x) < Math.min(p1.x, p2.x) ||
+    Math.max(p1.y, p2.y) < Math.min(p3.y, p4.y) ||
+    Math.max(p3.y, p4.y) < Math.min(p1.y, p2.y)
+  ) {
+    return false;
+  }
+  const d1 = ccw(p1, p2, p3);
+  const d2 = ccw(p1, p2, p4);
+  const d3 = ccw(p3, p4, p1);
+  const d4 = ccw(p3, p4, p2);
+
+  return (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  );
+}
+
+function doPolylinesIntersect(ptsA: Point[], ptsB: Point[]): boolean {
+  for (let i = 0; i < ptsA.length - 1; i++) {
+    for (let j = 0; j < ptsB.length - 1; j++) {
+      if (doSegmentsIntersect(ptsA[i], ptsA[i + 1], ptsB[j], ptsB[j + 1])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function pointToSegmentDistance(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy;
+  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+function minDistanceBetweenPolylines(ptsA: Point[], ptsB: Point[]): number {
+  let minDist = Infinity;
+  const stepA = Math.max(1, Math.floor((ptsA.length - 1) / 10));
+  for (let i = 0; i < ptsA.length; i += stepA) {
+    for (let j = 0; j < ptsB.length - 1; j++) {
+      const d = pointToSegmentDistance(ptsA[i], ptsB[j], ptsB[j + 1]);
+      if (d < minDist) minDist = d;
+    }
+  }
+  const stepB = Math.max(1, Math.floor((ptsB.length - 1) / 10));
+  for (let j = 0; j < ptsB.length; j += stepB) {
+    for (let i = 0; i < ptsA.length - 1; i++) {
+      const d = pointToSegmentDistance(ptsB[j], ptsA[i], ptsA[i + 1]);
+      if (d < minDist) minDist = d;
+    }
+  }
+  return minDist;
+}
+
 export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
   unlockedNodes,
   activeNode,
@@ -247,27 +311,45 @@ export const StrokeRushMinigame: React.FC<StrokeRushMinigameProps> = ({
     return baseInterval;
   }, []);
 
-// Zona de juego segura 100% visible (sin solapamiento con HUD superior, nota cuadrada ni barra inferior)
+// Zona de juego ampliada al máximo aprovechando los laterales, superior e inferior
 const RUSH_SAFE_ZONE = {
-  minX: 70,
-  maxX: 530,
-  minY: 155,
-  maxY: 415,
+  minX: 32,
+  maxX: 568,
+  minY: 72,
+  maxY: 508,
 };
 
+// Cuadrantes y sectores distribuidos uniformemente por todo el lienzo (laterales, centro, extremos)
 const RUSH_CANDIDATE_SECTORS = [
-  { x: 160, y: 200 },
-  { x: 300, y: 200 },
-  { x: 440, y: 200 },
-  { x: 160, y: 285 },
-  { x: 300, y: 285 },
-  { x: 440, y: 285 },
-  { x: 160, y: 370 },
-  { x: 300, y: 370 },
-  { x: 440, y: 370 },
+  // Lateral izquierdo
+  { x: 110, y: 140 },
+  { x: 110, y: 240 },
+  { x: 110, y: 340 },
+  { x: 110, y: 440 },
+  // Cuadrante intermedio izquierdo
+  { x: 210, y: 150 },
+  { x: 210, y: 260 },
+  { x: 210, y: 370 },
+  { x: 210, y: 450 },
+  // Eje central
+  { x: 300, y: 160 },
+  { x: 300, y: 280 },
+  { x: 300, y: 390 },
+  { x: 300, y: 460 },
+  // Cuadrante intermedio derecho
+  { x: 390, y: 150 },
+  { x: 390, y: 260 },
+  { x: 390, y: 370 },
+  { x: 390, y: 450 },
+  // Lateral derecho (evitando la esquina superior reservada para la tarjeta de nota si x > 470 && y < 120)
+  { x: 490, y: 190 },
+  { x: 490, y: 280 },
+  { x: 490, y: 370 },
+  { x: 490, y: 440 },
 ];
 
-  // Genera una nueva línea basada en un nodo de calistenia garantizando que quede en zona 100% visible
+  // Genera una nueva línea basada en un nodo de calistenia garantizando que quede en zona 100% visible,
+  // con mayor tamaño y variedad, sin intersecar con líneas existentes
   const spawnLineForNode = useCallback(
     (node: LessonNode, existingLines: ActiveRushLine[]): ActiveRushLine => {
       const rng = new SeededRNG(Math.floor(Math.random() * 900000 + 10000));
@@ -297,8 +379,8 @@ const RUSH_CANDIDATE_SECTORS = [
       // Si no hay puntos generados, fallback a línea horizontal en la zona segura central
       if (rawPoints.length < 2) {
         rawPoints = [
-          { x: 180, y: 285 },
-          { x: 420, y: 285 },
+          { x: 160, y: 285 },
+          { x: 440, y: 285 },
         ];
       }
 
@@ -317,91 +399,157 @@ const RUSH_CANDIDATE_SECTORS = [
       const rawH = Math.max(1, rMaxY - rMinY);
       const cx = (rMinX + rMaxX) / 2;
       const cy = (rMinY + rMaxY) / 2;
+      const rawDim = Math.max(rawW, rawH, 1);
 
-      // Escalar si el ejercicio es demasiado grande para caber holgadamente en la zona de juego
-      const maxAllowedW = 320;
-      const maxAllowedH = 175;
-      const scale = Math.min(1, maxAllowedW / rawW, maxAllowedH / rawH);
+      // Detectar si es una forma 2D (polígono, cuadrado, círculo, zigzag, etc.) o una línea/arco simple
+      const is2DForm = rawPoints.length > 2 && rawW > 25 && rawH > 25;
 
-      const scaledPoints = rawPoints.map((p) => ({
-        x: cx + (p.x - cx) * scale,
-        y: cy + (p.y - cy) * scale,
-        pressure: p.pressure,
-      }));
+      // Escala base: dar mayor tamaño y variedad aleatoria
+      let baseScale = 1.0;
+      if (is2DForm) {
+        // Formas: variedad entre 160px y 280px (sustancialmente más grandes que antes)
+        const targetDim = rng.range(160, 280);
+        let s = targetDim / rawDim;
+        // Límites holgados dentro de la zona de juego
+        s = Math.min(s, 440 / rawW, 340 / rawH);
+        baseScale = Math.max(0.65, s);
+      } else {
+        // Líneas y curvas simples: variedad entre trazos rápidos y trazos largos de hombro
+        const lineScaleFactor = rng.range(0.9, 1.45);
+        let s = lineScaleFactor;
+        s = Math.min(s, 500 / Math.max(rawW, 1), 400 / Math.max(rawH, 1));
+        baseScale = Math.max(0.75, s);
+      }
 
-      // Buscar un cuadrante / sector disponible para no colisionar totalmente con líneas previas
-      const shuffled = [...RUSH_CANDIDATE_SECTORS].sort(() => Math.random() - 0.5);
-      let bestTarget = shuffled[0];
-      let maxMinDist = -1;
+      // Función auxiliar para generar y ajustar puntos candidatos dado un sector y escala
+      const tryPlacement = (
+        sector: { x: number; y: number },
+        scale: number
+      ): Point[] | null => {
+        const jitterX = rng.range(-15, 15);
+        const jitterY = rng.range(-15, 15);
+        const targetX = sector.x + jitterX;
+        const targetY = sector.y + jitterY;
+        const dx = targetX - cx;
+        const dy = targetY - cy;
 
-      for (const cand of shuffled) {
-        let minDist = 9999;
-        for (const exLine of existingLines) {
-          const exMid = exLine.points[Math.floor(exLine.points.length / 2)] || exLine.startPoint;
-          const dMid = Math.hypot(cand.x - exMid.x, cand.y - exMid.y);
-          const dStart = Math.hypot(cand.x - exLine.startPoint.x, cand.y - exLine.startPoint.y);
-          const d = Math.min(dMid, dStart);
-          if (d < minDist) minDist = d;
+        const candidate = rawPoints.map((p) => ({
+          x: cx + (p.x - cx) * scale + dx,
+          y: cy + (p.y - cy) * scale + dy,
+          pressure: p.pressure,
+        }));
+
+        let cMinX = Infinity;
+        let cMaxX = -Infinity;
+        let cMinY = Infinity;
+        let cMaxY = -Infinity;
+        for (const p of candidate) {
+          if (p.x < cMinX) cMinX = p.x;
+          if (p.x > cMaxX) cMaxX = p.x;
+          if (p.y < cMinY) cMinY = p.y;
+          if (p.y > cMaxY) cMaxY = p.y;
         }
-        if (minDist > maxMinDist) {
-          maxMinDist = minDist;
-          bestTarget = cand;
+
+        // Clamp dentro de la zona de juego segura
+        let offX = 0;
+        let offY = 0;
+        if (cMinX < RUSH_SAFE_ZONE.minX) offX = RUSH_SAFE_ZONE.minX - cMinX;
+        else if (cMaxX > RUSH_SAFE_ZONE.maxX) offX = RUSH_SAFE_ZONE.maxX - cMaxX;
+
+        if (cMinY < RUSH_SAFE_ZONE.minY) offY = RUSH_SAFE_ZONE.minY - cMinY;
+        else if (cMaxY > RUSH_SAFE_ZONE.maxY) offY = RUSH_SAFE_ZONE.maxY - cMaxY;
+
+        // Evitar el área de la tarjeta de nota en la esquina superior derecha (x > 470 && y < 120)
+        if (cMaxX + offX > 470 && cMinY + offY < 120) {
+          if (cMaxY + offY + (120 - (cMinY + offY)) <= RUSH_SAFE_ZONE.maxY) {
+            offY += (120 - (cMinY + offY));
+          } else {
+            offX -= (cMaxX + offX - 470);
+          }
+        }
+
+        const placed = candidate.map((p) => ({
+          x: Math.round(Math.max(RUSH_SAFE_ZONE.minX, Math.min(RUSH_SAFE_ZONE.maxX, p.x + offX))),
+          y: Math.round(Math.max(RUSH_SAFE_ZONE.minY, Math.min(RUSH_SAFE_ZONE.maxY, p.y + offY))),
+          pressure: p.pressure,
+        }));
+
+        return placed;
+      };
+
+      // Si no hay líneas previas, colocamos directamente en un sector aleatorio
+      if (existingLines.length === 0) {
+        const shuffled = [...RUSH_CANDIDATE_SECTORS].sort(() => Math.random() - 0.5);
+        const placedPoints = tryPlacement(shuffled[0], baseScale) || rawPoints;
+        return {
+          id: `rush-line-${Date.now()}-${Math.random()}`,
+          points: placedPoints,
+          startPoint: placedPoints[0],
+          endPoint: placedPoints[placedPoints.length - 1],
+          spawnTime: Date.now(),
+          label,
+        };
+      }
+
+      // Con líneas existentes: buscar ubicación que NO corte ninguna línea y maximice la distancia/despeje
+      const scaleCandidates = [baseScale, baseScale * 0.85, baseScale * 0.72];
+      let bestPlacedPoints: Point[] | null = null;
+      let bestClearance = -1;
+      let fallbackCandidate: { points: Point[]; clearance: number; intersections: number } | null = null;
+
+      for (const scale of scaleCandidates) {
+        const shuffled = [...RUSH_CANDIDATE_SECTORS].sort(() => Math.random() - 0.5);
+
+        for (const sector of shuffled) {
+          const cand = tryPlacement(sector, scale);
+          if (!cand) continue;
+
+          let intersectionCount = 0;
+          let minClearance = Infinity;
+
+          for (const exLine of existingLines) {
+            if (doPolylinesIntersect(cand, exLine.points)) {
+              intersectionCount++;
+            }
+            const d = minDistanceBetweenPolylines(cand, exLine.points);
+            if (d < minClearance) minClearance = d;
+          }
+
+          // Criterio ideal: 0 intersecciones y margen >= 24px
+          if (intersectionCount === 0 && minClearance >= 24) {
+            if (minClearance > bestClearance) {
+              bestClearance = minClearance;
+              bestPlacedPoints = cand;
+            }
+          }
+
+          // Guardar el mejor fallback posible (mínimas intersecciones y máximo despeje)
+          if (
+            !fallbackCandidate ||
+            intersectionCount < fallbackCandidate.intersections ||
+            (intersectionCount === fallbackCandidate.intersections && minClearance > fallbackCandidate.clearance)
+          ) {
+            fallbackCandidate = { points: cand, clearance: minClearance, intersections: intersectionCount };
+          }
+        }
+
+        // Si ya encontramos un candidato limpio en esta escala, no necesitamos reducir más
+        if (bestPlacedPoints && bestClearance >= 30) {
+          break;
         }
       }
 
-      // Desplazar puntos al nuevo centro objetivo con ligera variación controlada
-      const jitterX = rng.range(-12, 12);
-      const jitterY = rng.range(-12, 12);
-      const targetX = bestTarget.x + jitterX;
-      const targetY = bestTarget.y + jitterY;
-      const dx = targetX - cx;
-      const dy = targetY - cy;
-
-      const shiftedPoints = scaledPoints.map((p) => ({
-        x: p.x + dx,
-        y: p.y + dy,
-        pressure: p.pressure,
-      }));
-
-      // Calcular bounding box desplazado
-      let sMinX = Infinity;
-      let sMaxX = -Infinity;
-      let sMinY = Infinity;
-      let sMaxY = -Infinity;
-      for (const p of shiftedPoints) {
-        if (p.x < sMinX) sMinX = p.x;
-        if (p.x > sMaxX) sMaxX = p.x;
-        if (p.y < sMinY) sMinY = p.y;
-        if (p.y > sMaxY) sMaxY = p.y;
-      }
-
-      // Ajustar traslación para garantizar que NINGÚN punto quede bajo HUD, nota cuadrada o botones
-      let offsetDx = 0;
-      let offsetDy = 0;
-
-      if (sMinX < RUSH_SAFE_ZONE.minX) {
-        offsetDx = RUSH_SAFE_ZONE.minX - sMinX;
-      } else if (sMaxX > RUSH_SAFE_ZONE.maxX) {
-        offsetDx = RUSH_SAFE_ZONE.maxX - sMaxX;
-      }
-
-      if (sMinY < RUSH_SAFE_ZONE.minY) {
-        offsetDy = RUSH_SAFE_ZONE.minY - sMinY;
-      } else if (sMaxY > RUSH_SAFE_ZONE.maxY) {
-        offsetDy = RUSH_SAFE_ZONE.maxY - sMaxY;
-      }
-
-      const placedPoints: Point[] = shiftedPoints.map((p) => ({
-        x: Math.round(Math.max(RUSH_SAFE_ZONE.minX, Math.min(RUSH_SAFE_ZONE.maxX, p.x + offsetDx))),
-        y: Math.round(Math.max(RUSH_SAFE_ZONE.minY, Math.min(RUSH_SAFE_ZONE.maxY, p.y + offsetDy))),
-        pressure: p.pressure,
-      }));
+      const finalPoints =
+        bestPlacedPoints ||
+        fallbackCandidate?.points ||
+        tryPlacement(RUSH_CANDIDATE_SECTORS[0], baseScale) ||
+        rawPoints;
 
       return {
         id: `rush-line-${Date.now()}-${Math.random()}`,
-        points: placedPoints,
-        startPoint: placedPoints[0],
-        endPoint: placedPoints[placedPoints.length - 1],
+        points: finalPoints,
+        startPoint: finalPoints[0],
+        endPoint: finalPoints[finalPoints.length - 1],
         spawnTime: Date.now(),
         label,
       };
@@ -724,18 +872,21 @@ const RUSH_CANDIDATE_SECTORS = [
       ctx.textBaseline = 'middle';
       ctx.fillText('1', p0.x, p0.y);
 
-      // Nodo de fin ②
+      // Nodo de fin ② (solo si no coincide con el de inicio, e.g. formas cerradas)
       const p1 = line.endPoint;
-      ctx.fillStyle = '#FFFFFF';
-      ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(p1.x, p1.y, 6.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      const isClosed = Math.hypot(p1.x - p0.x, p1.y - p0.y) < 14;
+      if (!isClosed) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
 
-      ctx.fillStyle = strokeColor;
-      ctx.fillText('2', p1.x, p1.y);
+        ctx.fillStyle = strokeColor;
+        ctx.fillText('2', p1.x, p1.y);
+      }
 
       // Etiqueta tenue de orden
       ctx.fillStyle = '#A1A1AA';
@@ -850,28 +1001,50 @@ const RUSH_CANDIDATE_SECTORS = [
 
     setUserStroke(recorded);
 
-    // 1. Identificar a cuál de las líneas activas apuntaba el usuario
-    const uMid = recorded[Math.floor(recorded.length / 2)];
+    // 1. Identificar con precisión a cuál de las líneas activas apuntaba el usuario
+    // Evaluamos el trazo del usuario contra TODAS las líneas activas para evitar
+    // que una línea cercana o en otra capa intercepte erróneamente la calificación.
     let bestLineIndex = -1;
-    let minMidDist = 9999;
+    let bestEvalResult: { score: number; avgDist: number; passed: boolean } | null = null;
+    let highestPassingScore = -1;
+    let highestOverallScore = -1;
+    let bestOverallIdx = -1;
+    let bestOverallEval: { score: number; avgDist: number; passed: boolean } | null = null;
 
     for (let i = 0; i < activeLines.length; i++) {
       const line = activeLines[i];
-      const lMid = line.points[Math.floor(line.points.length / 2)];
-      const d = Math.hypot(uMid.x - lMid.x, uMid.y - lMid.y);
-      if (d < minMidDist) {
-        minMidDist = d;
-        bestLineIndex = i;
+      const evalRes = evaluateUserStrokeAgainstLine(recorded, line.points);
+
+      // Si supera el umbral de aprobación (>= 70%), es un candidato prioritario
+      if (evalRes.passed) {
+        if (evalRes.score > highestPassingScore) {
+          highestPassingScore = evalRes.score;
+          bestLineIndex = i;
+          bestEvalResult = evalRes;
+        }
+      }
+
+      // Seguimiento del mejor score global por si ninguna llega al 70%
+      if (evalRes.score > highestOverallScore) {
+        highestOverallScore = evalRes.score;
+        bestOverallIdx = i;
+        bestOverallEval = evalRes;
       }
     }
 
+    // Si ninguna línea aprobó, usamos la que obtuvo mayor coincidencia geométrica
     if (bestLineIndex === -1) {
+      bestLineIndex = bestOverallIdx;
+      bestEvalResult = bestOverallEval;
+    }
+
+    if (bestLineIndex === -1 || !bestEvalResult) {
       renderCanvas();
       return;
     }
 
     const targetLine = activeLines[bestLineIndex];
-    const evalResult = evaluateUserStrokeAgainstLine(recorded, targetLine.points);
+    const evalResult = bestEvalResult;
 
     setLastEval({
       score: evalResult.score,
